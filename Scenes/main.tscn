@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://call03gudf6fp"]
+
+[ext_resource type="Script" uid="uid://njqhgf86sd3m" path="res://Scripts/main.gd" id="1_8gbba"]
+[ext_resource type="PackedScene" uid="uid://tnqqsysolp2i" path="res://Scenes/player.tscn" id="1_jjgbg"]
+[ext_resource type="PackedScene" uid="uid://bk1ksdcb4ldu4" path="res://Scenes/electric_box.tscn" id="2_bo1nx"]
+
+[node name="main" type="Node2D" unique_id=1038531685]
+script = ExtResource("1_8gbba")
+
+[node name="Player" parent="." unique_id=2079223582 instance=ExtResource("1_jjgbg")]
+position = Vector2(96, 92)
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=939599739]
+
+[node name="popupBanner" type="ColorRect" parent="CanvasLayer" unique_id=233576103]
+visible = false
+offset_right = 480.0
+offset_bottom = 40.0
+color = Color(0.047058824, 0.18039216, 1, 0.5921569)
+
+[node name="instructionText" type="Label" parent="CanvasLayer/popupBanner" unique_id=1837761953]
+layout_mode = 0
+offset_left = 63.0
+offset_top = 2.0
+offset_right = 400.0
+offset_bottom = 25.0
+text = "Find a way to restore the power to the ship!"
+
+[node name="EnergyLine" type="Line2D" parent="." unique_id=1435836786]
+unique_name_in_owner = true
+width = 4.0
+
+[node name="Line2D" type="Line2D" parent="." unique_id=1481600734]
+z_index = -1
+default_color = Color(0.9392189, 0.8714924, 0.2575523, 1)
+
+[node name="Box1" parent="." unique_id=1077204771 instance=ExtResource("2_bo1nx")]
+z_index = 1
+position = Vector2(350, 161)
+
+[node name="Box2" parent="." unique_id=1594315303 instance=ExtResource("2_bo1nx")]
+z_index = 1
+position = Vector2(142, 161)

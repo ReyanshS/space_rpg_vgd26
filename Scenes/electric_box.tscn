@@ -1,0 +1,39 @@
+[gd_scene format=3 uid="uid://bk1ksdcb4ldu4"]
+
+[ext_resource type="Script" uid="uid://deweweywxpwtu" path="res://Scripts/electric_box.gd" id="1_b7dj8"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_b7dj8"]
+size = Vector2(40, 41)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ow21h"]
+size = Vector2(32, 32)
+
+[node name="electricBox" type="Area2D" unique_id=1077204771]
+position = Vector2(-16, -16)
+script = ExtResource("1_b7dj8")
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=1908053928]
+offset_right = 32.0
+offset_bottom = 32.0
+color = Color(1, 1, 0.11372549, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1062677170]
+position = Vector2(16, 15.5)
+shape = SubResource("RectangleShape2D_b7dj8")
+
+[node name="PowerSymbol" type="Label" parent="." unique_id=1420876843]
+offset_left = 9.0
+offset_top = 5.0
+offset_right = 41.0
+offset_bottom = 42.0
+theme_override_colors/font_color = Color(1, 0, 0, 1)
+theme_override_font_sizes/font_size = 14
+text = "⏻"
+
+[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=360943320]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StaticBody2D" unique_id=756761705]
+position = Vector2(16, 16)
+shape = SubResource("RectangleShape2D_ow21h")
+
+[connection signal="body_entered" from="." to="." method="_on_body_entered"]
