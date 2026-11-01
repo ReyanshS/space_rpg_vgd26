@@ -1,0 +1,37 @@
+[gd_resource type="TileSet" format=3 uid="uid://cxjo4rkuhroux"]
+
+[ext_resource type="Texture2D" uid="uid://dvywds1wc5kww" path="res://Assets/images/tiles/layout_tiles.png" id="1_layout"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_layout"]
+texture = ExtResource("1_layout")
+texture_region_size = Vector2i(32, 32)
+0:0/0 = 0
+0:0/0/custom_data_0 = "floor"
+1:0/0 = 0
+1:0/0/custom_data_0 = "wall"
+2:0/0 = 0
+2:0/0/custom_data_0 = "start"
+3:0/0 = 0
+3:0/0/custom_data_0 = "goal"
+4:0/0 = 0
+4:0/0/custom_data_0 = "node"
+5:0/0 = 0
+5:0/0/custom_data_0 = "bend"
+6:0/0 = 0
+6:0/0/custom_data_0 = "discharge"
+7:0/0 = 0
+7:0/0/custom_data_0 = "discharge_off"
+8:0/0 = 0
+8:0/0/custom_data_0 = "crate"
+9:0/0 = 0
+9:0/0/custom_data_0 = "door"
+10:0/0 = 0
+10:0/0/custom_data_0 = "spawn"
+11:0/0 = 0
+11:0/0/custom_data_0 = "exit"
+
+[resource]
+tile_size = Vector2i(32, 32)
+custom_data_layer_0/name = "kind"
+custom_data_layer_0/type = 4
+sources/0 = SubResource("TileSetAtlasSource_layout")
