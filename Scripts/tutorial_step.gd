@@ -23,6 +23,7 @@ enum Trigger {
 	SOLVE_ROOM,       ## you power this room's goal
 	ENTER_NEXT_ROOM,  ## you walk into a later room
 	REACH_HERE,       ## you walk to where this marker is
+	DRIFT,            ## you drift across open space in this room (spacewalk)
 }
 
 ## The instruction shown at the top of the screen.

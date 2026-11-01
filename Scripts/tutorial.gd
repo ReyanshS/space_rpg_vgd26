@@ -5,11 +5,13 @@
 # HOW IT FITS TOGETHER
 #   - The steps are the TutorialStep children of this node, in tree order.
 #   - The level ANNOUNCES things with signals (wire_grabbed, pad_touched,
-#     room_solved, room_entered, room_restarted). This script LISTENS to them.
-#     The level doesn't know the tutorial exists - that's the point of signals:
-#     the level just says "this happened", and anyone interested can react.
+#     room_solved, room_entered, room_restarted, drift_started). This script
+#     LISTENS to them. The level doesn't know the tutorial exists - that's the
+#     point of signals: the level just says "this happened", and anyone
+#     interested can react.
 #   - Each step remembers which room it's in. A trigger only counts if it
-#     happens in that room.
+#     happens in that room. A step stays hidden until you walk into its room
+#     (so a Level 2 step about the airlock doesn't show up on the bridge).
 #   - If you fail and the room restarts, we jump back to that room's first step.
 #   - The HUD draws the text and the arrow (so the dark lighting doesn't hide them).
 # ---------------------------------------------------------------------------
@@ -44,15 +46,24 @@ func _start() -> void:
 	_level.room_solved.connect(_on_room_solved)
 	_level.room_entered.connect(_on_room_entered)
 	_level.room_restarted.connect(_on_room_restarted)
+	_level.drift_started.connect(_on_drift_started)
 	_go_to(0)
 
 
 func _go_to(i: int) -> void:
 	_current = i
-	if i >= _steps.size():
+	_show_current()
+
+
+## Shows the current step - but only once the player is in that step's room.
+func _show_current() -> void:
+	if _current >= _steps.size():
 		_level.hud.set_objective("", Vector2.ZERO, false)   # tutorial finished
 		return
-	var s := _steps[i]
+	if _rooms[_current] != _level.current_room_index():
+		_level.hud.set_objective("", Vector2.ZERO, false)   # not there yet
+		return
+	var s := _steps[_current]
 	_level.hud.set_objective(s.text, s.global_position, s.show_arrow)
 
 
@@ -92,12 +103,18 @@ func _on_room_solved(room: int) -> void:
 	_check(TutorialStep.Trigger.SOLVE_ROOM, room)
 
 
+func _on_drift_started(room: int) -> void:
+	_check(TutorialStep.Trigger.DRIFT, room)
+
+
 func _on_room_entered(room: int) -> void:
 	if _current < 0 or _current >= _steps.size():
 		return
 	var s := _steps[_current]
 	if s.advance_when == TutorialStep.Trigger.ENTER_NEXT_ROOM and room > _rooms[_current]:
 		_go_to(_current + 1)
+	else:
+		_show_current()      # maybe we just walked into this step's room
 
 
 func _on_room_restarted(room: int) -> void:

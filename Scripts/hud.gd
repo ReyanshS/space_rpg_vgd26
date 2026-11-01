@@ -1,15 +1,28 @@
 # ---------------------------------------------------------------------------
 # hud.gd  -  everything drawn on top of the game: the tutorial OBJECTIVE box and
 # its bouncing ARROW, the small "toast" message (room names, ZAP!, ...), the
-# 5-second timer bar, the white flash / black fade, and "Level complete".
+# 5-second timer bar, the white flash / black fade, PIP's SPEECH box, the ship
+# POWER meter, the POWER CELL counter, the OXYGEN gauge (spacewalks only), the
+# RESULTS screen with stars, and the PAUSE menu.
 #
 # It's a CanvasLayer, which means it stays still on screen while the camera
-# moves. Its nodes (Toast, TimerBar, ...) live in hud.tscn - open that scene
-# to change colours and sizes without code. All text uses the project theme
+# moves. Its nodes (Toast, TimerBar, Dialogue...) live in hud.tscn - open that
+# scene to change colours and sizes without code. All text uses the project theme
 # (Assets/ui/theme.tres -> the m6x11 pixel font at size 16).
+#
+# PAUSING: hud.tscn sets this node's Process Mode to "Always", so the HUD keeps
+# running when the game is paused (get_tree().paused = true) - that's how the
+# pause menu can still react to keys while everything else is frozen.
 # ---------------------------------------------------------------------------
 class_name GameHUD
 extends CanvasLayer
+
+## Emitted when a speech box that freezes the player starts (true) / ends (false).
+signal dialogue_blocking(on: bool)
+
+const TYPE_SPEED := 48.0          # letters per second in the speech box
+const NAME_COLOR := "#ffd84d"
+const KEY_COLOR := "#8fe3ff"
 
 @onready var toast: PanelContainer = $Toast
 @onready var toast_label: Label = $Toast/Text
@@ -20,6 +33,21 @@ extends CanvasLayer
 @onready var objective: PanelContainer = $Objective
 @onready var objective_label: Label = $Objective/Text
 @onready var marker: Control = $Marker
+@onready var status_box: Control = $Status
+@onready var cells_box: Control = $Cells
+@onready var keys_label: Label = $Keys
+@onready var dialogue: PanelContainer = $Dialogue
+@onready var portrait: Control = $Dialogue/Row/Portrait
+@onready var dialogue_text: RichTextLabel = $Dialogue/Row/Text
+@onready var stars_box: Control = $Complete/VBox/Stars
+@onready var pause_panel: Control = $Pause
+@onready var pause_level: Label = $Pause/VBox/Level
+
+## The level sets this to false on the results screen.
+var allow_pause := true
+## The level sets this: asked right before a speech freezes the player
+## ("is that OK right now?" - not while he's carrying the wire).
+var can_block: Callable
 
 var _frac := 1.0
 var _secs := 0.0
@@ -30,17 +58,58 @@ var _marker_on := false
 var _marker_world := Vector2.ZERO   # where the arrow points, in level (world) pixels
 var _t := 0.0
 
+# status (top-left) and cells (top-right)
+var _power_on := 0
+var _power_total := 0
+var _power_flash := 0.0
+var _o2_on := false
+var _o2_frac := 1.0
+var _cells := 0
+var _cells_total := 0
+var _cell_bump := 0.0
+
+# speech box
+var _queue: Array = []            # waiting speeches: [lines, speaker, blocking]
+var _talking := false
+var _blocking := false
+var _typing := false
+var _waiting_key := false
+var _skip_line := false           # cut the current (non-blocking) line short...
+var _cut_speech := false          # ...and skip the rest of that speech
+var _line_bbcode := ""
+
+# results screen
+var _stars_earned := 0
+var _stars_shown := 0
+
+var _sfx := {}
+
 
 func _ready() -> void:
-	# The timer bar has no picture: our own function draws it (see _draw_timer).
+	# The timer bar, status, cells, portrait and stars have no picture: our own
+	# functions draw them (see the _draw_... functions below).
 	timer_bar.draw.connect(_draw_timer)
 	marker.draw.connect(_draw_marker)
+	status_box.draw.connect(_draw_status)
+	cells_box.draw.connect(_draw_cells)
+	portrait.draw.connect(_draw_portrait)
+	stars_box.draw.connect(_draw_stars)
 	objective.visible = false
 	timer_bar.visible = false
 	complete_panel.visible = false
 	toast.visible = false
+	dialogue.visible = false
+	pause_panel.visible = false
 	flash_rect.color.a = 0.0
 	fade_rect.color.a = 0.0
+	for n in ["blip", "star"]:
+		var p := AudioStreamPlayer.new()
+		var path := "res://Assets/audio/%s.wav" % n
+		if ResourceLoader.exists(path):
+			p.stream = load(path)
+		add_child(p)
+		_sfx[n] = p
+	_sfx["blip"].volume_db = -10.0
 
 
 func _process(delta: float) -> void:
@@ -50,6 +119,38 @@ func _process(delta: float) -> void:
 		timer_bar.queue_redraw()
 	if _marker_on:
 		marker.queue_redraw()      # the arrow bobs, and the camera moves, so redraw every frame
+	_power_flash = maxf(0.0, _power_flash - delta)
+	_cell_bump = maxf(0.0, _cell_bump - delta * 3.0)
+	status_box.queue_redraw()
+	cells_box.queue_redraw()
+	if dialogue.visible:
+		portrait.queue_redraw()
+		_place_dialogue()
+		if _waiting_key:
+			var blink := int(_t * 3.0) % 2 == 0
+			dialogue_text.text = _line_bbcode + ("  [color=%s][E][/color]" % KEY_COLOR if blink else "")
+	if complete_panel.visible:
+		stars_box.queue_redraw()
+	if Input.is_action_just_pressed("pause") and allow_pause:
+		_set_paused(not get_tree().paused)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Q on the pause menu = back to the title screen
+	if pause_panel.visible and event is InputEventKey and event.pressed and not event.echo:
+		if (event as InputEventKey).physical_keycode == KEY_Q:
+			_set_paused(false)
+			Game.go_to_title()
+
+
+func _set_paused(on: bool) -> void:
+	get_tree().paused = on
+	pause_panel.visible = on
+
+
+## The pause menu shows which level you're on.
+func set_level_info(text: String) -> void:
+	pause_level.text = text
 
 
 # ------------------------------------------------------------------ tutorial objective
@@ -100,6 +201,149 @@ func _draw_marker() -> void:
 		marker.draw_polyline(tri + PackedVector2Array([tri[0]]), dark, 1.0)
 
 
+# ------------------------------------------------------------------ PIP's speech box
+
+## Queue up some lines for `speaker` to say. Each line is one speech bubble.
+## blocking = true: the player is frozen and presses E to go through the lines
+## (the level listens to dialogue_blocking). Otherwise lines go by on their own.
+func say(lines: PackedStringArray, speaker := "PIP", blocking := false) -> void:
+	if lines.is_empty():
+		return
+	if blocking:
+		# Something the player MUST read (e.g. a new room's warning) jumps the queue:
+		# casual chatter waiting in line is dropped, and the line on screen ends now.
+		_queue = _queue.filter(func(item: Array) -> bool: return item[2])
+		if _talking and not _blocking:
+			_skip_line = true
+			_cut_speech = true
+	_queue.append([lines, speaker, blocking])
+	if not _talking:
+		_run_dialogue()
+
+
+func is_blocking() -> bool:
+	return _blocking
+
+
+## The speech box sits at the bottom of the screen - unless the player is down
+## there, then it moves to the top so it doesn't hide him.
+func _place_dialogue() -> void:
+	var p := get_tree().get_first_node_in_group("player") as Node2D
+	if p == null:
+		return
+	var screen_y := (get_viewport().get_canvas_transform() * p.global_position).y
+	var h := dialogue.size.y
+	var top := 78.0 if screen_y > 150.0 else 238.0 - h     # 78 = just under the toast
+	dialogue.position.y = top
+
+
+## Plays everything in the queue, one line at a time. This function uses `await`
+## a lot: it pauses at each await (typing, waiting for E...) and carries on later,
+## while the rest of the game keeps running.
+func _run_dialogue() -> void:
+	_talking = true
+	while not _queue.is_empty():
+		dialogue.visible = true
+		dialogue.modulate.a = 1.0
+		while not _queue.is_empty():
+			var item: Array = _queue.pop_front()
+			var blocking: bool = item[2] and (not can_block.is_valid() or can_block.call())
+			if blocking != _blocking:
+				_blocking = blocking
+				dialogue_blocking.emit(blocking)
+			_cut_speech = false
+			for line in item[0]:
+				if _cut_speech:
+					break
+				await _show_line(item[1], line, blocking)
+				if not is_inside_tree():
+					return
+		if _blocking:
+			_blocking = false
+			dialogue_blocking.emit(false)
+		if not dialogue.visible:
+			break                         # hidden by the results screen
+		var tw := create_tween()
+		tw.tween_property(dialogue, "modulate:a", 0.0, 0.3)
+		await tw.finished
+		if not is_inside_tree():
+			return
+	dialogue.visible = false
+	_talking = false
+
+
+## Waits one frame. Returns false if the HUD left the scene meanwhile (level changed).
+func _frame() -> bool:
+	await get_tree().process_frame
+	return is_inside_tree()
+
+
+func _show_line(speaker: String, line: String, blocking: bool) -> void:
+	_line_bbcode = "[color=%s]%s:[/color] %s" % [NAME_COLOR, speaker, line]
+	dialogue_text.text = _line_bbcode
+	dialogue.reset_size()
+	var total := float(dialogue_text.get_total_character_count())
+	var shown := float(speaker.length() + 2)
+	var blips := 0
+	_typing = true
+	_skip_line = false
+	# typewriter: reveal a few more letters every frame
+	while shown < total and not _skip_line:
+		if not await _frame():
+			return                            # the level changed while PIP was talking
+		if get_tree().paused:
+			continue
+		if blocking and Input.is_action_just_pressed("interact"):
+			shown = total                     # E skips the typing
+		else:
+			shown += TYPE_SPEED * get_process_delta_time()
+		dialogue_text.visible_characters = int(shown)
+		if int(shown) / 3 > blips:
+			blips = int(shown) / 3
+			_sfx["blip"].play()
+	dialogue_text.visible_characters = -1
+	_typing = false
+	if blocking:
+		_waiting_key = true
+		if not await _frame():                # the press that finished typing doesn't count
+			return
+		while (not Input.is_action_just_pressed("interact") or get_tree().paused) and not _skip_line:
+			if not await _frame():
+				return
+		_waiting_key = false
+		dialogue_text.text = _line_bbcode
+	else:
+		# reading time grows with the length of the line (and stops while paused)
+		var wait := 1.6 + line.length() * 0.04
+		while wait > 0.0 and not _skip_line:
+			if not await _frame():
+				return
+			if not get_tree().paused:
+				wait -= get_process_delta_time()
+	_skip_line = false
+
+
+## PIP's face: a little screen with two eyes that blink and a mouth that moves while talking.
+func _draw_portrait() -> void:
+	var s := portrait.size
+	portrait.draw_rect(Rect2(Vector2.ZERO, s), Color(0.45, 0.85, 1.0))
+	portrait.draw_rect(Rect2(Vector2(1, 1), s - Vector2(2, 2)), Color(0.04, 0.14, 0.2))
+	var blink := fmod(_t, 3.2) < 0.12
+	var eye := Color(0.55, 0.95, 1.0)
+	for x in [8.0, 17.0]:
+		if blink:
+			portrait.draw_rect(Rect2(Vector2(x, 12), Vector2(4, 1)), eye)
+		else:
+			portrait.draw_rect(Rect2(Vector2(x, 9), Vector2(4, 5)), eye)
+			portrait.draw_rect(Rect2(Vector2(x + 2, 10), Vector2(1, 2)), Color(1, 1, 1))
+	var mouth := 1.0
+	if _typing:
+		mouth = 1.0 + float(int(_t * 14.0) % 3)
+	portrait.draw_rect(Rect2(Vector2(10, 19), Vector2(9, mouth)), eye)
+	var tip := Color(1.0, 0.85, 0.3) if fmod(_t, 1.0) < 0.5 else Color(1.0, 0.5, 0.2)
+	portrait.draw_rect(Rect2(Vector2(s.x - 5, 3), Vector2(2, 2)), tip)       # antenna light
+
+
 # ------------------------------------------------------------------ toast
 
 ## Shows a short message at the top for `seconds`, then fades it out.
@@ -111,6 +355,7 @@ func show_toast(text: String, seconds := 2.0) -> void:
 	var token := _toast_token
 	toast_label.text = text
 	toast.reset_size()
+	toast.position.x = (get_viewport().get_visible_rect().size.x - toast.size.x) * 0.5
 	toast.visible = true
 	toast.modulate.a = 1.0
 	await get_tree().create_timer(seconds).timeout
@@ -178,6 +423,79 @@ func _draw_timer() -> void:
 	timer_bar.draw_string(font, Vector2(size.x - 31, size.y - 6), "%.1f" % _secs, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
 
 
+# ------------------------------------------------------------------ ship power, cells, oxygen
+
+## How many rooms have power, out of how many. Drawn as a segmented bar.
+func set_power(on: int, total: int) -> void:
+	if on > _power_on:
+		_power_flash = 0.8
+	_power_on = on
+	_power_total = total
+
+
+## The oxygen gauge (only shown outside the ship). frac: 1 = full, 0 = empty.
+func set_o2(visible_now: bool, frac: float) -> void:
+	_o2_on = visible_now
+	_o2_frac = clampf(frac, 0.0, 1.0)
+
+
+func set_cells(count: int, total: int, bump := false) -> void:
+	_cells = count
+	_cells_total = total
+	if bump:
+		_cell_bump = 1.0
+
+
+## Bottom-right key reminder: shows [H] when this room has a hint.
+func set_hint_available(on: bool) -> void:
+	keys_label.text = "[H] hint   [Esc] menu" if on else "[Esc] menu"
+
+
+func _draw_status() -> void:
+	var font := status_box.get_theme_default_font()
+	var y := 0.0
+	if _power_total > 0:
+		var flash := _power_flash > 0.0 and int(_t * 10.0) % 2 == 0
+		var ink := Color.WHITE if flash else Color(1.0, 0.85, 0.3)
+		status_box.draw_rect(Rect2(0, 0, 82, 16), Color(0.03, 0.05, 0.12, 0.8))
+		var b := Vector2(3, 2)
+		status_box.draw_colored_polygon(PackedVector2Array([b + Vector2(5, 0), b + Vector2(1, 7), b + Vector2(4, 7),
+			b + Vector2(2, 12), b + Vector2(8, 5), b + Vector2(5, 5), b + Vector2(7, 0)]), ink)
+		var seg_w := (66.0 - 2.0 * (_power_total - 1)) / _power_total
+		for i in _power_total:
+			var r := Rect2(14 + i * (seg_w + 2.0), 4, seg_w, 8)
+			status_box.draw_rect(r, Color(0.16, 0.18, 0.26))
+			if i < _power_on:
+				status_box.draw_rect(r, ink)
+		y = 18.0
+	if _o2_on:
+		var low := _o2_frac < 0.3
+		var col := Color(0.5, 0.85, 1.0)
+		if low:
+			col = Color(1.0, 0.3, 0.25) if int(_t * 6.0) % 2 == 0 else Color(1.0, 0.7, 0.6)
+		status_box.draw_rect(Rect2(0, y, 82, 16), Color(0.03, 0.05, 0.12, 0.8))
+		status_box.draw_string(font, Vector2(2, y + 13), "O2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+		var bar := Rect2(18, y + 4, 60, 8)
+		status_box.draw_rect(bar, Color(0.16, 0.18, 0.26))
+		status_box.draw_rect(Rect2(bar.position, Vector2(roundf(bar.size.x * _o2_frac), bar.size.y)), col)
+
+
+func _draw_cells() -> void:
+	if _cells_total <= 0:
+		return
+	var font := cells_box.get_theme_default_font()
+	var s := cells_box.size
+	cells_box.draw_rect(Rect2(Vector2.ZERO, s), Color(0.03, 0.05, 0.12, 0.8))
+	var o := Vector2(5, 3 - roundf(_cell_bump * 3.0))
+	var body := Color(1.0, 0.85, 0.3).lerp(Color.WHITE, _cell_bump)
+	cells_box.draw_rect(Rect2(o + Vector2(2, 0), Vector2(4, 2)), Color(0.85, 0.88, 0.95))
+	cells_box.draw_rect(Rect2(o + Vector2(0, 2), Vector2(8, 12)), Color(0.2, 0.13, 0.02))
+	cells_box.draw_rect(Rect2(o + Vector2(1, 3), Vector2(6, 10)), body)
+	var txt := "%d/%d" % [_cells, _cells_total]
+	var ink := Color(1, 1, 1) if _cells < _cells_total else Color(1.0, 0.9, 0.4)
+	cells_box.draw_string(font, Vector2(18, 14), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink)
+
+
 # ------------------------------------------------------------------ screen effects
 
 func flash(color: Color, strength := 0.8) -> void:
@@ -197,8 +515,26 @@ func fade_in(duration: float) -> void:
 	await tw.finished
 
 
-func show_complete() -> void:
+# ------------------------------------------------------------------ results screen
+
+## The level is finished: show time, cells, retries and pop in the stars one by one.
+func show_summary(number: int, message: String, stats: Dictionary, has_next: bool) -> void:
+	allow_pause = false
 	toast.visible = false
+	set_objective("", Vector2.ZERO, false)
+	_queue.clear()                    # PIP stops talking: the results get the screen
+	_skip_line = true
+	_cut_speech = true
+	dialogue.visible = false
+	$Complete/VBox/Title.text = "LEVEL %d COMPLETE" % number
+	$Complete/VBox/Sub.text = message
+	var secs := int(stats.get("time", 0.0))
+	$Complete/VBox/Stats.text = "Time %d:%02d    Cells %d/%d    Retries %d" % [
+		secs / 60, secs % 60, stats.get("cells", 0), stats.get("cells_total", 0), stats.get("retries", 0)]
+	$Complete/VBox/StarHelp.text = "Stars: finish - all cells - %d retries or fewer" % stats.get("retry_goal", 0)
+	$Complete/VBox/Again.text = ("[E] next level" if has_next else "[E] back to title") + "    [R] play again"
+	_stars_earned = int(stats.get("stars", 1))
+	_stars_shown = 0
 	complete_panel.visible = true
 	complete_panel.pivot_offset = complete_panel.size * 0.5
 	complete_panel.scale = Vector2(0.6, 0.6)
@@ -206,3 +542,26 @@ func show_complete() -> void:
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(complete_panel, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(complete_panel, "modulate:a", 1.0, 0.25)
+	await get_tree().create_timer(0.6).timeout
+	for i in _stars_earned:
+		_stars_shown += 1
+		_sfx["star"].pitch_scale = 1.0 + i * 0.12
+		_sfx["star"].play()
+		await get_tree().create_timer(0.35).timeout
+
+
+func _draw_stars() -> void:
+	var s := stars_box.size
+	for i in 3:
+		var c := Vector2(s.x * 0.5 + (i - 1) * 30.0, s.y * 0.5)
+		var pts := PackedVector2Array()
+		for k in 10:
+			var r := 12.0 if k % 2 == 0 else 5.0
+			var a := -PI / 2.0 + k * PI / 5.0
+			pts.append(c + Vector2(cos(a), sin(a)) * r)
+		if i < _stars_shown:
+			stars_box.draw_colored_polygon(pts, Color(1.0, 0.85, 0.3))
+			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.45, 0.25, 0.0), 1.0)
+		else:
+			stars_box.draw_colored_polygon(pts, Color(0.12, 0.14, 0.22))
+			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.35, 0.4, 0.55), 1.0)
