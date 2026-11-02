@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://Scripts/floor_guide.gd" id="1_guide"]
+[ext_resource type="Texture2D" path="res://Assets/images/ui/guide_chevron.png" id="2_chev"]
+[ext_resource type="Shader" path="res://Shaders/guide_scroll.gdshader" id="3_scroll"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_scroll"]
+shader = ExtResource("3_scroll")
+shader_parameter/speed = 1.5
+
+[node name="FloorGuide" type="Line2D"]
+z_index = -8
+texture_repeat = 2
+material = SubResource("ShaderMaterial_scroll")
+modulate = Color(1, 1, 1, 0.6)
+points = PackedVector2Array(0, 0, 96, 0)
+width = 10.0
+default_color = Color(1, 1, 1, 1)
+texture = ExtResource("2_chev")
+texture_mode = 1
+script = ExtResource("1_guide")

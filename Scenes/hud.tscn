@@ -1,0 +1,147 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Scripts/hud.gd" id="1_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_toast"]
+content_margin_left = 8.0
+content_margin_top = 2.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+bg_color = Color(0.03, 0.06, 0.16, 0.85)
+border_width_bottom = 2
+border_color = Color(1, 0.84, 0.3, 0.9)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_complete"]
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+bg_color = Color(0.03, 0.06, 0.16, 0.94)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.84, 0.3, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_objective"]
+content_margin_left = 8.0
+content_margin_top = 3.0
+content_margin_right = 8.0
+content_margin_bottom = 5.0
+bg_color = Color(0.03, 0.05, 0.12, 0.88)
+border_width_left = 2
+border_color = Color(1, 0.84, 0.3, 1)
+
+[node name="HUD" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_hud")
+
+[node name="Toast" type="PanelContainer" parent="."]
+visible = false
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -60.0
+offset_top = 52.0
+offset_right = 60.0
+offset_bottom = 74.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
+
+[node name="Text" type="Label" parent="Toast"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.45, 1)
+text = "ROOM 1"
+horizontal_alignment = 1
+
+[node name="Marker" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Objective" type="PanelContainer" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -150.0
+offset_top = 4.0
+offset_right = 150.0
+offset_bottom = 26.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_objective")
+
+[node name="Text" type="Label" parent="Objective"]
+custom_minimum_size = Vector2(284, 0)
+layout_mode = 2
+text = "Come here and press E!"
+autowrap_mode = 3
+
+[node name="TimerBar" type="Control" parent="."]
+offset_left = 150.0
+offset_top = 242.0
+offset_right = 330.0
+offset_bottom = 264.0
+mouse_filter = 2
+
+[node name="Controls" type="Label" parent="."]
+offset_left = 6.0
+offset_top = 248.0
+offset_right = 140.0
+offset_bottom = 266.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.45)
+text = "[R] restart room"
+
+[node name="Flash" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 1, 1, 0)
+
+[node name="Fade" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 0)
+
+[node name="Complete" type="PanelContainer" parent="."]
+visible = false
+offset_left = 100.0
+offset_top = 80.0
+offset_right = 380.0
+offset_bottom = 180.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_complete")
+
+[node name="VBox" type="VBoxContainer" parent="Complete"]
+layout_mode = 2
+mouse_filter = 2
+alignment = 1
+
+[node name="Title" type="Label" parent="Complete/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 32
+text = "LEVEL 1 COMPLETE"
+horizontal_alignment = 1
+
+[node name="Sub" type="Label" parent="Complete/VBox"]
+layout_mode = 2
+text = "Power restored to this part of the ship!"
+horizontal_alignment = 1
+
+[node name="Again" type="Label" parent="Complete/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+text = "Press R to play again"
+horizontal_alignment = 1
