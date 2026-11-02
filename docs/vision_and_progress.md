@@ -86,7 +86,11 @@ the game. Every change gets explained, with "check yourself" tasks.
   wire), timer-out wire snap, **R** to restart a room, respawn at the room's START.
 - **Power cells**: charge them by touching them with the live wire (also mid-fling and mid-drift);
   kept once the room is powered, returned if you fail. 9 in Level 1, 10 in Level 2 — some on the
-  route, some needing a small detour, a few only reachable by a sharp player.
+  route, some needing a small detour, a few only reachable by a sharp player. Drawn as a battery
+  with a lightning bolt. PIP points at the first one and explains it at the start of Level 1; the
+  first charge, keep and loss each get a one-time message; the results screen shows the suit upgrade.
+- **Lights-on cutscene** when every room in a level has power: film bars slide in and the camera
+  glides back through every room as it lights up at full power, while PIP talks over it.
 - **Spacewalk**: hull plates and open space, drifting, floating debris, sparking hull tiles,
   gangways (catwalks that slide out when a section is powered), oxygen meter with refills,
   the airlock sequence, blinking hull beacons when a section is powered.
@@ -110,7 +114,9 @@ the game. Every change gets explained, with "check yourself" tasks.
 - Lighting: dark ship, emergency lights, helmet lamp, ceiling lights on power-up; sunlit hull outside.
 - 20 sound effects + 2 ambient music loops (ship / space), all generated in code.
 - HUD: timer bar, room-name toasts, flash and shake on shock, fades, power meter, cell counter,
-  oxygen gauge, PIP's speech box with an animated face, results screen with stars.
+  oxygen gauge, PIP's speech box with an animated face (it picks the top or bottom of the screen
+  once and turns see-through when you walk behind it), results screen with stars, film bars for
+  cutscenes.
 
 ### Tutorial
 Level 1: 7 steps (rooms 1-2) with arrows and floor chevrons, rewinds on failure. PIP explains bends
@@ -127,6 +133,8 @@ to the next section). Steps only appear once you're in their room.
   - Level 1 made more rewarding: power cells, power meter, results + stars, hints, PIP's story
   - Level 2 + spacewalk: bridge, airlock, drifting, oxygen, three hull sections; title screen,
     pause menu, music, level-to-level flow
+  - after the team's first playtest: lights-on cutscene, a speech box that no longer jumps around,
+    clearer power cells (battery art, PIP's explanation, suit-upgrade line on the results screen)
 
 ---
 
@@ -144,10 +152,10 @@ to the next section). Steps only appear once you're in their room.
   lines, music volume), the editor view of Level 2, and a **web export**.
 
 **Playtest checklist**
-1. Title → Level 1: PIP's intro, then the tutorial. Touch a cell without the wire: PIP explains.
+1. Title → Level 1: PIP's intro, then he points at the first power cell and explains it.
 2. Charge cells with the wire; fail once on purpose: the cells come back.
 3. Room 3 / 4: PIP's warnings; fail twice in a room: PIP offers a hint; press H.
-4. Finish Level 1: stars, then E → Level 2.
+4. Power the last room: the lights-on cutscene. Finish Level 1: stars, then E → Level 2.
 5. Bridge → airlock → Section A: drift across, watch the oxygen bar, try walking off where there's
    no plate (you should stay put).
 6. Finish Level 2 and check the results screen.

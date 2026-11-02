@@ -1,5 +1,6 @@
 # ---------------------------------------------------------------------------
-# power_cell.gd  -  a collectible POWER CELL (a small floating battery).
+# power_cell.gd  -  a collectible POWER CELL (a small floating battery with a
+# lightning bolt on it - the same picture as the cell counter, top right).
 #
 # Cells are painted on the Layout layer like any tile (kind "cell"). They start
 # EMPTY: walking over one does nothing. You charge one by touching it while you
@@ -31,23 +32,35 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	if _float_text > 0.0:
-		_float_text -= delta
-	if not charged or _float_text > 0.0:
+		# (stops at exactly 0, and the redraw at 0 wipes the last faint "+1")
+		_float_text = maxf(0.0, _float_text - delta)
 		queue_redraw()
+	elif not charged:
+		queue_redraw()
+
+
+## The battery picture: 10 x 15 pixels, top-left corner at `o`. A static func,
+## so the HUD's cell counter can draw the very same picture:
+##     PowerCell.draw_battery(some_control, Vector2(4, 1), body_colour, bolt_colour)
+static func draw_battery(ci: CanvasItem, o: Vector2, body: Color, bolt: Color) -> void:
+	ci.draw_rect(Rect2(o + Vector2(3, 0), Vector2(4, 2)), Color(0.85, 0.88, 0.95))   # the + terminal
+	ci.draw_rect(Rect2(o + Vector2(0, 2), Vector2(10, 13)), Color(0.06, 0.08, 0.14)) # outline
+	ci.draw_rect(Rect2(o + Vector2(1, 3), Vector2(8, 11)), body)                     # body
+	ci.draw_rect(Rect2(o + Vector2(1, 3), Vector2(1, 11)), body.lightened(0.3))      # shine
+	# a lightning bolt, one row of pixels at a time: [x, width] for each row
+	var rows := [[2, 3], [1, 3], [0, 3], [0, 5], [2, 2], [1, 2], [1, 1], [0, 1]]
+	for y in rows.size():
+		ci.draw_rect(Rect2(o + Vector2(3 + rows[y][0], 5 + y), Vector2(rows[y][1], 1)), bolt)
 
 
 func _draw() -> void:
 	if not charged:
 		var bob := roundf(sin(_t * 3.0) * 1.5)
-		var o := Vector2(-4, -8 + bob)
 		var pulse := 0.18 + 0.1 * sin(_t * 4.0)
-		draw_circle(Vector2(0, bob - 2), 10.0, Color(0.5, 0.85, 1.0, pulse))           # soft halo
-		draw_rect(Rect2(o + Vector2(2, -2), Vector2(4, 2)), Color(0.85, 0.88, 0.95))   # the + cap
-		draw_rect(Rect2(o, Vector2(8, 13)), Color(0.06, 0.08, 0.14))                    # outline
-		draw_rect(Rect2(o + Vector2(1, 1), Vector2(6, 11)), Color(0.4, 0.46, 0.56))    # empty body
-		draw_rect(Rect2(o + Vector2(1, 1), Vector2(1, 11)), Color(0.55, 0.62, 0.72))   # shine
-		# one flickering bar of charge at the bottom = "almost empty, needs power"
-		draw_rect(Rect2(o + Vector2(2, 9), Vector2(4, 2)), Color(0.5, 0.9, 1.0, 0.55 + 0.45 * sin(_t * 6.0)))
+		draw_circle(Vector2(0, bob - 1), 11.0, Color(0.5, 0.85, 1.0, pulse))   # soft halo
+		# EMPTY: a grey battery whose bolt only flickers faintly = "needs power"
+		var bolt := Color(0.45, 0.4, 0.15).lerp(Color(1.0, 0.85, 0.3), 0.5 + 0.5 * sin(_t * 5.0))
+		draw_battery(self, Vector2(-5, -9 + bob), Color(0.26, 0.31, 0.4), bolt)
 	if _float_text > 0.0:
 		var a := clampf(_float_text / 0.3, 0.0, 1.0)
 		var y := -14.0 - (0.9 - _float_text) * 26.0

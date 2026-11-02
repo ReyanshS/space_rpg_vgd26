@@ -8,8 +8,8 @@
 #
 # To add a line of story: duplicate a beat (Ctrl+D), drag it into the right
 # room, then set Trigger and Lines in the Inspector. Each entry in Lines is one
-# speech bubble. You can write {cells} or {o2_bonus} in a line and it gets
-# replaced with the real number (see Game.story_values()).
+# speech bubble. You can write {cells}, {o2_bonus} or {o2_per_cell} in a line
+# and it gets replaced with the real number (see Game.story_values()).
 # ---------------------------------------------------------------------------
 @tool
 class_name StoryBeat
@@ -23,9 +23,10 @@ enum Trigger {
 	GRAB_WIRE,          ## you first pick up the wire in this room
 	FAIL_IN_ROOM,       ## you fail in this room for the first time
 	AIRLOCK,            ## the airlock in this room starts cycling
-	ALL_POWERED,        ## every room in the level has power (room doesn't matter)
+	ALL_POWERED,        ## after the lights-on cutscene, when you can move again (room doesn't matter)
 	FIRST_DRIFT,        ## you first drift across open space in this room
 	TOUCH_EMPTY_CELL,   ## you touch a power cell WITHOUT the wire (room doesn't matter)
+	SHIP_LIGHTS_UP,     ## every room has power: plays DURING the lights-on cutscene (room doesn't matter)
 }
 
 @export var trigger: Trigger = Trigger.ENTER_ROOM:
@@ -42,6 +43,9 @@ enum Trigger {
 ## Freeze the player until every line is read (press E to go on). Only works when
 ## the player isn't carrying the wire - otherwise the lines just play normally.
 @export var pause_game := false
+## While these lines play, a blue arrow points at this marker. Put the marker
+## on the thing PIP is talking about (it still has to be in the right room).
+@export var point_here := false
 
 
 # Only drawn in the editor: the trigger and the start of the first line.

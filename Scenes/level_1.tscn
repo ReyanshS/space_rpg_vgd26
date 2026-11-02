@@ -89,11 +89,19 @@ trigger = 0
 lines = PackedStringArray("Oh! You're awake! I'm PIP, the ship's maintenance AI.", "A solar storm knocked out the power. The whole ship is dark... I don't like the dark.", "Carry the live wire from the yellow START pad to the blue GOAL to power each room.")
 pause_game = true
 
+[node name="CellIntro" type="Marker2D" parent="Story"]
+position = Vector2(304, 624)
+script = ExtResource("10_beat")
+trigger = 0
+lines = PackedStringArray("See that little battery with the lightning bolt? That's a POWER CELL - and it's empty.", "Run through it while you're carrying the live wire and it charges up!", "Every cell you keep gives your space suit {o2_per_cell} more seconds of air later. Get them all for a star!")
+pause_game = true
+point_here = true
+
 [node name="CellTip" type="Marker2D" parent="Story"]
 position = Vector2(240, 656)
 script = ExtResource("10_beat")
 trigger = 9
-lines = PackedStringArray("That's a POWER CELL. It's empty - touch it while you carry the live wire to charge it!", "Charged cells power up your suit later on. Find them all for a star!")
+lines = PackedStringArray("That cell is still empty - it only charges while you're CARRYING the live wire. Grab the wire first!")
 
 [node name="Room1Done" type="Marker2D" parent="Story"]
 position = Vector2(176, 656)
@@ -127,11 +135,17 @@ trigger = 1
 lines = PackedStringArray("Careful! Those RED grates are live. Step on one and ZAP - wire or no wire.", "The wire can't cross them either. Plan your route before you grab it!")
 pause_game = true
 
+[node name="ShipLightsUp" type="Marker2D" parent="Story"]
+position = Vector2(912, 752)
+script = ExtResource("10_beat")
+trigger = 10
+lines = PackedStringArray("Engineering is fully powered! Look at it all light up!", "Every room, every light... I can SEE everything again. Great work, engineer!")
+
 [node name="AllPowered" type="Marker2D" parent="Story"]
 position = Vector2(944, 720)
 script = ExtResource("10_beat")
 trigger = 7
-lines = PackedStringArray("Engineering is fully powered! Great work.", "The lift to the Main Deck is at the bottom of this room. Let's go!")
+lines = PackedStringArray("The lift to the Main Deck is at the bottom of this room. Let's go!")
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(272, 688)

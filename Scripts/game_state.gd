@@ -24,6 +24,8 @@ const O2_PER_CELL := 5.0
 
 # One entry per level number, e.g. results[1] = {"time": 140.2, "cells": 7, ...}
 var results := {}
+# Tips PIP already gave (so he explains something only once, even across levels)
+var _tips_seen := {}
 
 
 ## Forget everything (the title screen calls this when you start a new game).
@@ -48,6 +50,15 @@ func o2_bonus() -> float:
 	return cells_collected() * O2_PER_CELL
 
 
+## True the FIRST time it's asked about `tip`, false every time after that.
+## e.g.  if Game.first_time("cell_kept"): hud.say(...)   -> PIP explains it once.
+func first_time(tip: String) -> bool:
+	if _tips_seen.has(tip):
+		return false
+	_tips_seen[tip] = true
+	return true
+
+
 func has_level(number: int) -> bool:
 	return number >= 1 and number <= LEVELS.size()
 
@@ -64,6 +75,6 @@ func go_to_title() -> void:
 	get_tree().change_scene_to_file(TITLE_SCENE)
 
 
-## Values that story text can use: write {cells} or {o2_bonus} inside a line.
+## Values that story text can use: write {cells}, {o2_bonus} or {o2_per_cell} inside a line.
 func story_values() -> Dictionary:
-	return {"cells": cells_collected(), "o2_bonus": int(o2_bonus())}
+	return {"cells": cells_collected(), "o2_bonus": int(o2_bonus()), "o2_per_cell": int(O2_PER_CELL)}

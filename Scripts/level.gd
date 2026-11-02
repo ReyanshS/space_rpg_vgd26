@@ -19,6 +19,8 @@
 #      pad halos, floor guides) use light channel 2, lit by one flat "glow
 #      light" - see light_fx.gd. Each room has a red emergency light, and
 #      ceiling lights that switch on when you power it.
+#      When EVERY room has power, a short CUTSCENE (_power_tour) takes the
+#      camera back through all the rooms, lighting each one up at full power.
 #   7. The level ANNOUNCES what happens with signals (wire_grabbed, pad_touched,
 #      room_solved, ...). The tutorial, the story (PIP's lines) and the floor
 #      guides listen to those - the level doesn't need to know they exist.
@@ -70,7 +72,8 @@ signal empty_cell_touched                    # you touched a cell without the wi
 signal hint_shown(index: int)                # the player pressed H in room `index`
 signal drift_started(index: int)             # you pushed off into open space
 signal airlock_cycling(index: int)           # the airlock in room `index` started its sequence
-signal all_rooms_powered                     # every room with a GOAL has power
+signal ship_lighting_up                      # every room has power: the lights-on cutscene starts
+signal all_rooms_powered                     # ...and the cutscene is over (you can move again)
 
 const TILE := 32
 const DIRS4: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
@@ -109,6 +112,8 @@ const PIP_LINES := {
 	"hint": "Stuck? Press H and I'll light up the route for you.",
 	"o2_low": "Oxygen's getting low! Power this section - your suit recharges from the relay.",
 	"no_landing": "No hull to land on that way! Your boots only let go if there's a plate straight ahead.",
+	"cell_kept": "That power cell is yours to keep! Each one gives your space suit %d more seconds of air.",
+	"cell_lost": "Aw, your cell drained! Cells only stay charged once you get the room's power on.",
 }
 
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
@@ -140,6 +145,9 @@ const PIP_LINES := {
 @export var space_light := Color(0.5, 0.54, 0.7)
 ## Brightness of a room's lights once it's powered.
 @export var room_light_energy := 0.75
+## How bright the inside of the ship gets once EVERY room has power
+## (after the lights-on cutscene). Should be lighter than `darkness`.
+@export var full_power_light := Color(0.42, 0.43, 0.52)
 
 @export_group("Spacewalk")
 ## Seconds of oxygen for each hull section. Every power cell charged in earlier
@@ -174,6 +182,7 @@ class Room:
 	var cycled := false                 # this airlock has been used
 	var fails := 0                      # failed tries here (PIP offers a hint after 2)
 	var power_cells: Array[Vector2i] = []
+	var full_power := false             # lit up by the lights-on cutscene
 
 
 # --- map data
@@ -227,7 +236,14 @@ var _o2_warned := false
 var _o2_beep := 0.0
 var _drift_warn_cd := 0.0
 var _drift_tip_shown := false
-var _beacons: Array = []                  # [light, dot, phase]: blinking hull lights
+var _beacons: Array = []                  # [light, dot, phase, room]: blinking hull lights
+var _beacon_flare := {}                   # Room -> time until its beacons flash together
+
+# lights-on cutscene
+var _cutscene := false         # true while the cutscene moves the camera
+var _cut_cam := Vector2.ZERO   # where the cutscene camera looks (a Tween moves it)
+var _ship_powered := false     # every room has power: the inside of the ship is brighter
+var _env_tween: Tween          # the tween changing the darkness tint (so two never fight)
 
 # --- state
 var _busy := false             # true during win/lose animations: ignore input
@@ -1033,7 +1049,7 @@ func _light_hull(r: Room) -> void:
 		dot.draw.connect(func() -> void: dot.draw_rect(Rect2(-1, -1, 3, 3), col))
 		LightFX.glow(dot)
 		_tile_root.add_child(dot)
-		_beacons.append([l, dot, i * 0.27])
+		_beacons.append([l, dot, i * 0.27, r])
 		i += 1
 
 
@@ -1041,12 +1057,29 @@ func _light_hull(r: Room) -> void:
 func _update_environment(snap: bool) -> void:
 	if _current_room == null:
 		return
-	var col := space_light if _current_room.outside else darkness
+	var col := _env_color(_current_room, _ship_powered)
 	if snap:
+		if _env_tween:
+			_env_tween.kill()
 		_dark.color = col
 	else:
-		create_tween().tween_property(_dark, "color", col, 1.2)
+		_tween_env(col, 1.2)
 	_set_music("space" if _current_room.outside else "ship")
+
+
+## The darkness tint for room `r`. full = the whole ship has power.
+func _env_color(r: Room, full: bool) -> Color:
+	if r.outside:
+		return space_light
+	return full_power_light if full else darkness
+
+
+## Fades the darkness tint to `col`. Kills the previous fade first, so two never fight.
+func _tween_env(col: Color, secs: float) -> void:
+	if _env_tween:
+		_env_tween.kill()
+	_env_tween = create_tween()
+	_env_tween.tween_property(_dark, "color", col, secs)
 
 
 ## Draws an unpowered cable on the floor from each goal to the door it unlocks.
@@ -1208,7 +1241,8 @@ func _physics_process(delta: float) -> void:
 	if _complete:
 		_results_input()
 		return
-	_play_time += delta
+	if not _cutscene:
+		_play_time += delta         # the cutscene doesn't count towards your time
 	_strain_cd = maxf(0.0, _strain_cd - delta)
 	_drift_warn_cd = maxf(0.0, _drift_warn_cd - delta)
 	if _busy or _dialogue_lock:
@@ -1289,12 +1323,16 @@ func _process(delta: float) -> void:
 	_light_t += delta
 	for pair in _emergency:
 		var r: Room = pair[1]
-		if not r.solved:
+		if not r.solved and not r.full_power:
 			pair[0].energy = 0.35 + 0.2 * sin(_light_t * 2.2)
 	# powered hull sections: beacons blink one after another
+	# (in the cutscene a section's beacons flash all together for a moment)
 	for b in _beacons:
 		var on := fmod(_light_t + float(b[2]), 1.6) < 0.3
-		b[0].energy = 0.8 if on else 0.05
+		var flare: bool = _beacon_flare.get(b[3], 0.0) > _light_t
+		if flare:
+			on = int(_light_t * 10.0) % 2 == 0
+		b[0].energy = (1.4 if flare else 0.8) if on else 0.05
 		b[1].visible = on
 	_update_camera(delta, false)
 
@@ -1355,6 +1393,8 @@ func _check_cells() -> void:
 			_cells_pending.append(c)
 			_play("pickup")
 			hud.set_cells(_cells_banked + _cells_pending.size(), _cells.size(), true)
+			if Game.first_time("cell_charged"):
+				hud.show_toast("CELL CHARGED! POWER THE ROOM TO KEEP IT", 2.5)
 			cell_collected.emit(_wire_room.index)
 		elif not wired and not _cell_tip_shown:
 			_cell_tip_shown = true
@@ -1628,7 +1668,8 @@ func _solve(r: Room) -> void:
 	_set_hum(false)
 	_set_paused_node(Vector2i(-1, -1))
 	r.solved = true
-	_cells_banked += _cells_pending.size()    # cells charged on this try are yours to keep
+	var kept := _cells_pending.size()
+	_cells_banked += kept                     # cells charged on this try are yours to keep
 	_cells_pending.clear()
 	_rooms_powered += 1
 	hud.set_timer(false, 0.0, 0.0)
@@ -1653,11 +1694,13 @@ func _solve(r: Room) -> void:
 	hud.set_power(_rooms_powered, _rooms_with_goal)
 	_update_hint_label()
 	room_solved.emit(r.index)       # the tutorial, story and floor guides listen for this
+	if kept > 0 and Game.first_time("cell_kept"):
+		hud.say(PackedStringArray([PIP_LINES["cell_kept"] % int(Game.O2_PER_CELL)]))
 	if r.conduit:
 		await r.conduit.power_flow(0.5)
 	_open_exit_doors(r)
 	if _rooms_powered >= _rooms_with_goal:
-		_all_powered()
+		await _all_powered()        # the lights-on cutscene: wait here until it's over
 	_busy = false
 	_release_player()
 
@@ -1675,13 +1718,154 @@ func _open_exit_doors(r: Room) -> void:
 		_play("door")
 
 
-## The last room got power: fanfare!
+## The last room got power: fanfare, then the lights-on cutscene.
+## _solve() waits ("await") until this is finished before letting you move.
 func _all_powered() -> void:
 	_play("fanfare")
 	hud.flash(Color(1.0, 0.95, 0.7), 0.5)
 	_shake_cam(0.4, 2.5)
-	hud.show_toast("ALL SYSTEMS ONLINE!", 3.0)
-	all_rooms_powered.emit()
+	hud.show_toast("ALL SYSTEMS ONLINE!", 2.5)
+	await get_tree().create_timer(0.8).timeout
+	await _power_tour()
+	all_rooms_powered.emit()        # PIP says what to do next (StoryBeat: ALL_POWERED)
+
+
+# ===================================================================== lights-on cutscene
+# A cutscene is just a coroutine: a list of steps with `await` in between
+# (glide there... light it up... wait a moment... next room). While it runs,
+# _busy keeps the player frozen and _cutscene tells the camera to stop
+# following him and look at _cut_cam instead.
+
+## The camera glides back through every room - from the one you're in to the
+## very first one - and each room lights up at FULL power as it arrives.
+## Then a quick fade takes you back to the player.
+func _power_tour() -> void:
+	var order: Array[Room] = []
+	for r in _rooms:
+		if not r.is_exit:
+			order.append(r)
+	# highest room number first (= backwards to the start), and the room you're in first of all
+	order.sort_custom(func(a: Room, b: Room) -> bool: return a.index > b.index)
+	if order.has(_current_room):
+		order.erase(_current_room)
+		order.push_front(_current_room)
+	_cutscene = true
+	_cut_cam = _cam_pos
+	hud.set_cinematic(true)          # black bars top and bottom, objective box hidden
+	ship_lighting_up.emit()          # PIP talks over it (StoryBeat: SHIP_LIGHTS_UP)
+	for i in order.size():
+		var r := order[i]
+		await _glide_to(r)
+		_light_up(r, i)
+		await get_tree().create_timer(1.1 if r.cells.size() > 12 else 0.7).timeout
+	# let PIP finish what he's saying (but never wait forever)
+	var wait := 4.0
+	while hud.is_talking() and wait > 0.0:
+		await get_tree().process_frame
+		wait -= get_process_delta_time()
+	await hud.fade_out(0.3)
+	_cutscene = false
+	_ship_powered = true             # the inside of the ship stays brighter from now on
+	if _sfx.has("powerup"):
+		_sfx["powerup"].pitch_scale = 1.0
+	_update_camera(0.0, true)        # back to the player
+	_update_environment(true)
+	hud.set_cinematic(false)
+	await hud.fade_in(0.4)
+
+
+## Where the camera looks to show room `r`: the middle of the room.
+func _room_view(r: Room) -> Vector2:
+	var b := Rect2(Vector2(r.bounds.position * TILE), Vector2(r.bounds.size * TILE))
+	return b.get_center()
+
+
+## Moves the cutscene camera to room `r`: slow - fast - slow, like a film camera.
+## On the way, the darkness goes back to how that room looked before.
+func _glide_to(r: Room) -> void:
+	var target := _room_view(r)
+	var dist := _cut_cam.distance_to(target)
+	if dist < 4.0:
+		return
+	var secs := clampf(dist / 600.0, 0.4, 1.2)
+	_tween_env(_env_color(r, false), secs)
+	var tw := create_tween()
+	tw.tween_property(self, "_cut_cam", target, secs).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw.finished
+
+
+## One room goes to FULL power: brighter tint, lights flare, sparks, the floor
+## cable flows again. `step` = how many rooms came before (each sounds higher).
+func _light_up(r: Room, step: int) -> void:
+	r.full_power = true
+	var p: AudioStreamPlayer = _sfx.get("powerup")
+	if p and p.stream:
+		p.pitch_scale = 1.0 + step * 0.1
+		p.play()
+	if r.conduit:
+		r.conduit.power_flow(0.6)
+	if r.goal.x >= 0:
+		_tile_hit(r.goal)
+	if r.outside:
+		# The hull is sunlit already, so a quick bright surge shows the power arriving.
+		if _env_tween:
+			_env_tween.kill()
+		_env_tween = create_tween()
+		_env_tween.tween_property(_dark, "color", space_light.lerp(Color.WHITE, 0.4), 0.12)
+		_env_tween.tween_property(_dark, "color", space_light, 0.7)
+		_beacon_flare[r] = _light_t + 1.0        # its beacons flash all together...
+		_hull_running_lights(r)                  # ...and lights race along the plate edges
+		return
+	_tween_env(_env_color(r, true), 0.5)
+	for pair in _emergency:
+		if pair[1] == r:
+			create_tween().tween_property(pair[0], "energy", 0.0, 0.3)
+	var lights: Array = _room_lights.get(r, [])
+	for k in lights.size():
+		var l: PointLight2D = lights[k]
+		l.visible = true
+		var tw := create_tween()
+		tw.tween_interval(k * 0.08)                              # one after another
+		tw.tween_property(l, "energy", room_light_energy * 2.2, 0.08)
+		tw.tween_property(l, "energy", room_light_energy, 0.45)
+		_sparks_at(l.position)
+
+
+## A shower of warm sparks (a ceiling light bursting on).
+func _sparks_at(pos: Vector2) -> void:
+	var s := Wire.make_sparks(Color(1.0, 0.95, 0.7), 10, 0.5)
+	s.one_shot = true
+	s.explosiveness = 1.0
+	s.position = pos
+	s.z_index = 10
+	_wire_root.add_child(s)
+	s.emitting = true
+	get_tree().create_timer(1.0).timeout.connect(s.queue_free)
+
+
+## Little lights along every edge of a hull section, switching on in a wave that
+## starts at its relay (GOAL). They stay on: the outside of the ship is lit too.
+func _hull_running_lights(r: Room) -> void:
+	var from := center_of(r.goal) if r.goal.x >= 0 else _room_view(r)
+	for c in r.cells:
+		if kind_at(c) == "space":
+			continue
+		for d in DIRS4:
+			if not _is_void(c + d):
+				continue
+			var pos := center_of(c) + Vector2(d) * 13.0     # just inside the plate's edge
+			var dot := Node2D.new()
+			dot.position = pos
+			dot.z_index = 4
+			dot.modulate.a = 0.0
+			dot.draw.connect(func() -> void:
+				dot.draw_rect(Rect2(-1, -1, 3, 3), Color(1.0, 0.75, 0.3))
+				dot.draw_rect(Rect2(0, 0, 1, 1), Color(1.0, 1.0, 0.85)))
+			LightFX.glow(dot)
+			_tile_root.add_child(dot)
+			var tw := dot.create_tween()
+			tw.tween_interval(from.distance_to(pos) / 900.0)   # further away = later: a wave
+			tw.tween_property(dot, "modulate:a", 1.0, 0.1)
 
 
 func _fail(kind: String) -> void:
@@ -1698,6 +1882,7 @@ func _fail(kind: String) -> void:
 	if counts and r != null and not r.solved:
 		r.fails += 1
 		_retries += 1
+	var lost_cells := not _cells_pending.is_empty()
 	_return_cells()
 	player.lock(_wire != null)
 	match kind:
@@ -1732,6 +1917,9 @@ func _fail(kind: String) -> void:
 		_refill_o2()
 	await hud.fade_in(0.25)
 	_busy = false
+	# The first time a charged cell drains, PIP explains why.
+	if lost_cells and Game.first_time("cell_lost"):
+		hud.say(PackedStringArray([PIP_LINES["cell_lost"]]))
 	# Failed twice here? PIP offers a hint (once per room).
 	if counts and r != null and not r.solved and r.fails >= 2 and _room_has_hint(r) and not _hint_offered.has(r):
 		_hint_offered[r] = true
@@ -1884,8 +2072,13 @@ func _shake_cam(duration: float, strength: float) -> void:
 
 ## Follows the player but never shows outside the current room. If the room is
 ## smaller than the screen, the camera just sits in the room's middle.
+## During the lights-on cutscene it looks at _cut_cam instead.
 func _update_camera(delta: float, snap: bool) -> void:
 	if camera == null or _current_room == null:
+		return
+	if _cutscene:
+		_cam_pos = _cut_cam
+		camera.position = _cam_pos.round()
 		return
 	var view := get_viewport_rect().size
 	var b := _current_room.bounds

@@ -3,7 +3,8 @@
 # its bouncing ARROW, the small "toast" message (room names, ZAP!, ...), the
 # 5-second timer bar, the white flash / black fade, PIP's SPEECH box, the ship
 # POWER meter, the POWER CELL counter, the OXYGEN gauge (spacewalks only), the
-# RESULTS screen with stars, and the PAUSE menu.
+# RESULTS screen with stars, the PAUSE menu, and the black film bars that slide
+# in during a cutscene (set_cinematic).
 #
 # It's a CanvasLayer, which means it stays still on screen while the camera
 # moves. Its nodes (Toast, TimerBar, Dialogue...) live in hud.tscn - open that
@@ -42,6 +43,9 @@ const KEY_COLOR := "#8fe3ff"
 @onready var stars_box: Control = $Complete/VBox/Stars
 @onready var pause_panel: Control = $Pause
 @onready var pause_level: Label = $Pause/VBox/Level
+@onready var controls_label: Label = $Controls
+@onready var bar_top: ColorRect = $BarTop
+@onready var bar_bottom: ColorRect = $BarBottom
 
 ## The level sets this to false on the results screen.
 var allow_pause := true
@@ -56,6 +60,8 @@ var _pulse := 0.0
 var _toast_token := 0
 var _marker_on := false
 var _marker_world := Vector2.ZERO   # where the arrow points, in level (world) pixels
+var _objective_on := false          # a tutorial instruction is showing
+var _cinematic := false             # a cutscene is playing (film bars on)
 var _t := 0.0
 
 # status (top-left) and cells (top-right)
@@ -77,6 +83,10 @@ var _waiting_key := false
 var _skip_line := false           # cut the current (non-blocking) line short...
 var _cut_speech := false          # ...and skip the rest of that speech
 var _line_bbcode := ""
+var _box_top := false             # the box sits at the top (chosen ONCE, when it appears)
+var _box_alpha := 0.0             # fades the box in and out
+var _see_through := 0.0           # 0..1: the player is behind the box, so it turns see-through
+var _speech_point := Vector2.INF  # PIP's blue arrow points here while he talks (INF = no arrow)
 
 # results screen
 var _stars_earned := 0
@@ -102,6 +112,11 @@ func _ready() -> void:
 	pause_panel.visible = false
 	flash_rect.color.a = 0.0
 	fade_rect.color.a = 0.0
+	# the film bars wait just off screen (above the top / below the bottom)
+	bar_top.visible = false
+	bar_bottom.visible = false
+	bar_top.position.y = -bar_top.size.y
+	bar_bottom.position.y = get_viewport().get_visible_rect().size.y
 	for n in ["blip", "star"]:
 		var p := AudioStreamPlayer.new()
 		var path := "res://Assets/audio/%s.wav" % n
@@ -117,15 +132,14 @@ func _process(delta: float) -> void:
 	if _pulse > 0.0:
 		_pulse = maxf(0.0, _pulse - delta * 2.5)
 		timer_bar.queue_redraw()
-	if _marker_on:
-		marker.queue_redraw()      # the arrow bobs, and the camera moves, so redraw every frame
+	marker.queue_redraw()          # the arrows bob, and the camera moves, so redraw every frame
 	_power_flash = maxf(0.0, _power_flash - delta)
 	_cell_bump = maxf(0.0, _cell_bump - delta * 3.0)
 	status_box.queue_redraw()
 	cells_box.queue_redraw()
 	if dialogue.visible:
 		portrait.queue_redraw()
-		_place_dialogue()
+		_place_dialogue(delta)
 		if _waiting_key:
 			var blink := int(_t * 3.0) % 2 == 0
 			dialogue_text.text = _line_bbcode + ("  [color=%s][E][/color]" % KEY_COLOR if blink else "")
@@ -159,13 +173,15 @@ func set_level_info(text: String) -> void:
 ## `world_pos`. An empty text hides both.
 func set_objective(text: String, world_pos: Vector2, arrow: bool) -> void:
 	if text == "":
+		_objective_on = false
 		objective.visible = false
 		_marker_on = false
 		marker.queue_redraw()
 		return
+	_objective_on = true
 	objective_label.text = text
 	objective.reset_size()
-	objective.visible = true
+	objective.visible = not _cinematic
 	objective.modulate = Color(1.8, 1.8, 1.8)    # flash bright, then settle
 	create_tween().tween_property(objective, "modulate", Color.WHITE, 0.4)
 	_marker_world = world_pos
@@ -173,17 +189,21 @@ func set_objective(text: String, world_pos: Vector2, arrow: bool) -> void:
 	marker.queue_redraw()
 
 
-## Draws the arrow. The HUD is on its own layer that doesn't move with the camera,
-## so we convert the world position into a screen position first.
+## Draws the arrows: the yellow tutorial arrow, and PIP's blue one while he
+## points at something. The HUD is on its own layer that doesn't move with the
+## camera, so each world position is converted into a screen position first.
 func _draw_marker() -> void:
-	if not _marker_on:
-		return
-	var screen := get_viewport().get_canvas_transform() * _marker_world
+	if _marker_on:
+		_draw_arrow(_marker_world, Color(1.0, 0.85, 0.3), Color(0.15, 0.08, 0.0))
+	if _speech_point.is_finite():
+		_draw_arrow(_speech_point, Color(0.5, 0.9, 1.0), Color(0.0, 0.1, 0.18))
+
+
+func _draw_arrow(world: Vector2, col: Color, dark: Color) -> void:
+	var screen := get_viewport().get_canvas_transform() * world
 	var view := marker.size
 	var margin := 18.0
 	var inside := Rect2(Vector2(margin, margin + 30), view - Vector2(margin * 2, margin * 2 + 30))
-	var col := Color(1.0, 0.85, 0.3)
-	var dark := Color(0.15, 0.08, 0.0)
 	if inside.has_point(screen):
 		# on screen: a bouncing arrow pointing down at the spot
 		var tip := screen + Vector2(0, -20 - roundf(absf(sin(_t * 5.0)) * 6.0))
@@ -206,7 +226,8 @@ func _draw_marker() -> void:
 ## Queue up some lines for `speaker` to say. Each line is one speech bubble.
 ## blocking = true: the player is frozen and presses E to go through the lines
 ## (the level listens to dialogue_blocking). Otherwise lines go by on their own.
-func say(lines: PackedStringArray, speaker := "PIP", blocking := false) -> void:
+## point_at: a spot in the level for PIP's blue arrow while these lines play.
+func say(lines: PackedStringArray, speaker := "PIP", blocking := false, point_at := Vector2.INF) -> void:
 	if lines.is_empty():
 		return
 	if blocking:
@@ -216,7 +237,7 @@ func say(lines: PackedStringArray, speaker := "PIP", blocking := false) -> void:
 		if _talking and not _blocking:
 			_skip_line = true
 			_cut_speech = true
-	_queue.append([lines, speaker, blocking])
+	_queue.append([lines, speaker, blocking, point_at])
 	if not _talking:
 		_run_dialogue()
 
@@ -225,16 +246,63 @@ func is_blocking() -> bool:
 	return _blocking
 
 
-## The speech box sits at the bottom of the screen - unless the player is down
-## there, then it moves to the top so it doesn't hide him.
-func _place_dialogue() -> void:
+## Is PIP saying anything right now (or about to)?
+func is_talking() -> bool:
+	return _talking
+
+
+## Cutscene mode: black film bars slide in at the top and bottom, the objective
+## box, arrows and key reminders hide, and PIP's lines appear in the bottom bar
+## (E skips to his next line). Pausing is off until the cutscene ends.
+func set_cinematic(on: bool) -> void:
+	_cinematic = on
+	allow_pause = not on
+	var view := get_viewport().get_visible_rect().size
+	bar_top.visible = true
+	bar_bottom.visible = true
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(bar_top, "position:y", 0.0 if on else -bar_top.size.y, 0.35)
+	tw.tween_property(bar_bottom, "position:y", view.y - bar_bottom.size.y if on else view.y, 0.35)
+	objective.visible = _objective_on and not on
+	marker.visible = not on
+	keys_label.visible = not on
+	controls_label.visible = not on
+	if on:
+		timer_bar.visible = false
+
+
+## Where the player is on the SCREEN (the HUD doesn't move with the camera).
+func _player_on_screen() -> Vector2:
 	var p := get_tree().get_first_node_in_group("player") as Node2D
 	if p == null:
-		return
-	var screen_y := (get_viewport().get_canvas_transform() * p.global_position).y
+		return Vector2(-1000, -1000)
+	return get_viewport().get_canvas_transform() * p.global_position
+
+
+## Called when the box appears. It picks its side NOW - the bottom, or the top
+## if the player is low on the screen - and stays there until it closes.
+## (It used to follow the player and jump up and down mid-sentence: hard to read.)
+func _open_box() -> void:
+	_box_top = not _cinematic and _player_on_screen().y > 150.0
+	_see_through = 0.0
+	dialogue.visible = true
+	create_tween().tween_property(self, "_box_alpha", 1.0, 0.15)
+
+
+## Every frame while the box is open: keep it on its side, and if the player
+## walks behind it, fade it see-through so he never disappears.
+func _place_dialogue(delta: float) -> void:
 	var h := dialogue.size.y
-	var top := 78.0 if screen_y > 150.0 else 238.0 - h     # 78 = just under the toast
-	dialogue.position.y = top
+	if _cinematic:
+		dialogue.position.y = get_viewport().get_visible_rect().size.y - 4.0 - h   # in the bottom film bar
+	elif _box_top:
+		dialogue.position.y = 78.0                    # just under the toast
+	else:
+		dialogue.position.y = 238.0 - h               # just above the key reminders
+	var body := Rect2(_player_on_screen() + Vector2(-10, -40), Vector2(20, 44))
+	var behind := not _cinematic and Rect2(dialogue.position, dialogue.size).grow(2.0).intersects(body)
+	_see_through = move_toward(_see_through, 1.0 if behind else 0.0, delta * 4.0)
+	dialogue.modulate.a = _box_alpha * lerpf(1.0, 0.3, _see_through)
 
 
 ## Plays everything in the queue, one line at a time. This function uses `await`
@@ -243,8 +311,7 @@ func _place_dialogue() -> void:
 func _run_dialogue() -> void:
 	_talking = true
 	while not _queue.is_empty():
-		dialogue.visible = true
-		dialogue.modulate.a = 1.0
+		_open_box()
 		while not _queue.is_empty():
 			var item: Array = _queue.pop_front()
 			var blocking: bool = item[2] and (not can_block.is_valid() or can_block.call())
@@ -252,19 +319,21 @@ func _run_dialogue() -> void:
 				_blocking = blocking
 				dialogue_blocking.emit(blocking)
 			_cut_speech = false
+			_speech_point = item[3]
 			for line in item[0]:
 				if _cut_speech:
 					break
 				await _show_line(item[1], line, blocking)
 				if not is_inside_tree():
 					return
+			_speech_point = Vector2.INF
 		if _blocking:
 			_blocking = false
 			dialogue_blocking.emit(false)
 		if not dialogue.visible:
 			break                         # hidden by the results screen
 		var tw := create_tween()
-		tw.tween_property(dialogue, "modulate:a", 0.0, 0.3)
+		tw.tween_property(self, "_box_alpha", 0.0, 0.3)
 		await tw.finished
 		if not is_inside_tree():
 			return
@@ -293,7 +362,7 @@ func _show_line(speaker: String, line: String, blocking: bool) -> void:
 			return                            # the level changed while PIP was talking
 		if get_tree().paused:
 			continue
-		if blocking and Input.is_action_just_pressed("interact"):
+		if (blocking or _cinematic) and Input.is_action_just_pressed("interact"):
 			shown = total                     # E skips the typing
 		else:
 			shown += TYPE_SPEED * get_process_delta_time()
@@ -313,11 +382,17 @@ func _show_line(speaker: String, line: String, blocking: bool) -> void:
 		_waiting_key = false
 		dialogue_text.text = _line_bbcode
 	else:
-		# reading time grows with the length of the line (and stops while paused)
+		# reading time grows with the length of the line (and stops while paused).
+		# In a cutscene the pictures move on by themselves, so lines go a bit
+		# quicker - and E skips to the next one.
 		var wait := 1.6 + line.length() * 0.04
+		if _cinematic:
+			wait = 1.0 + line.length() * 0.03
 		while wait > 0.0 and not _skip_line:
 			if not await _frame():
 				return
+			if _cinematic and Input.is_action_just_pressed("interact"):
+				break
 			if not get_tree().paused:
 				wait -= get_process_delta_time()
 	_skip_line = false
@@ -486,11 +561,9 @@ func _draw_cells() -> void:
 	var font := cells_box.get_theme_default_font()
 	var s := cells_box.size
 	cells_box.draw_rect(Rect2(Vector2.ZERO, s), Color(0.03, 0.05, 0.12, 0.8))
-	var o := Vector2(5, 3 - roundf(_cell_bump * 3.0))
+	var o := Vector2(4, 1 - roundf(_cell_bump * 3.0))
 	var body := Color(1.0, 0.85, 0.3).lerp(Color.WHITE, _cell_bump)
-	cells_box.draw_rect(Rect2(o + Vector2(2, 0), Vector2(4, 2)), Color(0.85, 0.88, 0.95))
-	cells_box.draw_rect(Rect2(o + Vector2(0, 2), Vector2(8, 12)), Color(0.2, 0.13, 0.02))
-	cells_box.draw_rect(Rect2(o + Vector2(1, 3), Vector2(6, 10)), body)
+	PowerCell.draw_battery(cells_box, o, body, Color(0.4, 0.25, 0.02))   # same picture as in the level
 	var txt := "%d/%d" % [_cells, _cells_total]
 	var ink := Color(1, 1, 1) if _cells < _cells_total else Color(1.0, 0.9, 0.4)
 	cells_box.draw_string(font, Vector2(18, 14), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink)
@@ -525,12 +598,17 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	_queue.clear()                    # PIP stops talking: the results get the screen
 	_skip_line = true
 	_cut_speech = true
+	_speech_point = Vector2.INF
 	dialogue.visible = false
 	$Complete/VBox/Title.text = "LEVEL %d COMPLETE" % number
 	$Complete/VBox/Sub.text = message
 	var secs := int(stats.get("time", 0.0))
 	$Complete/VBox/Stats.text = "Time %d:%02d    Cells %d/%d    Retries %d" % [
 		secs / 60, secs % 60, stats.get("cells", 0), stats.get("cells_total", 0), stats.get("retries", 0)]
+	# what the cells are FOR: every one makes your suit's air last longer
+	var bonus := int(stats.get("cells", 0)) * int(Game.O2_PER_CELL)
+	$Complete/VBox/Bonus.visible = bonus > 0
+	$Complete/VBox/Bonus.text = "Suit upgrade: +%d s of oxygen" % bonus
 	$Complete/VBox/StarHelp.text = "Stars: finish - all cells - %d retries or fewer" % stats.get("retry_goal", 0)
 	$Complete/VBox/Again.text = ("[E] next level" if has_next else "[E] back to title") + "    [R] play again"
 	_stars_earned = int(stats.get("stars", 1))

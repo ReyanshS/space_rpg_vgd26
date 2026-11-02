@@ -51,7 +51,11 @@ dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship'
 - Red DISCHARGE tile: stepping on it (wire or not) = shock, room restarts. Timer at 0 = wire snaps,
   room restarts. **R** restarts manually (only counts as a retry while carrying the wire).
 - POWER CELL: touch it *while carrying the wire* to charge it (radius 14 px). Kept when the room is
-  powered, returned if you fail. Touching one without the wire triggers PIP's explanation once.
+  powered, returned if you fail. PIP explains cells at Level 1's start (a StoryBeat with
+  `point_here`); the first charge / keep / loss each get a one-time message (`Game.first_time()`).
+- All rooms powered -> the **lights-on cutscene** (`_power_tour()` in level.gd): film bars, the
+  camera glides back through every room and lights each one at full power (`full_power_light`).
+  StoryBeats with trigger SHIP_LIGHTS_UP play during it, ALL_POWERED ones after it.
 - Results at the exit: time, cells, retries; stars = finish + all cells + retries <= rooms with a goal.
   `Game` (autoload, `game_state.gd`) stores results; cells from earlier levels = extra oxygen.
 - **H** shows the room's hint route (a FloorGuide with `hint_only`); PIP offers it after 2 fails.
@@ -84,23 +88,29 @@ dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship'
   and music. Exports: `level_number`, `level_name`, `complete_message`, `room_titles`, rules,
   lighting, `o2_seconds`. Signals: `room_entered`, `room_solved`, `room_restarted`, `wire_grabbed`,
   `pad_touched(kind, index)`, `level_completed`, `cell_collected`, `empty_cell_touched`,
-  `hint_shown`, `drift_started`, `airlock_cycling`, `all_rooms_powered`.
+  `hint_shown`, `drift_started`, `airlock_cycling`, `ship_lighting_up` (cutscene starts),
+  `all_rooms_powered` (cutscene over).
 - `Scripts/player.gd` (`Astronaut`): state machine FREE / WIRED / CHOOSING / FLUNG / LOCKED / DRIFT.
   Only movement + animation; asks the level for rules (`player_moved()`, `wire_reaches()`,
   `drift_landing()`...).
 - `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`), results, `o2_bonus()`,
-  `go_to_level()`, `story_values()` for `{cells}` / `{o2_bonus}` in story text.
+  `go_to_level()`, `first_time(tip)` (PIP explains things once), `story_values()` for `{cells}` /
+  `{o2_bonus}` / `{o2_per_cell}` in story text.
 - `Scripts/puzzle_tile.gd`: runtime visuals for pads/doors/gangways/airlock (glow, sparks, arrows).
 - `Scripts/power_cell.gd`: the collectible battery (draws itself, collect/restore animations).
 - `Scripts/wire.gd`: carried wire + floor conduits (Line2D + `Shaders/wire_current.gdshader`).
 - `Scripts/hud.gd` + `Scenes/hud.tscn`: objective box + arrow, toasts, timer bar, fades, PIP's speech
-  box (`say(lines, speaker, blocking)`, typewriter, moves to the top if the player is low on screen;
-  a blocking speech cuts casual chatter short), power meter, cell counter, O2 gauge, results
-  screen with stars, pause menu.
+  box (`say(lines, speaker, blocking, point_at)`, typewriter; it picks the top or bottom ONCE when
+  it opens - top if the player is low on screen - and turns see-through when he walks behind it;
+  a blocking speech cuts casual chatter short; `point_at` = PIP's blue arrow), power meter, cell
+  counter, O2 gauge, results screen with stars + suit upgrade, pause menu, cutscene film bars
+  (`set_cinematic`: hides the objective, lines go in the bottom bar, E skips a line).
 - **Story** (`Scripts/story.gd` on the `Story` node + `Scripts/story_beat.gd` Marker2D children):
   each beat has `trigger` (LEVEL_START, ENTER_ROOM, SOLVE_ROOM, REACH_HERE, GRAB_WIRE, FAIL_IN_ROOM,
-  AIRLOCK, ALL_POWERED, FIRST_DRIFT, TOUCH_EMPTY_CELL), `lines`, `pause_game`; its room = where the
-  marker sits. Plays once. Blocking beats never freeze a player who carries the wire.
+  AIRLOCK, ALL_POWERED, FIRST_DRIFT, TOUCH_EMPTY_CELL, SHIP_LIGHTS_UP), `lines`, `pause_game`,
+  `point_here` (blue arrow at the marker while it plays); its room = where the marker sits. Plays
+  once. Blocking beats never freeze a player who carries the wire. New triggers go at the END of
+  the enum (scenes store the number).
 - **Tutorial**: `Scripts/tutorial.gd` on the `Tutorial` node runs its `TutorialStep` children
   (`Scripts/tutorial_step.gd`, Marker2D) in tree order. Each step has `text`, `advance_when`
   (GRAB_WIRE, TOUCH_NODE, TOUCH_BEND, SOLVE_ROOM, ENTER_NEXT_ROOM, REACH_HERE, DRIFT) and its
@@ -141,7 +151,7 @@ it (routes, tightest segment, and whether every power cell can be charged in tim
 
 ## AI-generated content (for TSA documentation)
 Made with Claude (Anthropic) in the Claude app and Claude Code: the level/tutorial/lighting/story/
-HUD scripts, Level 2's layout and puzzles (drafted as text, verified with the solver), the tile and
+HUD scripts (incl. the lights-on cutscene), Level 2's layout and puzzles (drafted as text, verified with the solver), the tile and
 astronaut sprite sheets (cleaned up from the team's AI-generated art; `astronaut_v2.png` was
 hand-composited in code), the hull/space/gangway/airlock art, planet and nebula (drawn pixel by
 pixel in `tools/art_space.py`), PIP's dialogue text, and all sounds and music in `Assets/audio`

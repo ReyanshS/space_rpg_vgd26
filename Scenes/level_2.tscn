@@ -141,11 +141,17 @@ trigger = 1
 lines = PackedStringArray("There it is: the MAIN COUPLING, behind that cloud of debris.", "Sparks on the hull are just as deadly as red floor tiles. Think before you fling!")
 pause_game = true
 
+[node name="ShipLightsUp" type="Marker2D" parent="Story"]
+position = Vector2(2016, 352)
+script = ExtResource("10_beat")
+trigger = 10
+lines = PackedStringArray("MAIN COUPLING ONLINE! Power's flowing through the whole ship!", "Look at her light up - from the hull plates all the way to the bridge!")
+
 [node name="AllPowered" type="Marker2D" parent="Story"]
 position = Vector2(1984, 352)
 script = ExtResource("10_beat")
 trigger = 7
-lines = PackedStringArray("MAIN COUPLING ONLINE! Full power to the bridge!", "I can see the whole ship lighting up. You did it!", "Now get back inside - the hatch under the coupling is open.")
+lines = PackedStringArray("You did it! Now get back inside - the hatch under the coupling is open.")
 pause_game = true
 
 [node name="Player" parent="." instance=ExtResource("2_player")]

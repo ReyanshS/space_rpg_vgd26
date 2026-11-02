@@ -42,6 +42,7 @@ func _start() -> void:
 	_level.airlock_cycling.connect(func(i: int) -> void: _fire(StoryBeat.Trigger.AIRLOCK, i))
 	_level.drift_started.connect(func(i: int) -> void: _fire(StoryBeat.Trigger.FIRST_DRIFT, i))
 	_level.all_rooms_powered.connect(func() -> void: _fire(StoryBeat.Trigger.ALL_POWERED, -1))
+	_level.ship_lighting_up.connect(func() -> void: _fire(StoryBeat.Trigger.SHIP_LIGHTS_UP, -1))
 	_level.empty_cell_touched.connect(func() -> void: _fire(StoryBeat.Trigger.TOUCH_EMPTY_CELL, -1))
 	_fire(StoryBeat.Trigger.LEVEL_START, -1)
 	_fire(StoryBeat.Trigger.ENTER_ROOM, _level.current_room_index())   # you start inside a room
@@ -65,7 +66,8 @@ func _play(b: StoryBeat) -> void:
 	var lines := PackedStringArray()
 	for line in b.lines:
 		lines.append(line.format(values))
-	_level.hud.say(lines, b.speaker, b.pause_game and _level.can_pause_for_dialogue())
+	var point := b.global_position if b.point_here else Vector2.INF   # INF = no arrow
+	_level.hud.say(lines, b.speaker, b.pause_game and _level.can_pause_for_dialogue(), point)
 
 
 func _process(_delta: float) -> void:
