@@ -5,9 +5,12 @@
 # per tile to tools/out/level1.txt. The solver and preview tools read that file.
 #
 #   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
-#   x red-off   C crate   D door   P spawn   E exit   (space) = nothing
+#   x red-off   C crate   D door   P spawn   E exit
+#   * power cell   , hull (outside floor)   ~ open space   A airlock pad   (space) = nothing
 #
-# Run from the project folder:   python tools/map_from_scene.py [scene.tscn]
+# Run from the project folder:   python tools/map_from_scene.py [scene.tscn] [out.txt]
+#   e.g. python tools/map_from_scene.py Scenes/level_2.tscn tools/out/level2.txt
+# (tools/map_to_scene.py does the opposite: text grid -> scene.)
 #
 # tile_map_data format (Godot 4): 2 bytes = format version, then 12 bytes per
 # painted cell: int16 x, int16 y, uint16 source id, uint16 atlas x, uint16 atlas y,
@@ -16,9 +19,10 @@ import os, re, struct, sys
 
 SCENE = sys.argv[1] if len(sys.argv) > 1 else 'Scenes/level_1.tscn'
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
-OUT = 'tools/out/level1.txt'
+OUT = sys.argv[2] if len(sys.argv) > 2 else 'tools/out/level1.txt'
 SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
-          'discharge': 'X', 'discharge_off': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E'}
+          'discharge': 'X', 'discharge_off': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
+          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A'}
 
 scene = open(SCENE, encoding='utf-8').read()
 layout = scene[scene.index('[node name="Layout"'):]

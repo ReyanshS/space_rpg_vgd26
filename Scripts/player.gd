@@ -11,7 +11,11 @@
 #   CHOOSING  stopped on a purple BEND, waiting for you to press one of its
 #             two arrows
 #   FLUNG     the BEND is throwing you in a straight line - no steering
-#   LOCKED    a short "cut-scene" (shocked, room solved...) - no control
+#   LOCKED    a short "cut-scene" (shocked, room solved, PIP talking...) - no control
+#   DRIFT     spacewalk: you walked off the edge of a hull plate and float in a
+#             straight line across open space until your mag boots grab the
+#             next plate. You can only push off where there IS a plate to land
+#             on (level.drift_landing() checks that before you go).
 #
 # This script only handles moving + animation. The RULES live in level.gd.
 # The player tells the level "I moved" by calling level.player_moved(), and
@@ -21,7 +25,7 @@
 class_name Astronaut          # lets other scripts use "Astronaut" as a type
 extends CharacterBody2D       # the node type this script is attached to
 
-enum State { FREE, WIRED, CHOOSING, FLUNG, LOCKED }
+enum State { FREE, WIRED, CHOOSING, FLUNG, LOCKED, DRIFT }
 
 const LAMP_ENERGY := 0.85     # helmet lamp brightness when it's on
 
@@ -34,12 +38,17 @@ const FEET_HALF := Vector2(6, 4)
 @export var walk_speed := 100.0
 ## How fast a BEND pad throws you.
 @export var fling_speed := 260.0
+## How fast you float across open space on a spacewalk (tools/solver2.py uses this too).
+@export var drift_speed := 150.0
 
 var level: WireLevel = null   # set by the level when the game starts
 var state: State = State.FREE
 var facing := Vector2i(0, 1)  # which way he looks: (0,1) = down, towards the camera
 var _last_x := 1              # last left/right he faced (for sprites with no "walk_up")
 
+var _drift_dir := Vector2.ZERO
+var _drift_target := Vector2.ZERO
+var _drift_t := 0.0
 var _fling_dir := Vector2.ZERO
 var _choice_at := Vector2.ZERO
 var _choices: Array[Vector2] = []
@@ -80,6 +89,8 @@ func _physics_process(delta: float) -> void:
 			_choose()
 		State.FLUNG:
 			_fling_step(delta)
+		State.DRIFT:
+			_drift_step(delta)
 		State.LOCKED:
 			_moving = false
 	_update_anim()
@@ -90,7 +101,7 @@ func _physics_process(delta: float) -> void:
 # ------------------------------------------------------------------ called by the level
 
 func is_wired() -> bool:
-	return state in [State.WIRED, State.CHOOSING, State.FLUNG] or (state == State.LOCKED and _carrying)
+	return state in [State.WIRED, State.CHOOSING, State.FLUNG] or (state in [State.LOCKED, State.DRIFT] and _carrying)
 
 
 func grab_wire() -> void:
@@ -175,7 +186,8 @@ func _walk(delta: float) -> void:
 	var step := input * walk_speed * delta
 	# Move X and Y separately so you slide along walls instead of sticking.
 	_slide(Vector2(step.x, 0.0), absf(input.y) < 0.2)
-	_slide(Vector2(0.0, step.y), absf(input.x) < 0.2)
+	if state == State.FREE or state == State.WIRED:     # not if that started a drift
+		_slide(Vector2(0.0, step.y), absf(input.x) < 0.2)
 
 
 ## Can the astronaut stand at `pos`? Not inside a wall, and (if wired) the
@@ -205,8 +217,14 @@ func _slide(mv: Vector2, may_nudge: bool) -> void:
 		remaining -= s
 	if remaining <= 0.0:
 		return
-	if state == State.WIRED and not level.box_blocked(position + dir * remaining, FEET_HALF):
-		level.wire_strained(position + dir * remaining)   # it was the wire, not a wall
+	var target := position + dir * remaining
+	# Only OPEN SPACE in the way (no wall, no crate)? Push off and drift across.
+	# (box_blocked's last argument = "does open space count as blocked?")
+	if may_nudge and level.box_blocked(target, FEET_HALF) and not level.box_blocked(target, FEET_HALF, false):
+		if _try_drift(dir):
+			return
+	if state == State.WIRED and not level.box_blocked(target, FEET_HALF):
+		level.wire_strained(target)   # it was the wire, not a wall
 	elif may_nudge:
 		_nudge_around_corner(dir)
 
@@ -272,6 +290,40 @@ func _fling_step(delta: float) -> void:
 		level.player_moved()       # may touch a pad / get shocked (changes state)
 
 
+# ------------------------------------------------------------------ spacewalk drift
+
+## Walked into open space: ask the level where we'd land. No landing = stay put.
+func _try_drift(dir: Vector2) -> bool:
+	var land := level.drift_landing(position, dir, FEET_HALF, state == State.WIRED)
+	if not land.is_finite():          # Vector2.INF = "nowhere to land"
+		level.player_drift_refused(position, dir)
+		return false
+	_drift_dir = dir
+	_drift_target = land
+	_drift_t = 0.0
+	state = State.DRIFT
+	_face(dir)
+	level.player_drift_begin(dir)
+	return true
+
+
+## Float towards the landing spot, 2 px at a time (so we can't skip a red tile or a cell).
+func _drift_step(delta: float) -> void:
+	_moving = false
+	_drift_t += delta
+	var remaining := drift_speed * delta
+	while remaining > 0.0 and state == State.DRIFT:
+		var s := minf(2.0, remaining)
+		if (_drift_target - position).dot(_drift_dir) <= s:     # distance left along the drift
+			position = _drift_target
+			state = State.WIRED if _carrying else State.FREE    # mag boots grab the hull
+			level.player_drift_end()
+		else:
+			position += _drift_dir * s
+		remaining -= s
+		level.player_moved()       # may charge a cell / get shocked / enter a room
+
+
 # ------------------------------------------------------------------ animation
 
 ## Which animation to play. The sprite's animations live in a SpriteFrames file
@@ -295,6 +347,8 @@ func _update_anim() -> void:
 	else:
 		anim = _first_existing(["idle_" + dir, "idle"])
 	sprite.speed_scale = 2.0 if state == State.FLUNG else 1.0
+	# floating in zero-G: tilt gently from side to side
+	sprite.rotation = sin(_drift_t * 5.0) * 0.14 if state == State.DRIFT else 0.0
 	if sprite.animation != anim or not sprite.is_playing():
 		sprite.play(anim)
 

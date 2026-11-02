@@ -79,4 +79,62 @@ save('complete.wav',x,0.6)
 # warning tick
 tt=t(0.07); x=np.sin(2*np.pi*1600*tt)*np.exp(-tt*60)
 save('tick.wav',x,0.5)
+
+# ---- added for the power cells, dialogue, spacewalk and music (Nov 2026) ----
+# New recipes go BELOW the old ones so the old sounds stay exactly the same
+# (the random generator is used in order, so inserting above would change them).
+def tone(f,d,square=0.3):
+    tt=t(d); return (np.sign(np.sin(2*np.pi*f*tt))*square+np.sin(2*np.pi*f*tt)*(1-square))
+# pickup: a power cell charges - quick rising arpeggio
+x=np.concatenate([tone(f,0.06)*env(int(SR*0.06),0.002,0.02) for f in (1318.5,1661.2,1975.5)]+
+                 [tone(2637.0,0.18)*np.exp(-t(0.18)*14)])
+save('pickup.wav',x,0.45)
+# blip: one letter of dialogue appearing
+tt=t(0.035); x=np.sin(2*np.pi*880*tt)*np.exp(-tt*90)
+save('blip.wav',x,0.25)
+# hiss: the airlock letting the air out (noise that gets thinner and quieter)
+d=2.4; tt=t(d); n=rng.uniform(-1,1,len(tt))
+k=np.linspace(2,40,len(tt)).astype(int); out=np.zeros(len(tt)); cs=np.cumsum(np.insert(n,0,0))
+for i in range(len(tt)):
+    a=max(0,i-k[i]); out[i]=(cs[i+1]-cs[a])/(i+1-a)
+save('hiss.wav',out*np.exp(-tt*0.9)*env(len(tt),0.05,0.6),0.7)
+# puff: the suit's thruster pushes you off the hull
+d=0.3; tt=t(d); x=lp(rng.uniform(-1,1,len(tt)),12)*np.exp(-tt*12)
+save('puff.wav',x,0.5)
+# clank: mag boots grab the hull
+d=0.35; tt=t(d)
+x=sum(np.sin(2*np.pi*f*tt)*np.exp(-tt*k) for f,k in ((420,18),(1130,26),(2210,40)))
+x[:150]+=rng.uniform(-1,1,150)*np.linspace(1,0,150)
+save('clank.wav',x,0.55)
+# alarm: low oxygen / airlock warning (two tones)
+x=np.concatenate([tone(988,0.16,0.5)*env(int(SR*0.16),0.005,0.03),np.zeros(int(SR*0.04)),
+                  tone(740,0.22,0.5)*env(int(SR*0.22),0.005,0.06)])
+save('alarm.wav',x,0.45)
+# star: a bell for each star on the results screen
+d=0.7; tt=t(d)
+x=(np.sin(2*np.pi*1318.5*tt)+0.5*np.sin(2*np.pi*2637*tt)+0.25*np.sin(2*np.pi*3955*tt))*np.exp(-tt*5)
+save('star.wav',x,0.5)
+# fanfare: the whole area is powered
+notes=[523.25,659.25,783.99,1046.5]
+x=np.concatenate([tone(f,0.11)*env(int(SR*0.11),0.004,0.03) for f in notes]+
+                 [sum(tone(f,1.2,0.2) for f in (523.25,659.25,783.99,1046.5))*np.exp(-t(1.2)*2.2)])
+save('fanfare.wav',x,0.55)
+# music loops: soft chords. Every frequency fits a whole number of cycles in the loop,
+# so the end joins the start without a click.
+def pad_loop(chords,seconds,shimmer):
+    L=seconds; tt=t(L); out=np.zeros(len(tt)); per=L/len(chords)
+    for i,ch in enumerate(chords):
+        w=np.clip(1-np.abs((tt-(i+0.5)*per)/(per*0.75)),0,1)**1.5   # crossfading swell
+        w+=np.clip(1-np.abs((tt-(i+0.5)*per+L)/(per*0.75)),0,1)**1.5
+        w+=np.clip(1-np.abs((tt-(i+0.5)*per-L)/(per*0.75)),0,1)**1.5
+        for f in ch:
+            f=round(f*L)/L
+            out+=w*(np.sin(2*np.pi*f*tt)+0.3*np.sin(2*np.pi*2*f*tt)+0.12*np.sin(2*np.pi*3*f*tt+1))
+    bass=round(55*L)/L; out+=0.6*np.sin(2*np.pi*bass*tt)*(0.7+0.3*np.sin(2*np.pi*tt/L*2))
+    if shimmer:
+        for f in (1760,2093,2637):
+            f=round(f*L)/L; out+=0.05*np.sin(2*np.pi*f*tt)*(0.5+0.5*np.sin(2*np.pi*tt/L*3+f))
+    return out
+save('music_ship.wav',pad_loop([(220,261.6,329.6),(174.6,220,261.6),(196,246.9,293.7),(164.8,207.7,246.9)],16,False),0.35)
+save('music_space.wav',pad_loop([(220,261.6,329.6,392),(174.6,220,261.6,329.6),(261.6,329.6,392,493.9),(196,246.9,293.7,370)],20,True),0.35)
 print('ok')

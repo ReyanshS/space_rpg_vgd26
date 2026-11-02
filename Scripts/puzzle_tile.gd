@@ -1,6 +1,7 @@
 # ---------------------------------------------------------------------------
 # puzzle_tile.gd  -  one interactive floor tile: start, goal, node, bend,
-# red discharge, or door.
+# red discharge, door, GANGWAY (a door out in space: a catwalk that extends
+# across the gap when the hull section is powered) or AIRLOCK pad.
 #
 # The level creates these in code (PuzzleTile.new() + setup()). Each one has:
 #   - a Sprite2D showing the right 32x32 picture (gets darker when the ship is dark)
@@ -15,8 +16,10 @@ class_name PuzzleTile
 extends Node2D
 
 # An enum is a list of named numbers: Kind.START == 0, Kind.GOAL == 1, ...
-# The order matches the pictures in puzzle_tiles.png from left to right.
-enum Kind { START, GOAL, NODE, BEND, DISCHARGE, DISCHARGE_OFF, CRATE, DOOR }
+# The order matches the pictures in puzzle_tiles.png from left to right
+# (DOOR_OPEN and GANGWAY_OPEN are the "after" pictures of a door / gangway).
+enum Kind { START, GOAL, NODE, BEND, DISCHARGE, DISCHARGE_OFF, CRATE, DOOR,
+	DOOR_OPEN, GANGWAY, GANGWAY_OPEN, AIRLOCK }
 
 const SHEET_PATH := "res://Assets/images/tiles/puzzle_tiles.png"
 const DOOR_OPEN_FRAME := 8
@@ -27,6 +30,8 @@ const GLOW := {
 	Kind.BEND: Color(0.75, 0.45, 1.0),
 	Kind.DISCHARGE: Color(1.0, 0.25, 0.25),
 	Kind.DOOR: Color(0.4, 1.0, 0.55),
+	Kind.GANGWAY: Color(1.0, 0.75, 0.3),
+	Kind.AIRLOCK: Color(1.0, 0.78, 0.3),
 }
 const DOOR_LOCKED := Color(1.0, 0.3, 0.25)
 
@@ -68,8 +73,10 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 		_add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_sprite = _make_sprite(kind)
 	add_child(_sprite)
+	if kind == Kind.GANGWAY:
+		LightFX.glow(_sprite)      # the retracted catwalk's outline shines in space
 	if GLOW.has(kind):
-		var col: Color = DOOR_LOCKED if kind == Kind.DOOR else GLOW[kind]   # locked doors glow red
+		var col: Color = DOOR_LOCKED if _is_door() else GLOW[kind]   # locked doors glow red
 		_glow = _make_sprite(kind)
 		_glow.material = _add_mat
 		_glow.modulate = Color(col, 0.0)
@@ -129,11 +136,11 @@ func _process(delta: float) -> void:
 	if _glow and not is_open:
 		var a := 0.0
 		match kind:
-			Kind.START, Kind.GOAL, Kind.NODE, Kind.BEND:
+			Kind.START, Kind.GOAL, Kind.NODE, Kind.BEND, Kind.AIRLOCK:
 				a = 0.18 + 0.12 * sin(_t * 3.0)     # slow gentle pulse
 			Kind.DISCHARGE:
 				a = 0.3 + 0.2 * sin(_t * 9.0)
-			Kind.DOOR:
+			Kind.DOOR, Kind.GANGWAY:
 				a = 0.12 + 0.08 * sin(_t * 2.0)
 		if active:
 			a = 0.5 + 0.25 * sin(_t * 10.0)       # fast pulse: "timer paused here"
@@ -226,13 +233,26 @@ func burst(color: Color, amount: int) -> void:
 	get_tree().create_timer(1.0).timeout.connect(p.queue_free)   # delete it after 1 s
 
 
+func _is_door() -> bool:
+	return kind == Kind.DOOR or kind == Kind.GANGWAY
+
+
 ## Door bar flickers out, leaving the open door frame. Its light goes red -> green.
+## A gangway instead slides its catwalk out across the gap.
 func open_door() -> void:
 	if is_open:
 		return
 	is_open = true
 	if _light:
 		_light.color = GLOW[Kind.DOOR]
+	if kind == Kind.GANGWAY:
+		_sprite.region_rect = Rect2(Kind.GANGWAY_OPEN * 32, 0, 32, 32)
+		_sprite.light_mask = 1          # a real catwalk: lit like the hull around it
+		_sprite.scale = Vector2(1.0, 0.05)
+		var tw := create_tween()
+		tw.tween_property(_sprite, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_callback(_finish_open)
+		return
 	var tw := create_tween()
 	for i in 5:
 		tw.tween_property(_sprite, "modulate", Color(2.0, 2.0, 2.0), 0.05)
@@ -242,8 +262,27 @@ func open_door() -> void:
 
 func _finish_open() -> void:
 	_sprite.modulate = Color.WHITE
-	_sprite.region_rect = Rect2(DOOR_OPEN_FRAME * 32, 0, 32, 32)
+	var open_frame := Kind.GANGWAY_OPEN if kind == Kind.GANGWAY else DOOR_OPEN_FRAME
+	_sprite.region_rect = Rect2(open_frame * 32, 0, 32, 32)
 	if _glow:
 		_glow.region_rect = _sprite.region_rect
 		_glow.modulate.a = 0.0
 	burst(Color(0.4, 1.0, 0.55), 22)
+
+
+## The opposite of open_door: the bar flickers back on (used by the airlock's inner door).
+func close_door() -> void:
+	if not is_open:
+		return
+	is_open = false
+	_sprite.region_rect = Rect2(kind * 32, 0, 32, 32)
+	if _glow:
+		_glow.region_rect = _sprite.region_rect
+	if _light:
+		_light.color = DOOR_LOCKED
+	var tw := create_tween()
+	for i in 4:
+		tw.tween_property(_sprite, "modulate", Color(1, 1, 1, 0.3), 0.05)
+		tw.tween_property(_sprite, "modulate", Color(2.0, 2.0, 2.0), 0.05)
+	tw.tween_property(_sprite, "modulate", Color.WHITE, 0.05)
+	burst(DOOR_LOCKED, 14)
