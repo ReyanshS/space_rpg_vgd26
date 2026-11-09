@@ -1,10 +1,14 @@
 # TSA Video Game Design 2027 — project notes for Claude
 
 Godot 4.7 top-down puzzle game for the TSA Video Game Design event (2026-27; AI use is allowed but
-must be documented). Working title **LIVE WIRE**. The player is an astronaut restoring power to a
-dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship's maintenance AI.
-`Scenes/title.tscn` is the main scene -> `level_1.tscn` (Engineering Deck, 4-room tutorial) ->
-`level_2.tscn` (Main Deck: bridge, airlock, spacewalk on the hull).
+must be documented). Title **STAR CIRCUIT** (the team's name). The player is an astronaut restoring
+power to a dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship's
+maintenance AI. `Scenes/title.tscn` is the main scene -> `level_1.tscn` (Engineering Deck: one open
+deck, 4 puzzle stages split by barriers) -> `level_2.tscn` (Main Deck: bridge, airlock, spacewalk
+across one open hull).
+- The team works in `D:\Godot\tsa-project\space_rpg_vgd26` (GitHub `ReyanshS/space_rpg_vgd26`,
+  branch `nilay-claude`, public) and pushes with GitHub Desktop - the command line here can't sign
+  in to GitHub. A teammate also edits the maps: fetch before working.
 
 ## How to work with this team
 - The developers are students learning GDScript. They want to UNDERSTAND every change, not just get
@@ -47,10 +51,13 @@ dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship'
 - NODE (orange): wraps the wire, refills the timer, pauses it while you stand on it. Touch radius 22 px.
 - BEND (purple): stops you, shows two arrows, you press one and get flung 90 deg
   (`bend_pauses_timer`). The fling stops at a wall, a node, or a hull edge.
-- GOAL (blue): powers the room — lights on, conduit fills, the door opens.
-- Red DISCHARGE tile: stepping on it (wire or not) = shock, room restarts. Timer at 0 = wire snaps,
-  room restarts. **R** restarts manually (only counts as a retry while carrying the wire).
-- POWER CELL: touch it *while carrying the wire* to charge it (radius 14 px). Kept when the room is
+- GOAL (blue): powers the stage — lights on, conduit fills, its doors open and its BARRIERS sink
+  into the floor (a wave, nearest the goal first), opening the next stage.
+- Red DISCHARGE tile: stepping on it (wire or not) = shock. Timer at 0 = wire snaps. Either way
+  the stage resets but the player **stays where he fell** (`_stay_after_fail()` pushes him to the
+  nearest safe tile if he's on red or over space; O2 refills). He walks back to the START himself.
+  **R** = fade back to the START (only counts as a retry while carrying the wire).
+- POWER CELL: touch it *while carrying the wire* to charge it (radius 14 px). Kept when the stage is
   powered, returned if you fail. PIP explains cells at Level 1's start (a StoryBeat with
   `point_here`); the first charge / keep / loss each get a one-time message (`Game.first_time()`).
 - All rooms powered -> the **lights-on cutscene** (`_power_tour()` in level.gd): film bars, the
@@ -79,10 +86,16 @@ dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship'
 ## Architecture (data -> logic -> visuals)
 - **The map is painted**, not coded: the `Layout` TileMapLayer uses
   `Assets/images/tiles/layout_tileset.tres`; each tile has Custom Data `kind` (floor, wall, start,
-  goal, node, bend, discharge, discharge_off, crate, door, spawn, exit, cell, hull, space, airlock).
-  Rooms are found by flood fill (walls/doors separate them; space and void separate hull sections)
-  and numbered in walking order from the spawn. Each room needs exactly one START (airlocks none).
-  Doors open when an adjacent room is solved.
+  goal, node, bend, discharge, discharge_off, crate, door, spawn, exit, cell, hull, space, airlock,
+  barrier). Rooms (= puzzle STAGES) are found by flood fill (walls/doors/barriers separate them;
+  space and void separate hull sections) and numbered in walking order from the spawn. Each needs
+  exactly one START (airlocks none). Doors and barriers open when an adjacent earlier stage is solved.
+- **Areas, not rooms**: stages joined by a `barrier` (or a gangway outside) form one AREA
+  (`_build_areas()`): the camera roams across the whole area (`area_bounds`) and the name popup
+  only shows when you enter a new area. Only real doors (walls beside them) start a new area.
+  Design rule: progression should feel like one space where powering things moves obstacles -
+  don't build separate rooms joined by corridors. Check new stages with the solver (it opens the
+  barriers of already-solved stages, so it catches shortcuts through them).
 - `Scripts/level.gd` (`WireLevel`, `@tool`): reads the Layout, builds the pretty Ground/HullEdges/
   Walls/Props layers live in the editor, then at runtime runs all the rules, camera, lighting, audio
   and music. Exports: `level_number`, `level_name`, `complete_message`, `room_titles`, rules,
@@ -96,7 +109,8 @@ dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship'
 - `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`), results, `o2_bonus()`,
   `go_to_level()`, `first_time(tip)` (PIP explains things once), `story_values()` for `{cells}` /
   `{o2_bonus}` / `{o2_per_cell}` in story text.
-- `Scripts/puzzle_tile.gd`: runtime visuals for pads/doors/gangways/airlock (glow, sparks, arrows).
+- `Scripts/puzzle_tile.gd`: runtime visuals for pads/doors/gangways/airlock/barriers (glow, sparks,
+  arrows; barriers shudder and sink, `open_door(delay)`).
 - `Scripts/power_cell.gd`: the collectible battery (draws itself, collect/restore animations).
 - `Scripts/wire.gd`: carried wire + floor conduits (Line2D + `Shaders/wire_current.gdshader`).
 - `Scripts/hud.gd` + `Scenes/hud.tscn`: objective box + arrow, toasts, timer bar, fades, PIP's speech
@@ -105,6 +119,12 @@ dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship'
   a blocking speech cuts casual chatter short; `point_at` = PIP's blue arrow), power meter, cell
   counter, O2 gauge, results screen with stars + suit upgrade, pause menu, cutscene film bars
   (`set_cinematic`: hides the objective, lines go in the bottom bar, E skips a line).
+- **UI look** (the team asked for "less AI"): ship hardware outside, old green terminal inside.
+  Panels are 9-slice `StyleBoxTexture`s of `Assets/ui/frame_screen.png` (riveted bezel + green
+  scanline screen) and `frame_plate.png` (riveted plate), drawn by `tools/art_ui.py`, margin 6.
+  Colours: amber `#ffc24d` (names, keys, headings), phosphor green `#a8f0a0` (text), dim green for
+  hints. Meters are LED segments (`_led()` in hud.gd). Keep new UI in this style - no flat
+  translucent boxes with thin glowing borders.
 - **Story** (`Scripts/story.gd` on the `Story` node + `Scripts/story_beat.gd` Marker2D children):
   each beat has `trigger` (LEVEL_START, ENTER_ROOM, SOLVE_ROOM, REACH_HERE, GRAB_WIRE, FAIL_IN_ROOM,
   AIRLOCK, ALL_POWERED, FIRST_DRIFT, TOUCH_EMPTY_CELL, SHIP_LIGHTS_UP), `lines`, `pause_game`,
@@ -155,7 +175,9 @@ HUD scripts (incl. the lights-on cutscene), Level 2's layout and puzzles (drafte
 astronaut sprite sheets (cleaned up from the team's AI-generated art; `astronaut_v2.png` was
 hand-composited in code), the hull/space/gangway/airlock art, planet and nebula (drawn pixel by
 pixel in `tools/art_space.py`), PIP's dialogue text, and all sounds and music in `Assets/audio`
-(synthesized in Python from sine waves, noise and volume envelopes — no outside sources). Level 1's
-rooms are the team's design, checked with a Python solver; Claude placed Level 1's power cells.
+(synthesized in Python from sine waves, noise and volume envelopes — no outside sources), the
+barrier tile (`tools/art_barrier.py`) and the UI frames (`tools/art_ui.py`). Level 1's puzzles are
+the team's design, checked with a Python solver; Claude placed Level 1's power cells and, at the
+team's request, turned its doors/corridors into barriers so the deck is one open space.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

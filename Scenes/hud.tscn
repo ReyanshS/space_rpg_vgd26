@@ -1,48 +1,60 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://Scripts/hud.gd" id="1_hud"]
+[ext_resource type="Texture2D" path="res://Assets/ui/frame_screen.png" id="2_screen"]
+[ext_resource type="Texture2D" path="res://Assets/ui/frame_plate.png" id="3_plate"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_toast"]
-content_margin_left = 8.0
-content_margin_top = 2.0
+[sub_resource type="StyleBoxTexture" id="StyleBoxFlat_toast"]
+content_margin_left = 9.0
+content_margin_top = 5.0
+content_margin_right = 9.0
+content_margin_bottom = 6.0
+texture = ExtResource("3_plate")
+texture_margin_left = 6.0
+texture_margin_top = 6.0
+texture_margin_right = 6.0
+texture_margin_bottom = 6.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxFlat_complete"]
+content_margin_left = 14.0
+content_margin_top = 11.0
+content_margin_right = 14.0
+content_margin_bottom = 11.0
+texture = ExtResource("2_screen")
+texture_margin_left = 6.0
+texture_margin_top = 6.0
+texture_margin_right = 6.0
+texture_margin_bottom = 6.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxFlat_objective"]
+content_margin_left = 9.0
+content_margin_top = 6.0
+content_margin_right = 9.0
+content_margin_bottom = 7.0
+texture = ExtResource("2_screen")
+texture_margin_left = 6.0
+texture_margin_top = 6.0
+texture_margin_right = 6.0
+texture_margin_bottom = 6.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxFlat_dialogue"]
+content_margin_left = 7.0
+content_margin_top = 7.0
 content_margin_right = 8.0
-content_margin_bottom = 4.0
-bg_color = Color(0.03, 0.06, 0.16, 0.85)
-border_width_bottom = 2
-border_color = Color(1, 0.84, 0.3, 0.9)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_complete"]
-content_margin_left = 12.0
-content_margin_top = 10.0
-content_margin_right = 12.0
-content_margin_bottom = 10.0
-bg_color = Color(0.03, 0.06, 0.16, 0.94)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 0.84, 0.3, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_objective"]
-content_margin_left = 8.0
-content_margin_top = 3.0
-content_margin_right = 8.0
-content_margin_bottom = 5.0
-bg_color = Color(0.03, 0.05, 0.12, 0.88)
-border_width_left = 2
-border_color = Color(1, 0.84, 0.3, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dialogue"]
-content_margin_left = 5.0
-content_margin_top = 4.0
-content_margin_right = 6.0
-content_margin_bottom = 4.0
-bg_color = Color(0.02, 0.05, 0.1, 0.92)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.45, 0.85, 1, 0.9)
+content_margin_bottom = 7.0
+texture = ExtResource("2_screen")
+texture_margin_left = 6.0
+texture_margin_top = 6.0
+texture_margin_right = 6.0
+texture_margin_bottom = 6.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
 
 [node name="HUD" type="CanvasLayer"]
 process_mode = 3
@@ -55,16 +67,16 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -60.0
-offset_top = 52.0
+offset_top = 56.0
 offset_right = 60.0
-offset_bottom = 74.0
+offset_bottom = 78.0
 grow_horizontal = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
 
 [node name="Text" type="Label" parent="Toast"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.88, 0.45, 1)
+theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
 text = "ROOM 1"
 horizontal_alignment = 1
 
@@ -95,18 +107,19 @@ color = Color(0, 0, 0, 1)
 anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -150.0
+offset_left = -144.0
 offset_top = 4.0
-offset_right = 150.0
+offset_right = 168.0
 offset_bottom = 26.0
 grow_horizontal = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_objective")
 
 [node name="Text" type="Label" parent="Objective"]
-custom_minimum_size = Vector2(284, 0)
+custom_minimum_size = Vector2(294, 0)
 layout_mode = 2
-text = "Come here and press E!"
+theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
+text = "> Come here and press E!"
 autowrap_mode = 3
 
 [node name="Status" type="Control" parent="."]
@@ -142,15 +155,15 @@ offset_left = 6.0
 offset_top = 248.0
 offset_right = 140.0
 offset_bottom = 266.0
-theme_override_colors/font_color = Color(1, 1, 1, 0.45)
-text = "[R] restart room"
+theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 0.85)
+text = "[R] back to start"
 
 [node name="Keys" type="Label" parent="."]
 offset_left = 300.0
 offset_top = 248.0
 offset_right = 474.0
 offset_bottom = 266.0
-theme_override_colors/font_color = Color(1, 1, 1, 0.45)
+theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 0.85)
 text = "[Esc] menu"
 horizontal_alignment = 2
 
@@ -181,7 +194,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 bbcode_enabled = true
-text = "[color=#ffd84d]PIP:[/color] Hello!"
+text = "[color=#ffc24d]PIP>[/color] [color=#a8f0a0]Hello![/color]"
 fit_content = true
 scroll_active = false
 autowrap_mode = 3
@@ -221,13 +234,14 @@ alignment = 1
 
 [node name="Title" type="Label" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
 theme_override_font_sizes/font_size = 32
 text = "LEVEL 1 COMPLETE"
 horizontal_alignment = 1
 
 [node name="Sub" type="Label" parent="Complete/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
 text = "Power restored to this part of the ship!"
 horizontal_alignment = 1
 
@@ -238,8 +252,8 @@ mouse_filter = 2
 
 [node name="Stats" type="Label" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.9, 1, 1)
-text = "Time 0:00    Cells 0/0    Retries 0"
+theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
+text = "TIME 0:00  |  CELLS 0/0  |  RETRIES 0"
 horizontal_alignment = 1
 
 [node name="Bonus" type="Label" parent="Complete/VBox"]
@@ -250,13 +264,13 @@ horizontal_alignment = 1
 
 [node name="StarHelp" type="Label" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 0.45)
+theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
 text = "Stars: finish - every cell - few retries"
 horizontal_alignment = 1
 
 [node name="Again" type="Label" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
 text = "[E] next level    [R] play again"
 horizontal_alignment = 1
 
@@ -276,7 +290,7 @@ alignment = 1
 
 [node name="Title" type="Label" parent="Pause/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
 theme_override_font_sizes/font_size = 32
 text = "PAUSED"
 horizontal_alignment = 1
@@ -289,16 +303,17 @@ horizontal_alignment = 1
 
 [node name="Controls" type="Label" parent="Pause/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
 text = "Move ............ WASD / arrows
 Grab the wire ... E / Space
-Restart room .... R
+Back to START ... R
 Show a hint ..... H
 Resume .......... Esc
 Quit to title ... Q"
 
 [node name="CellTip" type="Label" parent="Pause/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
+theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
 text = "Charge POWER CELLS by touching them
 with the live wire: +5 s of oxygen each!"
 horizontal_alignment = 1

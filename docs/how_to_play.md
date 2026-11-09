@@ -4,10 +4,12 @@
 pages (max 2 pages). Rewrite it in the team's own words.*
 
 ## Purpose and description
-LIVE WIRE is a deep-space puzzle adventure. A solar storm has knocked out your starship's power,
-and you, the ship's engineer, must bring it back to life one room at a time by carrying a live
-electrical wire from a power socket to each room's power relay. PIP, the ship's maintenance AI,
-guides you through the story. Progress comes only from solving puzzles — there is no combat.
+STAR CIRCUIT is a deep-space puzzle adventure. A solar storm has knocked out your starship's power,
+and you, the ship's engineer, must bring it back to life one machine at a time by carrying a live
+electrical wire from a power socket to each machine's power relay. Every machine you power moves
+something - cargo sinks into the floor, catwalks slide out - and opens up the next puzzle. PIP, the
+ship's maintenance AI, guides you through the story. Progress comes only from solving puzzles —
+there is no combat.
 
 ## Target audience
 Players aged 10 and up (rated E) who enjoy puzzle games. It teaches planning and spatial
@@ -15,16 +17,17 @@ reasoning: a straight wire can't bend around obstacles by itself, so you plan a 
 points before the timer runs out.
 
 ## Goal
-In every room, carry the wire from the yellow **START** pad to the blue **GOAL** pad. That powers
-the room and opens the way forward. At the end of each level you get up to three stars.
+In every puzzle, carry the wire from the yellow **START** pad to the blue **GOAL** pad. That powers
+the machine, and the cargo barriers (yellow-and-black striped crates) sink into the floor to open
+the way to the next puzzle. At the end of each level you get up to three stars.
 
 ## Controls
 | Action | Keys |
 | - | - |
 | Move | W A S D or the arrow keys |
 | Grab the wire / read the next line | E or Space |
-| Restart the room | R |
-| Show a hint (harder rooms) | H |
+| Go back to the START pad | R |
+| Show a hint (harder puzzles) | H |
 | Pause menu (controls, quit) | Esc |
 
 ## Rules
@@ -35,10 +38,12 @@ the room and opens the way forward. At the end of each level you get up to three
   stand on it.
 - **Purple BEND**: stops you and shows two arrows. Press one and you're flung around the corner;
   the wire bends with you.
-- **Red tiles** are live: step on one and you're shocked, and the room restarts.
-- If the timer runs out, the wire overloads and the room restarts.
+- **Red tiles** are live: step on one and you're shocked, and the wire snaps.
+- If the timer runs out, the wire overloads and snaps.
+- When the wire snaps you stay where you are: walk back to the START pad and try again, or press
+  **R** to jump straight back there.
 - **Power cells** (small batteries): touch one *while carrying the wire* to charge it. You keep
-  them when the room is powered. Every cell gives your space suit 5 more seconds of oxygen later.
+  them once you reach the GOAL. Every cell gives your space suit 5 more seconds of oxygen later.
 
 ## Spacewalk (Level 2)
 - Outside the ship you walk on **hull plates**. There is no floor between plates: walk straight
@@ -48,4 +53,4 @@ the room and opens the way forward. At the end of each level you get up to three
 - Watch your **oxygen** (top left). Powering a section refills it.
 
 ## Stars
-1. Finish the level. 2. Charge every power cell. 3. Few retries (no more than one per room).
+1. Finish the level. 2. Charge every power cell. 3. Few retries (no more than one per puzzle).

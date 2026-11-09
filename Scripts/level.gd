@@ -4,7 +4,7 @@
 # BIG PICTURE
 #   1. You paint the level on the "Layout" TileMapLayer with simple tiles
 #      (floor, wall, start, goal, node, bend, red, crate, door, spawn, exit,
-#      cell, hull, space, airlock).
+#      cell, hull, space, airlock, barrier).
 #      Each tile in the palette carries a hidden label called "kind"
 #      (set in Assets/images/tiles/layout_tileset.tres -> Custom Data).
 #   2. _read_layout() turns the painted tiles into a Dictionary:
@@ -12,7 +12,10 @@
 #   3. _build_visuals() uses that to draw the pretty version on 3 extra layers
 #      (Ground, Walls, Props): tall wall panels, roof edges, floor variety, hull plates.
 #      In the editor this re-runs every time you paint, so you see the result live.
-#   4. _build_rooms() finds the rooms (floor areas separated by walls/doors).
+#   4. _build_rooms() finds the rooms (floor areas separated by walls, doors
+#      and barriers). Each room is one puzzle STAGE. Stages joined by BARRIERS
+#      form one AREA: one big space the camera can roam across. When you power
+#      a stage, its barriers sink into the floor and the next stage opens up.
 #   5. During play the player calls player_moved() every frame and that function
 #      checks the rules: red tiles, power cells, new room, touching pads...
 #   6. Lighting: the ship starts dark (CanvasModulate). Glowing things (wires,
@@ -32,9 +35,11 @@
 #     tiles - if a step would make it, you just can't take that step.
 #   - NODE: wraps the wire, refills the timer and pauses it until you step off.
 #   - BEND: stops you and shows two arrows; press one and it flings you 90 deg.
-#   - GOAL: powers the room and opens the door.
+#   - GOAL: powers the stage and opens its doors / moves its barriers.
 #   - Timer hits 0, or you step on a red tile (with or without the wire)
-#     -> the room restarts. The wire itself can't be stretched over red tiles.
+#     -> the wire snaps and the stage resets, but you STAY where you are
+#     (pushed off the red tile). Walk back to the START, or press R to jump
+#     there. The wire itself can't be stretched over red tiles.
 #
 # POWER CELLS (the reward for a clever route)
 #   - "cell" tiles become PowerCells. Touch one WHILE CARRYING THE WIRE to charge
@@ -95,7 +100,7 @@ const PUZZLE_TEX := "res://Assets/images/tiles/puzzle_tiles.png"
 const HULL_TEX := "res://Assets/images/tiles/hull.png"
 # Which picture in puzzle_tiles.png belongs to which kind.
 const PUZZLE_FRAME := {"start": 0, "goal": 1, "node": 2, "bend": 3, "discharge": 4,
-	"discharge_off": 5, "crate": 6, "door": 7, "airlock": 11}
+	"discharge_off": 5, "crate": 6, "door": 7, "airlock": 11, "barrier": 12}
 const GANGWAY_FRAME := 9
 const SRC_WALL := 0
 const SRC_FLOOR := 1
@@ -113,7 +118,7 @@ const PIP_LINES := {
 	"o2_low": "Oxygen's getting low! Power this section - your suit recharges from the relay.",
 	"no_landing": "No hull to land on that way! Your boots only let go if there's a plate straight ahead.",
 	"cell_kept": "That power cell is yours to keep! Each one gives your space suit %d more seconds of air.",
-	"cell_lost": "Aw, your cell drained! Cells only stay charged once you get the room's power on.",
+	"cell_lost": "Aw, your cell drained! Cells only stay charged once the wire reaches the GOAL.",
 }
 
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
@@ -183,6 +188,8 @@ class Room:
 	var fails := 0                      # failed tries here (PIP offers a hint after 2)
 	var power_cells: Array[Vector2i] = []
 	var full_power := false             # lit up by the lights-on cutscene
+	var area_id := -1                   # stages joined by barriers/catwalks share an area...
+	var area_bounds := Rect2i()         # ...and the camera can roam across all of it
 
 
 # --- map data
@@ -420,27 +427,32 @@ func _walkable(kind: String) -> bool:
 	return kind != "" and kind != "wall"
 
 
+## Doors and barriers aren't part of any room: they're what separates rooms/stages.
 func _is_room_cell(kind: String) -> bool:
-	return _walkable(kind) and kind != "door"
+	return _walkable(kind) and kind != "door" and kind != "barrier"
 
 
-## Can't WALK through: nothing, walls, crates, closed doors - and open space,
-## unless space_blocks is false (used for drifting: you float over space).
+## Can't WALK through: nothing, walls, crates, closed doors and barriers that
+## haven't moved yet - and open space, unless space_blocks is false (used for
+## drifting: you float over space).
 func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
 	var kind := kind_at(c)
 	if kind == "" or kind == "wall" or kind == "crate":
 		return true
 	if kind == "space":
 		return space_blocks
-	if kind == "door":
+	if kind == "door" or kind == "barrier":
 		return not _open_doors.has(c)
 	return false
 
 
-## The WIRE can't pass over: nothing, walls, crates, doors, the exit, live red tiles.
-## (It CAN stretch across open space.)
+## The WIRE can't pass over: nothing, walls, crates, doors, the exit, live red
+## tiles, and barriers until they've sunk away. (It CAN stretch across open space.)
 func is_solid_for_wire(c: Vector2i) -> bool:
-	return kind_at(c) in ["", "wall", "crate", "door", "exit", "discharge"]
+	var kind := kind_at(c)
+	if kind == "barrier":
+		return not _open_doors.has(c)
+	return kind in ["", "wall", "crate", "door", "exit", "discharge"]
 
 
 ## True if a box (centre `pos`, half-size `half`) overlaps anything solid.
@@ -606,7 +618,7 @@ func _make_tileset() -> TileSet:
 	_add_atlas(ts, SRC_WALL, WALL_TEX, Vector2i(6, 4))
 	_add_atlas(ts, SRC_FLOOR, FLOOR_TEX, Vector2i(3, 1))
 	_add_atlas(ts, SRC_ROOF, ROOF_TEX, Vector2i(16, 16))
-	var puzzle := _add_atlas(ts, SRC_PUZZLE, PUZZLE_TEX, Vector2i(12, 1))
+	var puzzle := _add_atlas(ts, SRC_PUZZLE, PUZZLE_TEX, Vector2i(13, 1))
 	for frame in [PUZZLE_FRAME["door"], GANGWAY_FRAME]:
 		var alt := puzzle.create_alternative_tile(Vector2i(frame, 0), 1)
 		puzzle.get_tile_data(Vector2i(frame, 0), alt).transpose = true   # turned sideways
@@ -804,9 +816,9 @@ func _build_rooms() -> void:
 					_room_of[n] = room
 					queue.append(n)
 		_rooms.append(room)
-	# doors and which rooms they join
+	# doors (and barriers) and which rooms they join
 	for c in _kinds:
-		if _kinds[c] != "door":
+		if _kinds[c] != "door" and _kinds[c] != "barrier":
 			continue
 		var adj: Array = []
 		for d in DIRS4:
@@ -831,6 +843,7 @@ func _build_rooms() -> void:
 			r.bounds = Rect2i(mn.x - 2, mn.y - 2, mx.x - mn.x + 5, mx.y - mn.y + 5)
 		else:
 			r.bounds = Rect2i(mn.x - 1, mn.y - 3, mx.x - mn.x + 3, mx.y - mn.y + 5)
+	_build_areas()
 	if not spawn_found:
 		push_warning("No spawn tile painted - starting next to the first START pad.")
 		for r in _rooms:
@@ -857,6 +870,41 @@ func _build_rooms() -> void:
 	_check_rooms()
 
 
+## AREAS. A room is one puzzle STAGE. Stages joined by a BARRIER (or, outside,
+## by a catwalk) are really one big space, so they form an AREA: the camera can
+## roam across the whole area, and the room-name popup only shows when you walk
+## into a new area. Only real doors (with walls beside them) start a new area.
+func _build_areas() -> void:
+	var next_id := 0
+	for r in _rooms:
+		if r.area_id >= 0:
+			continue
+		# collect every room reachable through barriers / catwalks (breadth-first)
+		var members: Array[Room] = [r]
+		r.area_id = next_id
+		var k := 0
+		while k < members.size():
+			for c in members[k].doors:
+				if not _joins_area(c):
+					continue
+				for o in _door_rooms.get(c, []):
+					if o.area_id < 0:
+						o.area_id = next_id
+						members.append(o)
+			k += 1
+		var b := members[0].bounds
+		for m in members:
+			b = b.merge(m.bounds)
+		for m in members:
+			m.area_bounds = b
+		next_id += 1
+
+
+## Does this tile join two stages into one area? Barriers do, and so do catwalks.
+func _joins_area(c: Vector2i) -> bool:
+	return kind_at(c) == "barrier" or _is_gangway(c)
+
+
 ## Friendly warnings in the Output panel when the map is missing something.
 func _check_rooms() -> void:
 	for r in _rooms:
@@ -872,7 +920,7 @@ func _check_rooms() -> void:
 			push_warning("Room %d has no door leading onward." % n)
 
 
-## Doors that lead from room r to a LATER room (the ones r's goal opens).
+## Doors and barriers that lead from room r to a LATER room (the ones r's goal opens).
 func _exit_doors(r: Room) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for d in r.doors:
@@ -1394,7 +1442,7 @@ func _check_cells() -> void:
 			_play("pickup")
 			hud.set_cells(_cells_banked + _cells_pending.size(), _cells.size(), true)
 			if Game.first_time("cell_charged"):
-				hud.show_toast("CELL CHARGED! POWER THE ROOM TO KEEP IT", 2.5)
+				hud.show_toast("CELL CHARGED! REACH THE GOAL TO KEEP IT", 2.5)
 			cell_collected.emit(_wire_room.index)
 		elif not wired and not _cell_tip_shown:
 			_cell_tip_shown = true
@@ -1554,6 +1602,7 @@ func _update_prompts() -> void:
 
 
 func _enter_room(r: Room) -> void:
+	var new_area := _current_room == null or _current_room.area_id != r.area_id
 	_current_room = r
 	if r.is_exit:
 		_finish_level()
@@ -1563,7 +1612,8 @@ func _enter_room(r: Room) -> void:
 		_refill_o2()                # every new hull section has an oxygen port
 	_update_environment(false)
 	_update_hint_label()
-	_announce_room()
+	if new_area:
+		_announce_room()            # the next stage of the same area gets no popup
 	room_entered.emit(r.index)
 
 
@@ -1707,15 +1757,36 @@ func _solve(r: Room) -> void:
 
 func _open_exit_doors(r: Room) -> void:
 	var opened := false
+	var barriers: Array[Vector2i] = []
 	for d in _exit_doors(r):
-		if not _open_doors.has(d):
-			_open_doors[d] = true
-			opened = true
-			var t: PuzzleTile = _tiles.get(d)
-			if t:
-				t.open_door()
+		if _open_doors.has(d):
+			continue
+		_open_doors[d] = true
+		if kind_at(d) == "barrier":
+			barriers.append(d)
+			continue
+		opened = true
+		var t: PuzzleTile = _tiles.get(d)
+		if t:
+			t.open_door()
 	if opened:
 		_play("door")
+	if not barriers.is_empty():
+		_move_barriers(r, barriers)
+
+
+## The power reaches the barriers: they sink into the floor one after another,
+## starting with the one nearest the goal (so it looks like the power travels).
+func _move_barriers(r: Room, barriers: Array[Vector2i]) -> void:
+	var from := center_of(r.goal) if r.goal.x >= 0 else center_of(barriers[0])
+	var nearer := func(a: Vector2i, b: Vector2i) -> bool: return from.distance_to(center_of(a)) < from.distance_to(center_of(b))
+	barriers.sort_custom(nearer)
+	for i in barriers.size():
+		var t: PuzzleTile = _tiles.get(barriers[i])
+		if t:
+			t.open_door(i * 0.06)
+	_play("clank")
+	_shake_cam(0.3 + barriers.size() * 0.06, 1.5)
 
 
 ## The last room got power: fanfare, then the lights-on cutscene.
@@ -1879,6 +1950,7 @@ func _fail(kind: String) -> void:
 	var r := _wire_room if _wire_room != null else _current_room
 	# Pressing R while NOT carrying the wire is just a reset, not a failed try.
 	var counts := kind != "restart" or _wire != null
+	var had_wire := _wire != null
 	if counts and r != null and not r.solved:
 		r.fails += 1
 		_retries += 1
@@ -1911,11 +1983,21 @@ func _fail(kind: String) -> void:
 		_wire = null
 		await w.snap()
 		w.queue_free()
-	await hud.fade_out(0.2)
-	_respawn()
-	if _o2_on:
-		_refill_o2()
-	await hud.fade_in(0.25)
+	if kind == "restart":
+		# R = "take me back": a quick fade and you're on the START pad again.
+		await hud.fade_out(0.2)
+		_respawn()
+		if _o2_on:
+			_refill_o2()
+		await hud.fade_in(0.25)
+	else:
+		# Zapped / timer / oxygen: you stay where you fell. Walk back to the
+		# START yourself (or press R to jump there).
+		await _stay_after_fail()
+		if _o2_on:
+			_refill_o2()            # the suit switches to its reserve tank
+		if had_wire and Game.first_time("fail_walk_back"):
+			hud.show_toast("WIRE RESET - WALK BACK TO THE START, OR PRESS R", 3.0)
 	_busy = false
 	# The first time a charged cell drains, PIP explains why.
 	if lost_cells and Game.first_time("cell_lost"):
@@ -1934,6 +2016,53 @@ func _return_cells() -> void:
 		_cells[c].restore()
 	_cells_pending.clear()
 	hud.set_cells(_cells_banked, _cells.size())
+
+
+## After a fail: the wire is gone, but you stay where you are. If that spot is
+## somewhere you can't stand (a red tile, open space), a little push moves you
+## to the nearest safe floor - no teleport, no fade.
+func _stay_after_fail() -> void:
+	var r := _wire_room if _wire_room != null else _current_room
+	_wire_room = null
+	_anchor_cells.clear()
+	var safe := _nearest_safe_spot(player.position)
+	if safe.distance_to(player.position) > 0.5:
+		var tw := create_tween()
+		tw.tween_property(player, "position", safe, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		await tw.finished
+	var here: Room = _room_of.get(cell_of(player.position))
+	if here != null:
+		_current_room = here
+	_release_player()
+	if r != null and not r.solved:
+		room_restarted.emit(r.index)   # the tutorial points you back to the START
+
+
+## The closest place you can safely stand: not a red tile, not open space,
+## not inside a wall. Searches outwards tile by tile (breadth-first).
+func _nearest_safe_spot(pos: Vector2) -> Vector2:
+	if _safe_to_stand(pos):
+		return pos
+	var start := cell_of(pos)
+	var seen := {start: true}
+	var queue: Array[Vector2i] = [start]
+	var head := 0
+	while head < queue.size() and head < 500:
+		var c := queue[head]
+		head += 1
+		if c != start and _safe_to_stand(center_of(c)):
+			return center_of(c)
+		for d in DIRS4:
+			var n := c + d
+			if seen.has(n) or is_solid_for_walk(n, false):   # we may search across space
+				continue
+			seen[n] = true
+			queue.append(n)
+	return center_of(_spawn)
+
+
+func _safe_to_stand(pos: Vector2) -> bool:
+	return kind_at(cell_of(pos)) != "discharge" and not box_blocked(pos, Astronaut.FEET_HALF)
 
 
 func _respawn() -> void:
@@ -2070,9 +2199,9 @@ func _shake_cam(duration: float, strength: float) -> void:
 	_shake_strength = strength
 
 
-## Follows the player but never shows outside the current room. If the room is
-## smaller than the screen, the camera just sits in the room's middle.
-## During the lights-on cutscene it looks at _cut_cam instead.
+## Follows the player but never shows outside the current AREA (all the stages
+## joined to this one). If the area is smaller than the screen, the camera just
+## sits in its middle. During the lights-on cutscene it looks at _cut_cam instead.
 func _update_camera(delta: float, snap: bool) -> void:
 	if camera == null or _current_room == null:
 		return
@@ -2081,7 +2210,7 @@ func _update_camera(delta: float, snap: bool) -> void:
 		camera.position = _cam_pos.round()
 		return
 	var view := get_viewport_rect().size
-	var b := _current_room.bounds
+	var b := _current_room.area_bounds
 	var r := Rect2(Vector2(b.position * TILE), Vector2(b.size * TILE))
 	var target := player.position + Vector2(0, -12)
 	var half := view * 0.5

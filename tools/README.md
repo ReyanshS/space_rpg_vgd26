@@ -17,12 +17,18 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | `astro2.py` | Generates the v2 astronaut sheet `astronaut_v2.png` from text-drawn body parts | `python tools/astro2.py` |
 | `art_space.py` | Draws the Level 2 art: hull plates, gangway + airlock pad pictures, the 4 new palette icons, planet and nebula | `python tools/art_space.py` |
 | `maps/build_level2.py` | How Level 2's first map was pasted together from separately-solved pieces (reference only — edit Level 2 in Godot now) | `python tools/maps/build_level2.py` |
+| `art_barrier.py` | Draws the BARRIER tile (crate on a lift, hazard stripes) into `puzzle_tiles.png` frame 12 and its palette icon into `layout_tiles.png` frame 16 | `python tools/art_barrier.py` |
+| `art_ui.py` | Draws the UI frames `Assets/ui/frame_screen.png` (riveted bezel + green screen) and `frame_plate.png` (riveted plate) | `python tools/art_ui.py` |
 
 Run `map_from_scene.py` first whenever the map changed — the solver and previews read its output.
 
 **Map characters:** `#` wall, `.` floor, `S` start, `G` goal, `N` node, `B` bend, `X` red tile,
 `x` red-off, `C` crate (or floating debris), `D` door (gangway when no wall is beside it), `P` spawn,
-`E` exit, `*` power cell, `,` hull, `~` open space, `A` airlock pad, space = nothing.
+`E` exit, `*` power cell, `,` hull, `~` open space, `A` airlock pad, `=` barrier, space = nothing.
+
+The solver checks the stages in walking order. When it checks a stage, the barriers next to the
+stages before it count as open floor (in the game they've sunk away by then) - so if opening a
+barrier creates a shortcut for a later stage, the solver shows it.
 
 Solver output, e.g. `S(7,14) -> N(3,10) -> G(7,6)   (tightest segment: 3.38 s spare)` means: from the
 START at tile (7, 14), touch the node at (3, 10), then the goal at (7, 6); on the hardest stretch

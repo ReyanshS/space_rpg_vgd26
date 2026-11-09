@@ -16,7 +16,7 @@ layout = NodePath("Layout")
 level_number = 2
 level_name = "MAIN DECK"
 complete_message = "The main coupling is fixed - the ship lives!"
-room_titles = PackedStringArray("THE BRIDGE", "AIRLOCK", "HULL - SECTION A", "HULL - SOLAR ARRAY", "HULL - MAIN COUPLING")
+room_titles = PackedStringArray("THE BRIDGE", "AIRLOCK", "OUTER HULL", "HULL - SOLAR ARRAY", "HULL - MAIN COUPLING")
 
 [node name="Layout" type="TileMapLayer" parent="." unique_id=587387450]
 self_modulate = Color(1, 1, 1, 0.45)

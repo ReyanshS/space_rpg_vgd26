@@ -1,7 +1,8 @@
 # ---------------------------------------------------------------------------
 # puzzle_tile.gd  -  one interactive floor tile: start, goal, node, bend,
 # red discharge, door, GANGWAY (a door out in space: a catwalk that extends
-# across the gap when the hull section is powered) or AIRLOCK pad.
+# across the gap when the hull section is powered), AIRLOCK pad, or BARRIER
+# (a cargo stack on a lift that sinks into the floor when its stage is powered).
 #
 # The level creates these in code (PuzzleTile.new() + setup()). Each one has:
 #   - a Sprite2D showing the right 32x32 picture (gets darker when the ship is dark)
@@ -19,7 +20,7 @@ extends Node2D
 # The order matches the pictures in puzzle_tiles.png from left to right
 # (DOOR_OPEN and GANGWAY_OPEN are the "after" pictures of a door / gangway).
 enum Kind { START, GOAL, NODE, BEND, DISCHARGE, DISCHARGE_OFF, CRATE, DOOR,
-	DOOR_OPEN, GANGWAY, GANGWAY_OPEN, AIRLOCK }
+	DOOR_OPEN, GANGWAY, GANGWAY_OPEN, AIRLOCK, BARRIER }
 
 const SHEET_PATH := "res://Assets/images/tiles/puzzle_tiles.png"
 const DOOR_OPEN_FRAME := 8
@@ -32,6 +33,7 @@ const GLOW := {
 	Kind.DOOR: Color(0.4, 1.0, 0.55),
 	Kind.GANGWAY: Color(1.0, 0.75, 0.3),
 	Kind.AIRLOCK: Color(1.0, 0.78, 0.3),
+	Kind.BARRIER: Color(1.0, 0.6, 0.2),
 }
 const DOOR_LOCKED := Color(1.0, 0.3, 0.25)
 
@@ -140,7 +142,7 @@ func _process(delta: float) -> void:
 				a = 0.18 + 0.12 * sin(_t * 3.0)     # slow gentle pulse
 			Kind.DISCHARGE:
 				a = 0.3 + 0.2 * sin(_t * 9.0)
-			Kind.DOOR, Kind.GANGWAY:
+			Kind.DOOR, Kind.GANGWAY, Kind.BARRIER:
 				a = 0.12 + 0.08 * sin(_t * 2.0)
 		if active:
 			a = 0.5 + 0.25 * sin(_t * 10.0)       # fast pulse: "timer paused here"
@@ -239,10 +241,15 @@ func _is_door() -> bool:
 
 ## Door bar flickers out, leaving the open door frame. Its light goes red -> green.
 ## A gangway instead slides its catwalk out across the gap.
-func open_door() -> void:
+## A barrier shudders, then sinks into the floor. `delay` lets a row of barriers
+## go one after another, like a wave.
+func open_door(delay := 0.0) -> void:
 	if is_open:
 		return
 	is_open = true
+	if kind == Kind.BARRIER:
+		_sink(delay)
+		return
 	if _light:
 		_light.color = GLOW[Kind.DOOR]
 	if kind == Kind.GANGWAY:
@@ -270,11 +277,48 @@ func _finish_open() -> void:
 	burst(Color(0.4, 1.0, 0.55), 22)
 
 
+## BARRIER: a quick shudder, then the crate stack slides down into the floor.
+## (Shrinking the height while moving down by the same amount keeps the bottom
+## edge still, so it looks like it drops through a slot in the floor.)
+func _sink(delay: float) -> void:
+	var tw := create_tween()
+	tw.tween_interval(delay)
+	for i in 3:
+		tw.tween_property(_sprite, "position:x", 1.0, 0.03)
+		tw.tween_property(_sprite, "position:x", -1.0, 0.03)
+	tw.tween_property(_sprite, "position:x", 0.0, 0.02)
+	tw.tween_callback(burst.bind(Color(0.8, 0.75, 0.65), 10))         # dust
+	tw.set_parallel(true)
+	tw.tween_property(_sprite, "scale:y", 0.0, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(_sprite, "position:y", 16.0, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	if _glow:
+		tw.tween_property(_glow, "modulate:a", 0.0, 0.2)
+	if _light:
+		tw.tween_property(_light, "energy", 0.0, 0.35)
+	tw.set_parallel(false)
+	tw.tween_callback(_set_shown.bind(false))
+
+
+func _set_shown(on: bool) -> void:
+	_sprite.visible = on
+	if _glow:
+		_glow.visible = on
+	if _light:
+		_light.visible = on
+
+
 ## The opposite of open_door: the bar flickers back on (used by the airlock's inner door).
+## A barrier rises back up out of the floor.
 func close_door() -> void:
 	if not is_open:
 		return
 	is_open = false
+	if kind == Kind.BARRIER:
+		_set_shown(true)
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(_sprite, "scale:y", 1.0, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_sprite, "position:y", 0.0, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		return
 	_sprite.region_rect = Rect2(kind * 32, 0, 32, 32)
 	if _glow:
 		_glow.region_rect = _sprite.region_rect

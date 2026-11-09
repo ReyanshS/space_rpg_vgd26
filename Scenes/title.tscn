@@ -3,6 +3,16 @@
 [ext_resource type="Script" uid="uid://dhlexchakyr0l" path="res://Scripts/title.gd" id="1_title"]
 [ext_resource type="Script" uid="uid://4tet2c0n0nd6" path="res://Scripts/starfield.gd" id="2_stars"]
 [ext_resource type="SpriteFrames" uid="uid://de1pypgu4xh2n" path="res://Assets/images/astronaut/astronaut_frames.tres" id="3_frames"]
+[ext_resource type="Texture2D" path="res://Assets/ui/frame_screen.png" id="4_screen"]
+
+[sub_resource type="StyleBoxTexture" id="StyleBox_screen"]
+texture = ExtResource("4_screen")
+texture_margin_left = 6.0
+texture_margin_top = 6.0
+texture_margin_right = 6.0
+texture_margin_bottom = 6.0
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
 
 [node name="Title" type="Node2D" unique_id=1413600814]
 script = ExtResource("1_title")
@@ -52,13 +62,21 @@ theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
 text = "A deep-space puzzle adventure"
 horizontal_alignment = 1
 
+[node name="Screen" type="Panel" parent="UI"]
+offset_left = 178.0
+offset_top = 108.0
+offset_right = 472.0
+offset_bottom = 206.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_screen")
+
 [node name="Story" type="Label" parent="UI" unique_id=539097612]
 offset_left = 186.0
 offset_top = 114.0
 offset_right = 464.0
 offset_bottom = 170.0
-theme_override_colors/font_color = Color(1, 1, 1, 0.8)
-text = "A solar storm has knocked out your starship's power. Carry the live wire from room to room and bring her back to life."
+theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
+text = "A solar storm has knocked out your starship's power. Carry the live wire from machine to machine and bring her back to life."
 horizontal_alignment = 1
 autowrap_mode = 3
 
@@ -67,16 +85,17 @@ offset_left = 176.0
 offset_top = 180.0
 offset_right = 474.0
 offset_bottom = 198.0
-text = "PRESS E TO START"
+theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
+text = "> PRESS E TO START_"
 horizontal_alignment = 1
 
 [node name="Controls" type="Label" parent="UI" unique_id=178598356]
 offset_top = 222.0
 offset_right = 480.0
 offset_bottom = 262.0
-theme_override_colors/font_color = Color(1, 1, 1, 0.55)
+theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
 text = "Move: WASD / arrow keys    Grab the wire: E / Space
-Restart room: R    Hint: H    Menu: Esc"
+Back to start: R    Hint: H    Menu: Esc"
 horizontal_alignment = 1
 
 [node name="Fade" type="ColorRect" parent="UI" unique_id=1872592639]

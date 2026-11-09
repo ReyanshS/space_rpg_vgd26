@@ -10,7 +10,7 @@
 astronaut who restores power room by room by **carrying a live wire** from pad to pad, racing a
 5-second timer. It's an electricity puzzle game: sparks, crackling wires, lights flickering back
 on. It fits the 2026-27 TSA theme: *a deep space-themed RPG where progression comes from
-puzzle-solving rather than combat.* Working title: **LIVE WIRE** (easy to change on the title screen).
+puzzle-solving rather than combat.* Title: **STAR CIRCUIT** (the team's choice).
 
 **The core idea, in Nilay's words:** "you take the start and then pick up the wire and then take
 it to the goal. There is a 5 second timer… When you unlock the goal, the door unlocks." It's
@@ -135,6 +135,14 @@ to the next section). Steps only appear once you're in their room.
     pause menu, music, level-to-level flow
   - after the team's first playtest: lights-on cutscene, a speech box that no longer jumps around,
     clearer power cells (battery art, PIP's explanation, suit-upgrade line on the results screen)
+- **Nov 2-6**: team map touch-ups (extra red tiles and crates in both levels, a new node on the
+  bridge); the game is renamed **STAR CIRCUIT**.
+- **Nov 8**, after the team's second round of feedback:
+  - failing no longer sends you back: you stay where you fell and walk back (R still jumps back)
+  - multistage puzzles instead of separate rooms: a new BARRIER tile (cargo on a lift) sinks into
+    the floor when its stage is powered; Level 1 is now one open deck in 4 stages, and Level 2's
+    hull sections share one open camera space
+  - new UI look ("less AI"): riveted metal frames with green terminal screens, LED meters
 
 ---
 
@@ -153,9 +161,10 @@ to the next section). Steps only appear once you're in their room.
 
 **Playtest checklist**
 1. Title → Level 1: PIP's intro, then he points at the first power cell and explains it.
-2. Charge cells with the wire; fail once on purpose: the cells come back.
-3. Room 3 / 4: PIP's warnings; fail twice in a room: PIP offers a hint; press H.
-4. Power the last room: the lights-on cutscene. Finish Level 1: stars, then E → Level 2.
+2. Charge cells with the wire; fail once on purpose: the cells come back and you stay where you fell.
+3. Power stage 1: the cargo row sinks into the floor. Stages 3 / 4: PIP's warnings; fail twice in
+   a stage: PIP offers a hint; press H.
+4. Power the last stage: the lights-on cutscene. Finish Level 1: stars, then E → Level 2.
 5. Bridge → airlock → Section A: drift across, watch the oxygen bar, try walking off where there's
    no plate (you should stay put).
 6. Finish Level 2 and check the results screen.
@@ -175,7 +184,8 @@ to the next section). Steps only appear once you're in their room.
    controls (draft in `docs/how_to_play.md`); hand-drawn storyboard; copyright checklist;
    Resources & AI Reflection. The demo video (< 5 min) needs a tutorial, a level played, and the
    code/engine shown.
-4. Team decisions: the game's name, PIP's name and personality, the difficulty of Level 2.
+4. Team decisions: PIP's name and personality, the difficulty of Level 2. Level 2's bridge is
+   still a single stage - a second stage behind a barrier would make it feel like Level 1.
 
 **Cleanup:** the old prototype (`main.tscn`, `main.gd`, `electric_box.*`, `Assets/images/Player`)
 can go once nobody needs it.

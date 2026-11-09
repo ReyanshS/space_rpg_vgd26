@@ -11,7 +11,7 @@ roof=Image.open(T+'roof.png').convert('RGBA')
 puz=Image.open(T+'puzzle_tiles.png').convert('RGBA')
 hull=Image.open(T+'hull.png').convert('RGBA')
 icons=Image.open(T+'layout_tiles.png').convert('RGBA')
-PIDX={'S':0,'G':1,'N':2,'B':3,'X':4,'x':5,'C':6,'D':7,'A':11}
+PIDX={'S':0,'G':1,'N':2,'B':3,'X':4,'x':5,'C':6,'D':7,'A':11,'=':12}   # '=' barrier
 def load(p):
     rows=open(p).read().split('\n'); w=max(len(r) for r in rows)
     return [list(r.ljust(w)) for r in rows]

@@ -7,7 +7,7 @@
 #
 #   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
 #   x red-off   C crate   D door   P spawn   E exit
-#   * power cell   , hull (outside floor)   ~ open space   A airlock pad
+#   * power cell   , hull (outside floor)   ~ open space   A airlock pad   = barrier
 #   (space) = nothing
 #
 # Run from the project folder:   python tools/map_to_scene.py tools/maps/level2.txt Scenes/level_2.tscn
@@ -18,7 +18,7 @@ import re, struct, sys
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
 SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
           'discharge': 'X', 'discharge_off': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
-          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A'}
+          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '='}
 
 if len(sys.argv) < 3:
     sys.exit('usage: python tools/map_to_scene.py <map.txt> <scene.tscn>')
@@ -46,9 +46,14 @@ for y, row in enumerate(rows):
 
 # Same layout Godot uses: uint16 format version (0), then 12 bytes per cell, row by row.
 data = struct.pack('<H', 0) + b''.join(struct.pack('<hhHHHH', *c) for c in cells)
-packed = 'tile_map_data = PackedByteArray(' + ', '.join(str(b) for b in data) + ')'
 
 scene = open(scene_path, encoding='utf-8').read()
+if scene.startswith('[gd_scene format=4'):
+    # newer Godot (scene format 4) stores byte arrays as base64 text
+    import base64
+    packed = 'tile_map_data = PackedByteArray("' + base64.b64encode(data).decode('ascii') + '")'
+else:
+    packed = 'tile_map_data = PackedByteArray(' + ', '.join(str(b) for b in data) + ')'
 start = scene.index('[node name="Layout"')
 nxt = scene.find('\n[', start + 1)
 section = scene[start:nxt if nxt >= 0 else len(scene)]

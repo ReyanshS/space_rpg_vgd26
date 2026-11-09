@@ -22,8 +22,14 @@ extends CanvasLayer
 signal dialogue_blocking(on: bool)
 
 const TYPE_SPEED := 48.0          # letters per second in the speech box
-const NAME_COLOR := "#ffd84d"
-const KEY_COLOR := "#8fe3ff"
+# The look: SHIP HARDWARE outside (riveted metal frames, Assets/ui/frame_*.png,
+# drawn by tools/art_ui.py) and an old GREEN COMPUTER SCREEN inside.
+const NAME_COLOR := "#ffc24d"     # amber: names, keys, headings
+const TEXT_COLOR := "#a8f0a0"     # phosphor green: what PIP says
+const KEY_COLOR := "#ffc24d"
+const AMBER := Color(1.0, 0.76, 0.3)
+const PHOSPHOR := Color(0.66, 0.94, 0.63)
+const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
 
 @onready var toast: PanelContainer = $Toast
 @onready var toast_label: Label = $Toast/Text
@@ -93,9 +99,15 @@ var _stars_earned := 0
 var _stars_shown := 0
 
 var _sfx := {}
+var _plate: StyleBoxTexture       # riveted metal plate, for the meters drawn in code
 
 
 func _ready() -> void:
+	_plate = StyleBoxTexture.new()
+	_plate.texture = load("res://Assets/ui/frame_plate.png")
+	_plate.set_texture_margin_all(6.0)     # 9-slice: keep the 6 px riveted border as it is
+	_plate.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
+	_plate.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE
 	# The timer bar, status, cells, portrait and stars have no picture: our own
 	# functions draw them (see the _draw_... functions below).
 	timer_bar.draw.connect(_draw_timer)
@@ -179,7 +191,7 @@ func set_objective(text: String, world_pos: Vector2, arrow: bool) -> void:
 		marker.queue_redraw()
 		return
 	_objective_on = true
-	objective_label.text = text
+	objective_label.text = "> " + text          # like a line typed on a terminal
 	objective.reset_size()
 	objective.visible = not _cinematic
 	objective.modulate = Color(1.8, 1.8, 1.8)    # flash bright, then settle
@@ -348,7 +360,7 @@ func _frame() -> bool:
 
 
 func _show_line(speaker: String, line: String, blocking: bool) -> void:
-	_line_bbcode = "[color=%s]%s:[/color] %s" % [NAME_COLOR, speaker, line]
+	_line_bbcode = "[color=%s]%s>[/color] [color=%s]%s[/color]" % [NAME_COLOR, speaker, TEXT_COLOR, line]
 	dialogue_text.text = _line_bbcode
 	dialogue.reset_size()
 	var total := float(dialogue_text.get_total_character_count())
@@ -398,25 +410,28 @@ func _show_line(speaker: String, line: String, blocking: bool) -> void:
 	_skip_line = false
 
 
-## PIP's face: a little screen with two eyes that blink and a mouth that moves while talking.
+## PIP's face: a little green CRT monitor in a metal case. Two eyes that blink,
+## a mouth that moves while talking, and dark scanlines across the glass.
 func _draw_portrait() -> void:
 	var s := portrait.size
-	portrait.draw_rect(Rect2(Vector2.ZERO, s), Color(0.45, 0.85, 1.0))
-	portrait.draw_rect(Rect2(Vector2(1, 1), s - Vector2(2, 2)), Color(0.04, 0.14, 0.2))
+	portrait.draw_rect(Rect2(Vector2.ZERO, s), Color(0.29, 0.32, 0.38))                  # metal case
+	portrait.draw_rect(Rect2(Vector2.ZERO, Vector2(s.x, 1)), Color(0.54, 0.58, 0.65))    # its top edge catches the light
+	portrait.draw_rect(Rect2(Vector2(2, 2), s - Vector2(4, 4)), Color(0.03, 0.09, 0.05)) # the glass
 	var blink := fmod(_t, 3.2) < 0.12
-	var eye := Color(0.55, 0.95, 1.0)
-	for x in [8.0, 17.0]:
+	for x in [8.0, 16.0]:
 		if blink:
-			portrait.draw_rect(Rect2(Vector2(x, 12), Vector2(4, 1)), eye)
+			portrait.draw_rect(Rect2(Vector2(x, 12), Vector2(4, 1)), PHOSPHOR)
 		else:
-			portrait.draw_rect(Rect2(Vector2(x, 9), Vector2(4, 5)), eye)
-			portrait.draw_rect(Rect2(Vector2(x + 2, 10), Vector2(1, 2)), Color(1, 1, 1))
+			portrait.draw_rect(Rect2(Vector2(x, 9), Vector2(4, 5)), PHOSPHOR)
+			portrait.draw_rect(Rect2(Vector2(x + 2, 10), Vector2(1, 2)), Color(0.9, 1.0, 0.9))
 	var mouth := 1.0
 	if _typing:
 		mouth = 1.0 + float(int(_t * 14.0) % 3)
-	portrait.draw_rect(Rect2(Vector2(10, 19), Vector2(9, mouth)), eye)
-	var tip := Color(1.0, 0.85, 0.3) if fmod(_t, 1.0) < 0.5 else Color(1.0, 0.5, 0.2)
-	portrait.draw_rect(Rect2(Vector2(s.x - 5, 3), Vector2(2, 2)), tip)       # antenna light
+	portrait.draw_rect(Rect2(Vector2(10, 18), Vector2(8, mouth)), PHOSPHOR)
+	for y in range(3, int(s.y) - 2, 2):
+		portrait.draw_rect(Rect2(2, y, s.x - 4, 1), Color(0, 0, 0, 0.35))                # scanlines
+	var tip := AMBER if fmod(_t, 1.0) < 0.5 else Color(0.5, 0.3, 0.1)
+	portrait.draw_rect(Rect2(Vector2(s.x - 4, 1), Vector2(2, 1)), tip)                   # status light
 
 
 # ------------------------------------------------------------------ toast
@@ -460,21 +475,34 @@ func pulse_timer() -> void:
 	_pulse = 1.0
 
 
+## One segment of an LED meter: lit = its colour with a brighter top row (like a
+## little glowing bulb), unlit = dark.
+func _led(ci: CanvasItem, r: Rect2, lit: bool, col: Color) -> void:
+	if not lit:
+		ci.draw_rect(r, LED_OFF)
+		return
+	ci.draw_rect(r, col)
+	ci.draw_rect(Rect2(r.position, Vector2(r.size.x, 1)), col.lightened(0.45))
+
+
+## The ship's lightning bolt icon, 8 x 13 pixels, top-left corner at `b`.
+func _bolt(ci: CanvasItem, b: Vector2, col: Color) -> void:
+	ci.draw_colored_polygon(PackedVector2Array([b + Vector2(5, 0), b + Vector2(1, 7), b + Vector2(4, 7),
+		b + Vector2(2, 13), b + Vector2(8, 5), b + Vector2(5, 5), b + Vector2(7, 0)]), col)
+
+
 func _draw_timer() -> void:
 	var size := timer_bar.size
 	var font := timer_bar.get_theme_default_font()
-	timer_bar.draw_rect(Rect2(Vector2.ZERO, size), Color(0.03, 0.04, 0.09, 0.9))
-	timer_bar.draw_rect(Rect2(Vector2.ZERO, size), Color(0.45, 0.6, 0.95, 0.9), false, 1.0)
+	timer_bar.draw_style_box(_plate, Rect2(Vector2.ZERO, size))
 	if _paused:
 		# pause icon: two bars
-		timer_bar.draw_rect(Rect2(Vector2(5, 5), Vector2(3, 12)), Color(0.5, 0.9, 1.0))
-		timer_bar.draw_rect(Rect2(Vector2(10, 5), Vector2(3, 12)), Color(0.5, 0.9, 1.0))
+		timer_bar.draw_rect(Rect2(Vector2(7, 5), Vector2(3, 12)), Color(0.5, 0.9, 1.0))
+		timer_bar.draw_rect(Rect2(Vector2(12, 5), Vector2(3, 12)), Color(0.5, 0.9, 1.0))
 	else:
-		var b := Vector2(5, 4)
-		var bolt := PackedVector2Array([b + Vector2(5, 0), b + Vector2(1, 7), b + Vector2(4, 7), b + Vector2(2, 13), b + Vector2(8, 5), b + Vector2(5, 5), b + Vector2(7, 0)])
-		timer_bar.draw_colored_polygon(bolt, Color(1.0, 0.85, 0.3))
-	# colour: yellow -> orange -> blinking red; light blue while paused
-	var col := Color(1.0, 0.85, 0.3)
+		_bolt(timer_bar, Vector2(7, 4), AMBER)
+	# colour: amber -> orange -> blinking red; light blue while paused
+	var col := AMBER
 	if _paused:
 		col = Color(0.45, 0.9, 1.0)
 	elif _frac < 0.25:
@@ -483,19 +511,16 @@ func _draw_timer() -> void:
 		col = Color(1.0, 0.55, 0.15)
 	if _pulse > 0.0:
 		col = col.lerp(Color.WHITE, _pulse)
-	var seg_count := 5
-	var x0 := 18.0
-	var bar_w := size.x - x0 - 34.0
+	# 10 LED segments, one per half second
+	var seg_count := 10
+	var x0 := 20.0
+	var bar_w := size.x - x0 - 38.0
 	var gap := 2.0
-	var seg_w := (bar_w - gap * (seg_count - 1)) / seg_count
-	var fill := _frac * seg_count
+	var seg_w := floorf((bar_w - gap * (seg_count - 1)) / seg_count)
+	var lit := ceili(_frac * seg_count)
 	for i in seg_count:
-		var r := Rect2(x0 + i * (seg_w + gap), 5, seg_w, size.y - 10)
-		timer_bar.draw_rect(r, Color(0.15, 0.17, 0.25))
-		var amt := clampf(fill - i, 0.0, 1.0)
-		if amt > 0.0:
-			timer_bar.draw_rect(Rect2(r.position, Vector2(roundf(r.size.x * amt), r.size.y)), col)
-	timer_bar.draw_string(font, Vector2(size.x - 31, size.y - 6), "%.1f" % _secs, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color.WHITE)
+		_led(timer_bar, Rect2(x0 + i * (seg_w + gap), 7, seg_w, size.y - 14), i < lit, col)
+	timer_bar.draw_string(font, Vector2(size.x - 33, size.y - 6), "%.1f" % _secs, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
 
 
 # ------------------------------------------------------------------ ship power, cells, oxygen
@@ -526,47 +551,47 @@ func set_hint_available(on: bool) -> void:
 	keys_label.text = "[H] hint   [Esc] menu" if on else "[Esc] menu"
 
 
+## Top left: the ship's POWER meter (one LED per goal) on a metal plate, and
+## under it the OXYGEN meter while you're outside.
 func _draw_status() -> void:
 	var font := status_box.get_theme_default_font()
 	var y := 0.0
 	if _power_total > 0:
 		var flash := _power_flash > 0.0 and int(_t * 10.0) % 2 == 0
-		var ink := Color.WHITE if flash else Color(1.0, 0.85, 0.3)
-		status_box.draw_rect(Rect2(0, 0, 82, 16), Color(0.03, 0.05, 0.12, 0.8))
-		var b := Vector2(3, 2)
-		status_box.draw_colored_polygon(PackedVector2Array([b + Vector2(5, 0), b + Vector2(1, 7), b + Vector2(4, 7),
-			b + Vector2(2, 12), b + Vector2(8, 5), b + Vector2(5, 5), b + Vector2(7, 0)]), ink)
-		var seg_w := (66.0 - 2.0 * (_power_total - 1)) / _power_total
+		var ink := Color.WHITE if flash else AMBER
+		status_box.draw_style_box(_plate, Rect2(0, 0, 88, 22))
+		_bolt(status_box, Vector2(7, 4), ink)
+		var seg_w := floorf((60.0 - 2.0 * (_power_total - 1)) / _power_total)
 		for i in _power_total:
-			var r := Rect2(14 + i * (seg_w + 2.0), 4, seg_w, 8)
-			status_box.draw_rect(r, Color(0.16, 0.18, 0.26))
-			if i < _power_on:
-				status_box.draw_rect(r, ink)
-		y = 18.0
+			_led(status_box, Rect2(20 + i * (seg_w + 2.0), 7, seg_w, 8), i < _power_on, ink)
+		y = 24.0
 	if _o2_on:
 		var low := _o2_frac < 0.3
 		var col := Color(0.5, 0.85, 1.0)
 		if low:
 			col = Color(1.0, 0.3, 0.25) if int(_t * 6.0) % 2 == 0 else Color(1.0, 0.7, 0.6)
-		status_box.draw_rect(Rect2(0, y, 82, 16), Color(0.03, 0.05, 0.12, 0.8))
-		status_box.draw_string(font, Vector2(2, y + 13), "O2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
-		var bar := Rect2(18, y + 4, 60, 8)
-		status_box.draw_rect(bar, Color(0.16, 0.18, 0.26))
-		status_box.draw_rect(Rect2(bar.position, Vector2(roundf(bar.size.x * _o2_frac), bar.size.y)), col)
+		status_box.draw_style_box(_plate, Rect2(0, y, 88, 22))
+		status_box.draw_string(font, Vector2(6, y + 15), "O2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+		var bar := Rect2(24, y + 7, 58, 8)
+		status_box.draw_rect(bar, LED_OFF)
+		var fill := Rect2(bar.position, Vector2(roundf(bar.size.x * _o2_frac), bar.size.y))
+		status_box.draw_rect(fill, col)
+		status_box.draw_rect(Rect2(fill.position, Vector2(fill.size.x, 1)), col.lightened(0.45))
 
 
+## Top right: how many power cells you've charged, on a metal plate.
 func _draw_cells() -> void:
 	if _cells_total <= 0:
 		return
 	var font := cells_box.get_theme_default_font()
 	var s := cells_box.size
-	cells_box.draw_rect(Rect2(Vector2.ZERO, s), Color(0.03, 0.05, 0.12, 0.8))
-	var o := Vector2(4, 1 - roundf(_cell_bump * 3.0))
-	var body := Color(1.0, 0.85, 0.3).lerp(Color.WHITE, _cell_bump)
+	cells_box.draw_style_box(_plate, Rect2(0, 0, s.x, 22))
+	var o := Vector2(6, 3 - roundf(_cell_bump * 3.0))
+	var body := AMBER.lerp(Color.WHITE, _cell_bump)
 	PowerCell.draw_battery(cells_box, o, body, Color(0.4, 0.25, 0.02))   # same picture as in the level
 	var txt := "%d/%d" % [_cells, _cells_total]
-	var ink := Color(1, 1, 1) if _cells < _cells_total else Color(1.0, 0.9, 0.4)
-	cells_box.draw_string(font, Vector2(18, 14), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink)
+	var ink := PHOSPHOR if _cells < _cells_total else AMBER
+	cells_box.draw_string(font, Vector2(20, 16), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink)
 
 
 # ------------------------------------------------------------------ screen effects
@@ -603,7 +628,7 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	$Complete/VBox/Title.text = "LEVEL %d COMPLETE" % number
 	$Complete/VBox/Sub.text = message
 	var secs := int(stats.get("time", 0.0))
-	$Complete/VBox/Stats.text = "Time %d:%02d    Cells %d/%d    Retries %d" % [
+	$Complete/VBox/Stats.text = "TIME %d:%02d  |  CELLS %d/%d  |  RETRIES %d" % [
 		secs / 60, secs % 60, stats.get("cells", 0), stats.get("cells_total", 0), stats.get("retries", 0)]
 	# what the cells are FOR: every one makes your suit's air last longer
 	var bonus := int(stats.get("cells", 0)) * int(Game.O2_PER_CELL)
@@ -638,8 +663,8 @@ func _draw_stars() -> void:
 			var a := -PI / 2.0 + k * PI / 5.0
 			pts.append(c + Vector2(cos(a), sin(a)) * r)
 		if i < _stars_shown:
-			stars_box.draw_colored_polygon(pts, Color(1.0, 0.85, 0.3))
+			stars_box.draw_colored_polygon(pts, AMBER)
 			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.45, 0.25, 0.0), 1.0)
 		else:
-			stars_box.draw_colored_polygon(pts, Color(0.12, 0.14, 0.22))
-			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.35, 0.4, 0.55), 1.0)
+			stars_box.draw_colored_polygon(pts, Color(0.06, 0.12, 0.08))                 # an unlit star on the screen
+			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.25, 0.42, 0.28), 1.0)

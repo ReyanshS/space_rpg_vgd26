@@ -14,9 +14,11 @@ TILE = 32; FEET = (6, 4); WALK = 100.0; FLING = 260.0; DRIFT = 150.0; TIME = 5.0
 R = {'N': 22.0, 'G': 20.0, 'B': 16.0}
 CELL_R = 14.0
 STEP = 4
-WALK_SOLID = '# CD~'    # your feet can't go here (open space too: mag boots need hull)
-HARD_SOLID = '# CD'     # you can't pass here at all, not even drifting
-WIRE_SOLID = '# CDEX'   # the wire can't cross these (it CAN cross open space)
+WALK_SOLID = '# CD=~'   # your feet can't go here (open space too: mag boots need hull)
+HARD_SOLID = '# CD='    # you can't pass here at all, not even drifting
+WIRE_SOLID = '# CD=EX'  # the wire can't cross these (it CAN cross open space)
+# '=' is a BARRIER that hasn't moved yet. When a stage is checked, the barriers next
+# to the stages you've already powered have sunk into the floor: they become '.'.
 
 
 def load(p):
@@ -213,21 +215,54 @@ def rooms(g):
     H = len(g); W = len(g[0]); seen = {}; out = []
     for r in range(H):
         for c in range(W):
-            if (c, r) in seen or g[r][c] in '# D': continue
+            if (c, r) in seen or g[r][c] in '# D=': continue
             stack = [(c, r)]; seen[(c, r)] = len(out); cells = []
             while stack:
                 cc, rr = stack.pop(); cells.append((cc, rr))
                 for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                     n = (cc + dc, rr + dr)
-                    if 0 <= n[1] < H and 0 <= n[0] < W and n not in seen and g[n[1]][n[0]] not in '# D':
+                    if 0 <= n[1] < H and 0 <= n[0] < W and n not in seen and g[n[1]][n[0]] not in '# D=':
                         seen[n] = len(out); stack.append(n)
             out.append(cells)
     return out
 
 
+def walking_order(g, rms):
+    """Rooms in the order you reach them from the spawn (P), through doors and
+    barriers - the same numbering level.gd uses."""
+    room_of = {cell: i for i, cells in enumerate(rms) for cell in cells}
+    links = {i: set() for i in range(len(rms))}
+    for r, row in enumerate(g):
+        for c, ch in enumerate(row):
+            if ch not in 'D=': continue
+            adj = {room_of[n] for n in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)) if n in room_of}
+            for a in adj: links[a] |= adj - {a}
+    first = next((room_of[(c, r)] for r, row in enumerate(g) for c, ch in enumerate(row) if ch == 'P'), 0)
+    order = [first]
+    for i in order:
+        for n in sorted(links[i]):
+            if n not in order: order.append(n)
+    return order + [i for i in range(len(rms)) if i not in order], room_of
+
+
+def open_barriers(g, room_of, done):
+    """The map as it is once the rooms in `done` are powered: their barriers are floor."""
+    g = [list(row) for row in g]
+    for r, row in enumerate(g):
+        for c, ch in enumerate(row):
+            if ch != '=': continue
+            near = {room_of.get(n) for n in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1))}
+            if near & done: g[r][c] = '.'
+    return [''.join(row) for row in g]
+
+
 if __name__ == '__main__':
-    g, floating = floating_cells(load(sys.argv[1])); M = Map(g)
-    for cells_of_room in rooms(g):
+    g, floating = floating_cells(load(sys.argv[1]))
+    rms = rooms(g)
+    order, room_of = walking_order(g, rms)
+    for k, ri in enumerate(order):
+        cells_of_room = rms[ri]
+        M = Map(open_barriers(g, room_of, set(order[:k])))
         pads = {}; cells = {}
         for (c, r) in cells_of_room:
             ch = g[r][c]
@@ -236,7 +271,7 @@ if __name__ == '__main__':
         st = [k for k, v in pads.items() if v[0] == 'S']
         if not st: continue
         sols = solve_room(M, pads, cells, st[0])
-        print(f'Room start {st[0]}: {len(sols)} solutions')
+        print(f'Stage {k + 1} (start {st[0]}): {len(sols)} solutions')
         best = {}
         for labels, spare, got in sols:
             key = ' -> '.join(labels)
