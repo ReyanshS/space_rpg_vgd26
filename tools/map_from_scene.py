@@ -5,7 +5,7 @@
 # per tile to tools/out/level1.txt. The solver and preview tools read that file.
 #
 #   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
-#   x red-off   C crate   D door   P spawn   E exit
+#   x blinking grate   C crate   D door   P spawn   E exit
 #   * power cell   , hull (outside floor)   ~ open space   A airlock pad   = barrier
 #   (space) = nothing
 #
@@ -22,7 +22,7 @@ SCENE = sys.argv[1] if len(sys.argv) > 1 else 'Scenes/level_1.tscn'
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
 OUT = sys.argv[2] if len(sys.argv) > 2 else 'tools/out/level1.txt'
 SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
-          'discharge': 'X', 'discharge_off': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
+          'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
           'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '='}
 
 scene = open(SCENE, encoding='utf-8').read()

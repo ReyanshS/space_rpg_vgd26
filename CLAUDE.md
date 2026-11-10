@@ -3,9 +3,10 @@
 Godot 4.7 top-down puzzle game for the TSA Video Game Design event (2026-27; AI use is allowed but
 must be documented). Title **STAR CIRCUIT** (the team's name). The player is an astronaut restoring
 power to a dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship's
-maintenance AI. `Scenes/title.tscn` is the main scene -> `level_1.tscn` (Engineering Deck: one open
-deck, 4 puzzle stages split by barriers) -> `level_2.tscn` (Main Deck: bridge, airlock, spacewalk
-across one open hull).
+maintenance AI. `Scenes/title.tscn` is the main scene (logo: `Assets/images/ui/logo.png`) ->
+`level_1.tscn` (Engineering Deck: the team's 4 rooms joined by doors, then the Generator Room: 3
+stages split by cargo barriers, ending in blinking grates) -> `level_2.tscn` (Main Deck: bridge,
+airlock, spacewalk across one open hull).
 - The team works in `D:\Godot\tsa-project\space_rpg_vgd26` (GitHub `ReyanshS/space_rpg_vgd26`,
   branch `nilay-claude`, public) and pushes with GitHub Desktop - the command line here can't sign
   in to GitHub. A teammate also edits the maps: fetch before working.
@@ -22,6 +23,9 @@ across one open hull).
   editing, or to pick **Reload** (never Resave) when Godot reports files changed on disk.
 - Keep a note of anything AI-generated for their TSA documentation (see bottom).
 - When playtesting with Godot from the command line, **mute it**: `--audio-driver Dummy`.
+- **Writing (PIP, tutorial, popups):** the team wants it to sound natural, not AI-written. Short
+  plain sentences, contractions, no dashes of any kind as punctuation, few exclamation marks, no
+  ALL-CAPS words inside PIP's lines. PIP is a slightly nervous maintenance bot with dry humour.
 
 ## TSA requirements (check work against these)
 - Official event guide (2027 & 2028 nationals) — key points: game > 3 minutes of play (-5 pts if
@@ -51,8 +55,13 @@ across one open hull).
 - NODE (orange): wraps the wire, refills the timer, pauses it while you stand on it. Touch radius 22 px.
 - BEND (purple): stops you, shows two arrows, you press one and get flung 90 deg
   (`bend_pauses_timer`). The fling stops at a wall, a node, or a hull edge.
-- GOAL (blue): powers the stage — lights on, conduit fills, its doors open and its BARRIERS sink
-  into the floor (a wave, nearest the goal first), opening the next stage.
+- GOAL (blue): powers the stage — lights on, conduit fills, its doors open and every BARRIER
+  GROUP touching the stage sinks into the floor (a wave, nearest the goal first).
+- Stages in the same area (joined by barriers) SHARE pads: a later stage's wire can wrap round
+  the nodes and bends of stages already powered there (`_stage_pads()`).
+- BLINKING GRATE (`blinker`, map char `x`): lit for `grate_live` of every `grate_cycle` seconds,
+  each column `grate_wave` s behind the one to its left (a wave); flickers just before lighting.
+  Lit = zaps your feet (also if you stand still); the wire is never blocked by it.
 - Red DISCHARGE tile: stepping on it (wire or not) = shock. Timer at 0 = wire snaps. Either way
   the stage resets but the player **stays where he fell** (`_stay_after_fail()` pushes him to the
   nearest safe tile if he's on red or over space; O2 refills). He walks back to the START himself.
@@ -86,16 +95,19 @@ across one open hull).
 ## Architecture (data -> logic -> visuals)
 - **The map is painted**, not coded: the `Layout` TileMapLayer uses
   `Assets/images/tiles/layout_tileset.tres`; each tile has Custom Data `kind` (floor, wall, start,
-  goal, node, bend, discharge, discharge_off, crate, door, spawn, exit, cell, hull, space, airlock,
+  goal, node, bend, discharge, blinker, crate, door, spawn, exit, cell, hull, space, airlock,
   barrier). Rooms (= puzzle STAGES) are found by flood fill (walls/doors/barriers separate them;
   space and void separate hull sections) and numbered in walking order from the spawn. Each needs
-  exactly one START (airlocks none). Doors and barriers open when an adjacent earlier stage is solved.
-- **Areas, not rooms**: stages joined by a `barrier` (or a gangway outside) form one AREA
-  (`_build_areas()`): the camera roams across the whole area (`area_bounds`) and the name popup
-  only shows when you enter a new area. Only real doors (walls beside them) start a new area.
-  Design rule: progression should feel like one space where powering things moves obstacles -
-  don't build separate rooms joined by corridors. Check new stages with the solver (it opens the
-  barriers of already-solved stages, so it catches shortcuts through them).
+  exactly one START (airlocks none). Doors open when the room before them is solved; touching
+  barrier tiles form a GROUP (`_build_barrier_groups()`) that sinks when any stage next to it is.
+- **Areas**: stages joined by a barrier group (or a gangway outside) form one AREA
+  (`_build_areas()`): the camera roams across the whole area (`area_bounds`), the name popup only
+  shows when you enter a new area, and pads are shared (see Game rules). Doors start a new area.
+  The team wants BOTH: normal rooms joined by doors, and multistage rooms where powering a stage
+  really changes the room for the next one. A good multistage room makes the next stage NEED the
+  opened space (e.g. Generator Room stage B only works by wrapping round stage A's node through
+  the sunk barrier column) - not just a barrier where a door would be. Check every new stage with
+  the solver (it opens barrier groups of earlier stages and shares their nodes, like the game).
 - `Scripts/level.gd` (`WireLevel`, `@tool`): reads the Layout, builds the pretty Ground/HullEdges/
   Walls/Props layers live in the editor, then at runtime runs all the rules, camera, lighting, audio
   and music. Exports: `level_number`, `level_name`, `complete_message`, `room_titles`, rules,
@@ -178,6 +190,8 @@ pixel in `tools/art_space.py`), PIP's dialogue text, and all sounds and music in
 (synthesized in Python from sine waves, noise and volume envelopes — no outside sources), the
 barrier tile (`tools/art_barrier.py`) and the UI frames (`tools/art_ui.py`). Level 1's puzzles are
 the team's design, checked with a Python solver; Claude placed Level 1's power cells and, at the
-team's request, turned its doors/corridors into barriers so the deck is one open space.
+team's request, designed Level 1's Generator Room (multistage barriers, shared nodes, blinking
+grates). The title logo was provided by the team; `tools/logo_import.py` (Claude) removed its
+painted-on checkerboard background and shrank it to game pixels - record where the logo came from.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

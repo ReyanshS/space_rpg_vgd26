@@ -6,9 +6,9 @@ pages (max 2 pages). Rewrite it in the team's own words.*
 ## Purpose and description
 STAR CIRCUIT is a deep-space puzzle adventure. A solar storm has knocked out your starship's power,
 and you, the ship's engineer, must bring it back to life one machine at a time by carrying a live
-electrical wire from a power socket to each machine's power relay. Every machine you power moves
-something - cargo sinks into the floor, catwalks slide out - and opens up the next puzzle. PIP, the
-ship's maintenance AI, guides you through the story. Progress comes only from solving puzzles —
+electrical wire from a power socket to each machine's power relay. Powering a machine opens doors,
+and in some rooms it moves the cargo around, which changes the room for the next puzzle. PIP, the
+ship's maintenance AI, guides you through the story. Progress comes only from solving puzzles, and
 there is no combat.
 
 ## Target audience
@@ -18,8 +18,9 @@ points before the timer runs out.
 
 ## Goal
 In every puzzle, carry the wire from the yellow **START** pad to the blue **GOAL** pad. That powers
-the machine, and the cargo barriers (yellow-and-black striped crates) sink into the floor to open
-the way to the next puzzle. At the end of each level you get up to three stars.
+the machine and opens the way forward. In the Generator Room, the cargo barriers (yellow-and-black
+striped crates) sink into the floor when you power a machine, and the next puzzle uses the space
+they leave behind. At the end of each level you get up to three stars.
 
 ## Controls
 | Action | Keys |
@@ -40,6 +41,9 @@ the way to the next puzzle. At the end of each level you get up to three stars.
   the wire bends with you.
 - **Red tiles** are live: step on one and you're shocked, and the wire snaps.
 - If the timer runs out, the wire overloads and snaps.
+- **Blinking grates** switch on and off in a wave. When they're lit they shock you; when they're
+  dark they're safe. The wire can cross them either way.
+- Nodes and bends you've already used in a room still work for the next puzzle in that room.
 - When the wire snaps you stay where you are: walk back to the START pad and try again, or press
   **R** to jump straight back there.
 - **Power cells** (small batteries): touch one *while carrying the wire* to charge it. You keep

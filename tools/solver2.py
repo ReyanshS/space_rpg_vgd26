@@ -227,47 +227,84 @@ def rooms(g):
     return out
 
 
+def near4(c, r): return ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1))
+
+
+def barrier_groups(g, room_of):
+    """Touching '=' tiles form one GROUP that moves together. Returns a list of
+    (tiles, rooms next to the group) - same as level.gd's _barrier_groups."""
+    seen = set(); out = []
+    for r, row in enumerate(g):
+        for c, ch in enumerate(row):
+            if ch != '=' or (c, r) in seen: continue
+            stack = [(c, r)]; seen.add((c, r)); tiles = []; near = set()
+            while stack:
+                t = stack.pop(); tiles.append(t)
+                for n in near4(*t):
+                    if n in room_of: near.add(room_of[n])
+                    if 0 <= n[1] < len(g) and 0 <= n[0] < len(g[n[1]]) and g[n[1]][n[0]] == '=' and n not in seen:
+                        seen.add(n); stack.append(n)
+            out.append((tiles, near))
+    return out
+
+
 def walking_order(g, rms):
     """Rooms in the order you reach them from the spawn (P), through doors and
-    barriers - the same numbering level.gd uses."""
+    barriers - the same numbering level.gd uses. Also returns the AREAS: rooms
+    joined by barriers (they share nodes and bends once powered)."""
     room_of = {cell: i for i, cells in enumerate(rms) for cell in cells}
     links = {i: set() for i in range(len(rms))}
     for r, row in enumerate(g):
         for c, ch in enumerate(row):
-            if ch not in 'D=': continue
-            adj = {room_of[n] for n in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)) if n in room_of}
+            if ch != 'D': continue
+            adj = {room_of[n] for n in near4(c, r) if n in room_of}
             for a in adj: links[a] |= adj - {a}
+    groups = barrier_groups(g, room_of)
+    area = list(range(len(rms)))
+    def find(i):
+        while area[i] != i: i = area[i]
+        return i
+    for tiles, near in groups:
+        for a in near:
+            links[a] |= near - {a}
+            for b in near: area[find(a)] = find(b)
     first = next((room_of[(c, r)] for r, row in enumerate(g) for c, ch in enumerate(row) if ch == 'P'), 0)
     order = [first]
     for i in order:
         for n in sorted(links[i]):
             if n not in order: order.append(n)
-    return order + [i for i in range(len(rms)) if i not in order], room_of
+    order += [i for i in range(len(rms)) if i not in order]
+    return order, room_of, groups, [find(i) for i in range(len(rms))]
 
 
-def open_barriers(g, room_of, done):
-    """The map as it is once the rooms in `done` are powered: their barriers are floor."""
+def open_barriers(g, groups, done):
+    """The map as it is once the rooms in `done` are powered: every barrier group
+    touching one of them has sunk into the floor."""
     g = [list(row) for row in g]
-    for r, row in enumerate(g):
-        for c, ch in enumerate(row):
-            if ch != '=': continue
-            near = {room_of.get(n) for n in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1))}
-            if near & done: g[r][c] = '.'
+    for tiles, near in groups:
+        if near & done:
+            for c, r in tiles: g[r][c] = '.'
     return [''.join(row) for row in g]
 
 
 if __name__ == '__main__':
     g, floating = floating_cells(load(sys.argv[1]))
     rms = rooms(g)
-    order, room_of = walking_order(g, rms)
+    order, room_of, groups, area = walking_order(g, rms)
     for k, ri in enumerate(order):
         cells_of_room = rms[ri]
-        M = Map(open_barriers(g, room_of, set(order[:k])))
+        done = set(order[:k])
+        M = Map(open_barriers(g, groups, done))
         pads = {}; cells = {}
         for (c, r) in cells_of_room:
             ch = g[r][c]
             if ch in 'SNBG': pads[(c, r)] = (ch, center(c, r))
             if ch == '*' or (c, r) in floating: cells[(c, r)] = center(c, r)
+        # nodes and bends of stages you already powered in the same area still work
+        for o in done:
+            if area[o] != area[ri]: continue
+            for (c, r) in rms[o]:
+                if g[r][c] in 'NB': pads[(c, r)] = (g[r][c], center(c, r))
         st = [k for k, v in pads.items() if v[0] == 'S']
         if not st: continue
         sols = solve_room(M, pads, cells, st[0])

@@ -265,7 +265,7 @@ horizontal_alignment = 1
 [node name="StarHelp" type="Label" parent="Complete/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
-text = "Stars: finish - every cell - few retries"
+text = "Stars for finishing, every cell, and few retries"
 horizontal_alignment = 1
 
 [node name="Again" type="Label" parent="Complete/VBox"]
@@ -298,7 +298,7 @@ horizontal_alignment = 1
 [node name="Level" type="Label" parent="Pause/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
-text = "LEVEL 1 - ENGINEERING DECK"
+text = "LEVEL 1: ENGINEERING DECK"
 horizontal_alignment = 1
 
 [node name="Controls" type="Label" parent="Pause/VBox"]

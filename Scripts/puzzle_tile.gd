@@ -1,8 +1,9 @@
 # ---------------------------------------------------------------------------
 # puzzle_tile.gd  -  one interactive floor tile: start, goal, node, bend,
 # red discharge, door, GANGWAY (a door out in space: a catwalk that extends
-# across the gap when the hull section is powered), AIRLOCK pad, or BARRIER
-# (a cargo stack on a lift that sinks into the floor when its stage is powered).
+# across the gap when the hull section is powered), AIRLOCK pad, BARRIER
+# (a cargo stack on a lift that sinks into the floor when its stage is powered),
+# or BLINKING GRATE (Kind.DISCHARGE_OFF: the level turns it on and off).
 #
 # The level creates these in code (PuzzleTile.new() + setup()). Each one has:
 #   - a Sprite2D showing the right 32x32 picture (gets darker when the ship is dark)
@@ -30,6 +31,7 @@ const GLOW := {
 	Kind.NODE: Color(1.0, 0.55, 0.2),
 	Kind.BEND: Color(0.75, 0.45, 1.0),
 	Kind.DISCHARGE: Color(1.0, 0.25, 0.25),
+	Kind.DISCHARGE_OFF: Color(1.0, 0.25, 0.25),   # a blinking grate (red while lit)
 	Kind.DOOR: Color(0.4, 1.0, 0.55),
 	Kind.GANGWAY: Color(1.0, 0.75, 0.3),
 	Kind.AIRLOCK: Color(1.0, 0.78, 0.3),
@@ -45,6 +47,8 @@ var kind: int = Kind.START
 var powered := false          # room solved: shine brightly
 var active := false           # this node is the one you're standing on (timer paused)
 var is_open := false          # doors only
+var live := false             # blinking grates: lit right now
+var _warning := false         # blinking grates: about to light up
 ## Shows the floating [E] key above START pads.
 var prompt := false:
 	set(v):
@@ -84,14 +88,14 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 		_glow.modulate = Color(col, 0.0)
 		_add_fx(_glow)
 		# a small light so the floor around the pad is lit too
-		if kind != Kind.DISCHARGE:
+		if kind != Kind.DISCHARGE and kind != Kind.DISCHARGE_OFF:
 			_light = LightFX.make(col, 44.0, 0.55)
 			add_child(_light)
 	if rotated:
 		_sprite.rotation = PI / 2.0
 		if _glow:
 			_glow.rotation = PI / 2.0
-	if kind == Kind.DISCHARGE:
+	if kind == Kind.DISCHARGE or kind == Kind.DISCHARGE_OFF:
 		_crackle = Wire.make_sparks(Color(1.0, 0.45, 0.4), 4, 0.3)
 		_crackle.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 		_crackle.emission_rect_extents = Vector2(11, 11)
@@ -100,7 +104,7 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 		_crackle.gravity = Vector2.ZERO
 		_crackle.randomness = 1.0
 		_add_fx(_crackle)
-		_crackle.emitting = true
+		_crackle.emitting = kind == Kind.DISCHARGE      # blinking grates only crackle while lit
 	if kind == Kind.START:
 		_prompt_node = _make_overlay(_draw_prompt)
 	if kind == Kind.BEND:
@@ -142,6 +146,11 @@ func _process(delta: float) -> void:
 				a = 0.18 + 0.12 * sin(_t * 3.0)     # slow gentle pulse
 			Kind.DISCHARGE:
 				a = 0.3 + 0.2 * sin(_t * 9.0)
+			Kind.DISCHARGE_OFF:
+				if live:
+					a = 0.3 + 0.2 * sin(_t * 9.0)
+				elif _warning:
+					a = 0.25 if int(_t * 20.0) % 2 == 0 else 0.0     # quick flicker: "watch out"
 			Kind.DOOR, Kind.GANGWAY, Kind.BARRIER:
 				a = 0.12 + 0.08 * sin(_t * 2.0)
 		if active:
@@ -156,7 +165,7 @@ func _process(delta: float) -> void:
 		if powered:
 			e = 0.9
 		_light.energy = e
-	if kind == Kind.DISCHARGE:
+	if kind == Kind.DISCHARGE or (kind == Kind.DISCHARGE_OFF and live):
 		_flick -= delta
 		if _flick <= 0.0:
 			_flick = randf_range(0.04, 0.35)
@@ -205,6 +214,23 @@ func _draw_preview() -> void:
 		var tri := PackedVector2Array([tip, base + side, base - side])
 		_preview_node.draw_colored_polygon(tri, col)
 		_preview_node.draw_polyline(PackedVector2Array([tip, base + side, base - side, tip]), outline, 1.0)
+
+
+## BLINKING GRATES: the level switches them on and off every frame.
+## warning = it's about to light up (the glow flickers).
+func set_live(on: bool, warning := false) -> void:
+	_warning = warning and not on
+	if on == live:
+		return
+	live = on
+	var frame := Kind.DISCHARGE if on else Kind.DISCHARGE_OFF
+	_sprite.region_rect = Rect2(frame * 32, 0, 32, 32)
+	if _glow:
+		_glow.region_rect = _sprite.region_rect
+	if _crackle:
+		_crackle.emitting = on
+	if not on:
+		_sprite.modulate = Color.WHITE
 
 
 ## Quick flash + spark burst when the wire touches this tile.

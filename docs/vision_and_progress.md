@@ -143,6 +143,15 @@ to the next section). Steps only appear once you're in their room.
     the floor when its stage is powered; Level 1 is now one open deck in 4 stages, and Level 2's
     hull sections share one open camera space
   - new UI look ("less AI"): riveted metal frames with green terminal screens, LED meters
+- **Nov 8**: teammate redesigned Level 2's Main Coupling (a bend floating in space).
+- **Nov 9**, third round of feedback:
+  - doors are back between Level 1's four rooms (the team's layout)
+  - new **Generator Room** at the end of Level 1: a real multistage room. Powering stage A sinks a
+    whole column of cargo, and stage B can only be solved by wrapping the wire round stage A's
+    node through that gap. Stage C crosses **blinking grates** (a light wave you walk behind)
+  - barriers now move in groups; later stages can reuse earlier stages' nodes and bends
+  - the team's STAR CIRCUIT logo on the title screen; PIP and all game text rewritten to sound
+    natural (no dashes, fewer exclamation marks)
 
 ---
 

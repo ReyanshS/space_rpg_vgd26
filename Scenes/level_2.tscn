@@ -15,8 +15,8 @@ script = ExtResource("1_level")
 layout = NodePath("Layout")
 level_number = 2
 level_name = "MAIN DECK"
-complete_message = "The main coupling is fixed - the ship lives!"
-room_titles = PackedStringArray("THE BRIDGE", "AIRLOCK", "OUTER HULL", "HULL - SOLAR ARRAY", "HULL - MAIN COUPLING")
+complete_message = "The main coupling is fixed. The ship's alive again."
+room_titles = PackedStringArray("THE BRIDGE", "AIRLOCK", "OUTER HULL", "SOLAR ARRAY", "MAIN COUPLING")
 
 [node name="Layout" type="TileMapLayer" parent="." unique_id=587387450]
 self_modulate = Color(1, 1, 1, 0.45)
@@ -30,30 +30,30 @@ script = ExtResource("7_tutorial")
 [node name="Step1Airlock" type="Marker2D" parent="Tutorial" unique_id=1596182360]
 position = Vector2(560, 240)
 script = ExtResource("8_step")
-text = "Stand on the AIRLOCK pad to start the airlock."
+text = "Stand on the airlock pad"
 
 [node name="Step2Grab" type="Marker2D" parent="Tutorial" unique_id=1592838863]
 position = Vector2(720, 240)
 script = ExtResource("8_step")
-text = "Grab the wire from the hull socket with E."
+text = "Grab the wire from the hull socket with E"
 advance_when = 0
 
 [node name="Step3Drift" type="Marker2D" parent="Tutorial" unique_id=323225581]
 position = Vector2(816, 240)
 script = ExtResource("8_step")
-text = "Walk straight off the edge - you'll DRIFT across the gap!"
+text = "Walk straight off the edge to drift across the gap"
 advance_when = 6
 
 [node name="Step4Relay" type="Marker2D" parent="Tutorial" unique_id=258538740]
 position = Vector2(1040, 400)
 script = ExtResource("8_step")
-text = "Drift down to the relay (the GOAL) and plug the wire in!"
+text = "Drift down to the blue relay and plug the wire in"
 advance_when = 3
 
 [node name="Step5Onward" type="Marker2D" parent="Tutorial" unique_id=1359210264]
 position = Vector2(1104, 400)
 script = ExtResource("8_step")
-text = "A catwalk slid out! Cross it to the solar array."
+text = "Cross the catwalk to the solar array"
 advance_when = 4
 
 [node name="Hints" type="Node2D" parent="." unique_id=207618543]
@@ -77,81 +77,81 @@ script = ExtResource("9_story")
 position = Vector2(240, 192)
 script = ExtResource("10_beat")
 trigger = 0
-lines = PackedStringArray("We made it to the Main Deck! The reactor\'s humming again, thanks to you.", "But the power isn\'t reaching the bridge. Let\'s get these consoles online first.")
+lines = PackedStringArray("Main deck. Hear that hum? That\'s the reactor, and that\'s your doing.", "Power still isn\'t reaching the bridge though. Let\'s sort the consoles out first.")
 pause_game = true
 
 [node name="CellTip" type="Marker2D" parent="Story" unique_id=1741676386]
 position = Vector2(272, 192)
 script = ExtResource("10_beat")
 trigger = 9
-lines = PackedStringArray("Another POWER CELL! Charge it with the live wire - every cell means more oxygen outside.")
+lines = PackedStringArray("Another power cell. Same as before, it only charges while you\'re holding the wire.")
 
 [node name="BridgeDone" type="Marker2D" parent="Story" unique_id=1711252232]
 position = Vector2(208, 192)
 script = ExtResource("10_beat")
 trigger = 2
-lines = PackedStringArray("Running diagnostics... uh oh.", "A micrometeoroid smashed the MAIN POWER COUPLING on the outer hull.", "Someone has to go outside and rewire it. And, well... you\'re the only someone aboard.", "The airlock door is open. Suit up, engineer!")
+lines = PackedStringArray("Running diagnostics... oh no.", "A micrometeoroid hit the main power coupling. It\'s on the outside of the hull.", "Someone has to go out there and rewire it, and you\'re the only someone on board.", "The airlock\'s open. Suit up.")
 pause_game = true
 
 [node name="Airlock" type="Marker2D" parent="Story" unique_id=1831506672]
 position = Vector2(528, 208)
 script = ExtResource("10_beat")
 trigger = 6
-lines = PackedStringArray("Sealing the inner door. Mag boots: ON. Tether: locked.", "Venting the air... don\'t worry, your suit brought its own. For a while.")
+lines = PackedStringArray("Sealing the inner door. Mag boots on, tether locked.", "Venting the air now. Your suit has its own supply. For a while, anyway.")
 
 [node name="SectionAIntro" type="Marker2D" parent="Story" unique_id=813830721]
 position = Vector2(736, 192)
 script = ExtResource("10_beat")
-lines = PackedStringArray("Whoa. Look at that view!", "Out here there\'s no floor between the hull plates. Walk off an edge and you\'ll DRIFT across.", "Keep an eye on your OXYGEN, top left. Your {cells} power cells gave your suit +{o2_bonus} seconds!")
+lines = PackedStringArray("Okay. That\'s a big view.", "There\'s no floor between the hull plates out here. Walk off an edge and you\'ll drift across to the next one.", "Watch your air in the top left. Your {cells} power cells bought you {o2_bonus} extra seconds.")
 pause_game = true
 
 [node name="SectionADrift" type="Marker2D" parent="Story" unique_id=1323036442]
 position = Vector2(768, 192)
 script = ExtResource("10_beat")
 trigger = 8
-lines = PackedStringArray("Wheee! Zero-G!")
+lines = PackedStringArray("Zero gravity. Try not to enjoy it too much.")
 
 [node name="SectionAFail" type="Marker2D" parent="Story" unique_id=1340477760]
 position = Vector2(800, 160)
 script = ExtResource("10_beat")
 trigger = 5
-lines = PackedStringArray("Tip: line yourself up with the plate across the gap, then walk straight off the edge.")
+lines = PackedStringArray("Line yourself up with the plate across the gap first, then walk straight off the edge.")
 
 [node name="SectionADone" type="Marker2D" parent="Story" unique_id=1355726332]
 position = Vector2(704, 192)
 script = ExtResource("10_beat")
 trigger = 2
-lines = PackedStringArray("Relay online - and your suit topped up its air from it. A catwalk slid out, too!")
+lines = PackedStringArray("Relay\'s online and your suit topped up its air. And a catwalk just slid out.")
 
 [node name="SolarIntro" type="Marker2D" parent="Story" unique_id=1869121701]
 position = Vector2(1232, 416)
 script = ExtResource("10_beat")
-lines = PackedStringArray("The solar array. See that floating debris? The wire can\'t pass through it.", "If the wire won\'t reach, give it a better angle: hook it round a NODE first.")
+lines = PackedStringArray("This is the solar array. The wire can\'t go through that floating junk.", "If it won\'t reach, hook it round a node first to get a better angle.")
 pause_game = true
 
 [node name="SolarDone" type="Marker2D" parent="Story" unique_id=60506198]
 position = Vector2(1264, 416)
 script = ExtResource("10_beat")
 trigger = 2
-lines = PackedStringArray("The solar array\'s feeding power again. One more to go!")
+lines = PackedStringArray("Solar array\'s feeding power again. One more.")
 
 [node name="CouplingIntro" type="Marker2D" parent="Story" unique_id=1524913608]
 position = Vector2(1952, 352)
 script = ExtResource("10_beat")
-lines = PackedStringArray("There it is: the MAIN COUPLING, behind that cloud of debris.", "Sparks on the hull are just as deadly as red floor tiles. Think before you fling!")
+lines = PackedStringArray("There\'s the main coupling, behind all that debris.", "Those sparks on the hull zap you just like the red grates did. Think before you fling.")
 pause_game = true
 
 [node name="ShipLightsUp" type="Marker2D" parent="Story" unique_id=1599607169]
 position = Vector2(2016, 352)
 script = ExtResource("10_beat")
 trigger = 10
-lines = PackedStringArray("MAIN COUPLING ONLINE! Power\'s flowing through the whole ship!", "Look at her light up - from the hull plates all the way to the bridge!")
+lines = PackedStringArray("Coupling\'s connected. Power\'s going through the whole ship.", "Look at her. Lights from the hull all the way up to the bridge.")
 
 [node name="AllPowered" type="Marker2D" parent="Story" unique_id=1607152995]
 position = Vector2(1984, 352)
 script = ExtResource("10_beat")
 trigger = 7
-lines = PackedStringArray("You did it! Now get back inside - the hatch under the coupling is open.")
+lines = PackedStringArray("Nice work. Now get back inside. The hatch under the coupling is open.")
 pause_game = true
 
 [node name="Player" parent="." unique_id=1280366845 instance=ExtResource("2_player")]

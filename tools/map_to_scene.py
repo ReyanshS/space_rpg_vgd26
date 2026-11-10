@@ -6,7 +6,7 @@
 # its old copy over the new map.
 #
 #   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
-#   x red-off   C crate   D door   P spawn   E exit
+#   x blinking grate   C crate   D door   P spawn   E exit
 #   * power cell   , hull (outside floor)   ~ open space   A airlock pad   = barrier
 #   (space) = nothing
 #
@@ -17,7 +17,7 @@ import re, struct, sys
 
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
 SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
-          'discharge': 'X', 'discharge_off': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
+          'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
           'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '='}
 
 if len(sys.argv) < 3:

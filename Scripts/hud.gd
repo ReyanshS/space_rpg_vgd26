@@ -634,7 +634,7 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	var bonus := int(stats.get("cells", 0)) * int(Game.O2_PER_CELL)
 	$Complete/VBox/Bonus.visible = bonus > 0
 	$Complete/VBox/Bonus.text = "Suit upgrade: +%d s of oxygen" % bonus
-	$Complete/VBox/StarHelp.text = "Stars: finish - all cells - %d retries or fewer" % stats.get("retry_goal", 0)
+	$Complete/VBox/StarHelp.text = "Stars for finishing, every cell, and %d retries or fewer" % stats.get("retry_goal", 0)
 	$Complete/VBox/Again.text = ("[E] next level" if has_next else "[E] back to title") + "    [R] play again"
 	_stars_earned = int(stats.get("stars", 1))
 	_stars_shown = 0

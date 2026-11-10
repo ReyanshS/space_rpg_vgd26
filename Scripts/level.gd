@@ -13,9 +13,13 @@
 #      (Ground, Walls, Props): tall wall panels, roof edges, floor variety, hull plates.
 #      In the editor this re-runs every time you paint, so you see the result live.
 #   4. _build_rooms() finds the rooms (floor areas separated by walls, doors
-#      and barriers). Each room is one puzzle STAGE. Stages joined by BARRIERS
-#      form one AREA: one big space the camera can roam across. When you power
-#      a stage, its barriers sink into the floor and the next stage opens up.
+#      and barriers). Each room is one puzzle STAGE. Doors lead to the next
+#      room. BARRIERS (cargo on a lift) split one room into several stages:
+#      touching barrier tiles are a GROUP that sinks into the floor as soon as a
+#      stage next to it is powered. Stages joined by barriers form one AREA:
+#      the camera roams across it, and a later stage can wrap its wire round the
+#      NODES and BENDS of the stages you already powered there. So powering
+#      something really changes the room for the next puzzle.
 #   5. During play the player calls player_moved() every frame and that function
 #      checks the rules: red tiles, power cells, new room, touching pads...
 #   6. Lighting: the ship starts dark (CanvasModulate). Glowing things (wires,
@@ -40,6 +44,8 @@
 #     -> the wire snaps and the stage resets, but you STAY where you are
 #     (pushed off the red tile). Walk back to the START, or press R to jump
 #     there. The wire itself can't be stretched over red tiles.
+#   - BLINKING GRATES switch on and off in a wave (grate_cycle, grate_live,
+#     grate_wave). Lit = they zap your feet. The wire is fine over them.
 #
 # POWER CELLS (the reward for a clever route)
 #   - "cell" tiles become PowerCells. Touch one WHILE CARRYING THE WIRE to charge
@@ -100,7 +106,7 @@ const PUZZLE_TEX := "res://Assets/images/tiles/puzzle_tiles.png"
 const HULL_TEX := "res://Assets/images/tiles/hull.png"
 # Which picture in puzzle_tiles.png belongs to which kind.
 const PUZZLE_FRAME := {"start": 0, "goal": 1, "node": 2, "bend": 3, "discharge": 4,
-	"discharge_off": 5, "crate": 6, "door": 7, "airlock": 11, "barrier": 12}
+	"blinker": 5, "crate": 6, "door": 7, "airlock": 11, "barrier": 12}
 const GANGWAY_FRAME := 9
 const SRC_WALL := 0
 const SRC_FLOOR := 1
@@ -114,11 +120,11 @@ const MUSIC_DB := -17.0
 ## Things PIP says that are part of the RULES, not the story.
 ## (Story lines are StoryBeat nodes under the "Story" node in each level.)
 const PIP_LINES := {
-	"hint": "Stuck? Press H and I'll light up the route for you.",
-	"o2_low": "Oxygen's getting low! Power this section - your suit recharges from the relay.",
-	"no_landing": "No hull to land on that way! Your boots only let go if there's a plate straight ahead.",
-	"cell_kept": "That power cell is yours to keep! Each one gives your space suit %d more seconds of air.",
-	"cell_lost": "Aw, your cell drained! Cells only stay charged once the wire reaches the GOAL.",
+	"hint": "Stuck? Press H and I'll show you the way.",
+	"o2_low": "Your air's getting low. Power this section and the relay will top you up.",
+	"no_landing": "There's nothing to land on that way. Your boots only let go if there's a plate straight ahead.",
+	"cell_kept": "That cell's yours now. It's worth %d more seconds of air for your suit.",
+	"cell_lost": "Your cell drained when the wire went. They only stay charged once you reach the blue pad.",
 }
 
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
@@ -135,7 +141,7 @@ const PIP_LINES := {
 ## Shown in the pause menu.
 @export var level_name := "ENGINEERING DECK"
 ## Shown on the results screen.
-@export var complete_message := "Power restored to this part of the ship!"
+@export var complete_message := "Power's back on in this part of the ship."
 
 @export_group("Rules")
 ## Seconds you get from the START pad, and again at every NODE.
@@ -154,6 +160,16 @@ const PIP_LINES := {
 ## (after the lights-on cutscene). Should be lighter than `darkness`.
 @export var full_power_light := Color(0.42, 0.43, 0.52)
 
+@export_group("Blinking grates")
+## Seconds for one full on + off cycle of a blinking grate.
+@export var grate_cycle := 2.4
+## How many of those seconds it's lit (and zaps you).
+@export var grate_live := 1.2
+## Each column of grates lights up this many seconds after the one to its left,
+## so the light runs across the floor like a wave and you can walk in the gap.
+## Positive: the wave runs right-to-left. Negative: left-to-right. 0: all together.
+@export var grate_wave := 0.36
+
 @export_group("Spacewalk")
 ## Seconds of oxygen for each hull section. Every power cell charged in earlier
 ## levels adds Game.O2_PER_CELL more.
@@ -161,11 +177,12 @@ const PIP_LINES := {
 
 @export_group("Room names")
 ## Shown for a moment when you walk into each room (in the order you reach them).
+## Stages joined by barriers count as one room: only the first one's name shows.
 @export var room_titles: PackedStringArray = [
-	"ROOM 1 - POWER UP",
-	"ROOM 2 - NODES",
-	"ROOM 3 - BENDS",
-	"ROOM 4 - DISCHARGE",
+	"ROOM 1",
+	"ROOM 2",
+	"ROOM 3",
+	"ROOM 4",
 ]
 
 
@@ -245,6 +262,10 @@ var _drift_warn_cd := 0.0
 var _drift_tip_shown := false
 var _beacons: Array = []                  # [light, dot, phase, room]: blinking hull lights
 var _beacon_flare := {}                   # Room -> time until its beacons flash together
+var _barrier_groups: Array = []           # {"tiles": [...], "rooms": [...]}: cargo that moves together
+var _group_of := {}                       # barrier tile -> index in _barrier_groups
+var _wire_pads: Array[Vector2i] = []      # the pads the wire you're carrying can use
+var _blinkers: Array[Vector2i] = []       # blinking grate tiles
 
 # lights-on cutscene
 var _cutscene := false         # true while the cutscene moves the camera
@@ -319,7 +340,7 @@ func _ready() -> void:
 	_current_room = _room_of.get(_spawn)
 	hud.dialogue_blocking.connect(_on_dialogue_blocking)
 	hud.can_block = can_pause_for_dialogue
-	hud.set_level_info("LEVEL %d - %s" % [level_number, level_name])
+	hud.set_level_info("LEVEL %d: %s" % [level_number, level_name])
 	hud.set_cells(0, _cells.size())
 	hud.set_power(0, _rooms_with_goal)
 	_update_hint_label.call_deferred()     # after the floor guides know their rooms
@@ -831,6 +852,7 @@ func _build_rooms() -> void:
 			for o in adj:
 				if o != r and not r.neighbors.has(o):
 					r.neighbors.append(o)
+	_build_barrier_groups()
 	# camera bounds: room tiles + 1 tile of wall, + 3 tiles above for the wall panels
 	# (outside: 2 tiles of space all round)
 	for r in _rooms:
@@ -870,10 +892,49 @@ func _build_rooms() -> void:
 	_check_rooms()
 
 
+## BARRIER GROUPS. Barrier tiles that touch each other form one group: a whole
+## wall of cargo that moves together. A group sinks as soon as ANY stage next to
+## it gets power. (So a barrier can also sit in the middle of a stage, not only
+## between two.) The stages next to a group become neighbours.
+func _build_barrier_groups() -> void:
+	_barrier_groups.clear()
+	_group_of.clear()
+	for c in _kinds:
+		if _kinds[c] != "barrier" or _group_of.has(c):
+			continue
+		var gi := _barrier_groups.size()
+		var tiles: Array[Vector2i] = []
+		var near: Array = []
+		var queue: Array[Vector2i] = [c]
+		_group_of[c] = gi
+		while not queue.is_empty():
+			var cur: Vector2i = queue.pop_back()
+			tiles.append(cur)
+			for d in DIRS4:
+				var n := cur + d
+				var r = _room_of.get(n)
+				if r != null and not near.has(r):
+					near.append(r)
+				if kind_at(n) == "barrier" and not _group_of.has(n):
+					_group_of[n] = gi
+					queue.append(n)
+		_barrier_groups.append({"tiles": tiles, "rooms": near})
+		for r in near:
+			for o in near:
+				if o != r and not r.neighbors.has(o):
+					r.neighbors.append(o)
+
+
+## The barrier groups that sink when room r gets power (every group touching it).
+func _barrier_groups_of(r: Room) -> Array:
+	return _barrier_groups.filter(func(g: Dictionary) -> bool: return g["rooms"].has(r))
+
+
 ## AREAS. A room is one puzzle STAGE. Stages joined by a BARRIER (or, outside,
 ## by a catwalk) are really one big space, so they form an AREA: the camera can
-## roam across the whole area, and the room-name popup only shows when you walk
-## into a new area. Only real doors (with walls beside them) start a new area.
+## roam across the whole area, the room-name popup only shows when you walk into
+## a new area, and a stage can use the NODES and BENDS of stages you already
+## powered in its area. Only real doors (with walls beside them) start a new area.
 func _build_areas() -> void:
 	var next_id := 0
 	for r in _rooms:
@@ -885,9 +946,12 @@ func _build_areas() -> void:
 		var k := 0
 		while k < members.size():
 			for c in members[k].doors:
-				if not _joins_area(c):
-					continue
-				for o in _door_rooms.get(c, []):
+				var joined: Array = []
+				if kind_at(c) == "barrier":
+					joined = _barrier_groups[_group_of[c]]["rooms"]
+				elif _is_gangway(c):
+					joined = _door_rooms.get(c, [])
+				for o in joined:
 					if o.area_id < 0:
 						o.area_id = next_id
 						members.append(o)
@@ -898,11 +962,6 @@ func _build_areas() -> void:
 		for m in members:
 			m.area_bounds = b
 		next_id += 1
-
-
-## Does this tile join two stages into one area? Barriers do, and so do catwalks.
-func _joins_area(c: Vector2i) -> bool:
-	return kind_at(c) == "barrier" or _is_gangway(c)
 
 
 ## Friendly warnings in the Output panel when the map is missing something.
@@ -916,14 +975,17 @@ func _check_rooms() -> void:
 				push_warning("Room %d has no START pad." % n)
 			if r.goal.x < 0:
 				push_warning("Room %d has no GOAL pad." % n)
-		if _exit_doors(r).is_empty():
-			push_warning("Room %d has no door leading onward." % n)
+		if _exit_doors(r).is_empty() and _barrier_groups_of(r).is_empty():
+			push_warning("Room %d has no door or barrier leading onward." % n)
 
 
-## Doors and barriers that lead from room r to a LATER room (the ones r's goal opens).
+## DOORS that lead from room r to a LATER room (the ones r's goal opens).
+## (Barriers work in groups instead: see _barrier_groups_of.)
 func _exit_doors(r: Room) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for d in r.doors:
+		if kind_at(d) != "door":
+			continue
 		for o in _door_rooms.get(d, []):
 			if o != r and o.index > r.index:
 				out.append(d)
@@ -950,6 +1012,8 @@ func _spawn_runtime_tiles() -> void:
 		else:
 			t.setup(PUZZLE_FRAME[kind], kind == "door" and _door_rotated(c))
 		_tiles[c] = t
+		if kind == "blinker":
+			_blinkers.append(c)
 
 
 ## Every "cell" tile becomes a PowerCell you can charge with the live wire.
@@ -1136,6 +1200,9 @@ func _build_conduits() -> void:
 		if r.goal.x < 0:
 			continue
 		var targets := _exit_doors(r)
+		for d in r.doors:
+			if kind_at(d) == "barrier":
+				targets.append(d)              # the cable also feeds the cargo lifts
 		if targets.is_empty():
 			continue
 		var pts := _conduit_path(r, targets)
@@ -1302,6 +1369,10 @@ func _physics_process(delta: float) -> void:
 			return
 		if Input.is_action_just_pressed("hint"):
 			_try_hint()
+	# a blinking grate can light up under you while you stand still
+	if player.state != Astronaut.State.LOCKED and _is_live_tile(cell_of(player.position)):
+		_fail("shock")
+		return
 	if _tick_o2(delta):
 		return
 	if _wire != null and player.is_wired():
@@ -1382,6 +1453,7 @@ func _process(delta: float) -> void:
 			on = int(_light_t * 10.0) % 2 == 0
 		b[0].energy = (1.4 if flare else 0.8) if on else 0.05
 		b[1].visible = on
+	_update_blinkers()
 	_update_camera(delta, false)
 
 
@@ -1390,7 +1462,7 @@ func player_moved() -> void:
 	if _busy or _complete:
 		return
 	var c := cell_of(player.position)
-	if kind_at(c) == "discharge":
+	if _is_live_tile(c):
 		_fail("shock")
 		return
 	_check_cells()
@@ -1409,7 +1481,7 @@ func player_moved() -> void:
 	if _paused_node.x >= 0 and player.position.distance_to(center_of(_paused_node)) > NODE_RADIUS + 4.0:
 		_set_paused_node(Vector2i(-1, -1))
 	# Did we touch a pad we haven't used yet?
-	for pad in _wire_room.pads:
+	for pad in _wire_pads:
 		if _anchor_cells.has(pad):
 			continue
 		var kind := kind_at(pad)
@@ -1442,7 +1514,7 @@ func _check_cells() -> void:
 			_play("pickup")
 			hud.set_cells(_cells_banked + _cells_pending.size(), _cells.size(), true)
 			if Game.first_time("cell_charged"):
-				hud.show_toast("CELL CHARGED! REACH THE GOAL TO KEEP IT", 2.5)
+				hud.show_toast("CELL CHARGED. NOW REACH THE BLUE PAD", 2.5)
 			cell_collected.emit(_wire_room.index)
 		elif not wired and not _cell_tip_shown:
 			_cell_tip_shown = true
@@ -1646,7 +1718,7 @@ func _try_hint() -> void:
 	_hints_shown[r] = true
 	_hints_used += 1
 	hint_shown.emit(r.index)        # the room's hint guide fades in
-	hud.show_toast("HINT: FOLLOW THE ARROWS")
+	hud.show_toast("FOLLOW THE ARROWS")
 	_update_hint_label()
 
 
@@ -1658,6 +1730,7 @@ func _try_grab() -> void:
 	if player.position.distance_to(sc) > START_RADIUS:
 		return
 	_wire_room = r
+	_wire_pads = _stage_pads(r)
 	_anchor_cells = [r.start]
 	_last_anchor = sc
 	_set_paused_node(Vector2i(-1, -1))
@@ -1736,10 +1809,10 @@ func _solve(r: Room) -> void:
 	if r.outside:
 		_light_hull(r)              # beacons start blinking
 		_refill_o2()                # ...and the relay tops up your suit
-		hud.show_toast("RELAY ONLINE!")
+		hud.show_toast("RELAY ONLINE")
 	else:
 		_power_room(r)              # the lights come on!
-		hud.show_toast("POWER RESTORED!")
+		hud.show_toast("POWER ON")
 	player.set_lamp(false)          # ...so he doesn't need his helmet lamp any more
 	hud.set_power(_rooms_powered, _rooms_with_goal)
 	_update_hint_label()
@@ -1757,20 +1830,24 @@ func _solve(r: Room) -> void:
 
 func _open_exit_doors(r: Room) -> void:
 	var opened := false
-	var barriers: Array[Vector2i] = []
 	for d in _exit_doors(r):
 		if _open_doors.has(d):
 			continue
 		_open_doors[d] = true
-		if kind_at(d) == "barrier":
-			barriers.append(d)
-			continue
 		opened = true
 		var t: PuzzleTile = _tiles.get(d)
 		if t:
 			t.open_door()
 	if opened:
 		_play("door")
+	# every barrier group touching this stage sinks - the whole group, even the
+	# crates that aren't right next to the stage
+	var barriers: Array[Vector2i] = []
+	for g in _barrier_groups_of(r):
+		for c in g["tiles"]:
+			if not _open_doors.has(c):
+				_open_doors[c] = true
+				barriers.append(c)
 	if not barriers.is_empty():
 		_move_barriers(r, barriers)
 
@@ -1795,7 +1872,7 @@ func _all_powered() -> void:
 	_play("fanfare")
 	hud.flash(Color(1.0, 0.95, 0.7), 0.5)
 	_shake_cam(0.4, 2.5)
-	hud.show_toast("ALL SYSTEMS ONLINE!", 2.5)
+	hud.show_toast("ALL SYSTEMS ONLINE", 2.5)
 	await get_tree().create_timer(0.8).timeout
 	await _power_tour()
 	all_rooms_powered.emit()        # PIP says what to do next (StoryBeat: ALL_POWERED)
@@ -1971,12 +2048,12 @@ func _fail(kind: String) -> void:
 			_play("snap")
 			hud.flash(Color(1.0, 0.45, 0.15), 0.45)
 			_shake_cam(0.25, 2.0)
-			hud.show_toast("WIRE OVERLOADED!")
+			hud.show_toast("WIRE OVERLOADED")
 		"oxygen":
 			_play("alarm")
 			hud.flash(Color(0.4, 0.7, 1.0), 0.5)
 			_shake_cam(0.3, 2.0)
-			hud.show_toast("OUT OF OXYGEN!")
+			hud.show_toast("OUT OF AIR")
 			await get_tree().create_timer(0.8).timeout
 	if _wire != null:
 		var w := _wire
@@ -1997,7 +2074,7 @@ func _fail(kind: String) -> void:
 		if _o2_on:
 			_refill_o2()            # the suit switches to its reserve tank
 		if had_wire and Game.first_time("fail_walk_back"):
-			hud.show_toast("WIRE RESET - WALK BACK TO THE START, OR PRESS R", 3.0)
+			hud.show_toast("WIRE'S GONE. WALK BACK OR PRESS R", 3.0)
 	_busy = false
 	# The first time a charged cell drains, PIP explains why.
 	if lost_cells and Game.first_time("cell_lost"):
@@ -2062,7 +2139,51 @@ func _nearest_safe_spot(pos: Vector2) -> Vector2:
 
 
 func _safe_to_stand(pos: Vector2) -> bool:
-	return kind_at(cell_of(pos)) != "discharge" and not box_blocked(pos, Astronaut.FEET_HALF)
+	var k := kind_at(cell_of(pos))
+	return k != "discharge" and k != "blinker" and not box_blocked(pos, Astronaut.FEET_HALF)
+
+
+## The pads the wire from room r can use: its own, plus the NODES and BENDS of
+## stages you already powered in the same area. Once the cargo between them has
+## sunk, those pads are right there - so a later stage can wrap the wire round
+## them from a new angle.
+func _stage_pads(r: Room) -> Array[Vector2i]:
+	var out: Array[Vector2i] = r.pads.duplicate()
+	for o in _rooms:
+		if o == r or not o.solved or o.area_id != r.area_id:
+			continue
+		for p in o.pads:
+			if kind_at(p) == "node" or kind_at(p) == "bend":
+				out.append(p)
+	return out
+
+
+# ===================================================================== blinking grates
+
+## Is the grate at c lit right now? Each grate is lit for grate_live seconds out
+## of every grate_cycle. Grates further along x are a little behind (grate_wave),
+## so the light runs across the floor like a wave you can follow through the gap.
+func blinker_live(c: Vector2i) -> bool:
+	return _blinker_phase(c) < grate_live
+
+
+func _blinker_phase(c: Vector2i) -> float:
+	return fposmod(_light_t + c.x * grate_wave, grate_cycle)
+
+
+## Would standing on tile c zap you right now? (red grates always, blinking ones when lit)
+func _is_live_tile(c: Vector2i) -> bool:
+	var k := kind_at(c)
+	return k == "discharge" or (k == "blinker" and blinker_live(c))
+
+
+## Every frame: switch each blinking grate's picture on or off. Just before it
+## lights up it flickers, so you can see it coming.
+func _update_blinkers() -> void:
+	for c in _blinkers:
+		var t: PuzzleTile = _tiles.get(c)
+		if t:
+			t.set_live(blinker_live(c), _blinker_phase(c) > grate_cycle - 0.35)
 
 
 func _respawn() -> void:
