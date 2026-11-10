@@ -31,11 +31,7 @@ axis_stretch_horizontal = 1
 axis_stretch_vertical = 1
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxFlat_objective"]
-content_margin_left = 9.0
-content_margin_top = 6.0
-content_margin_right = 9.0
-content_margin_bottom = 7.0
-texture = ExtResource("2_screen")
+texture = ExtResource("3_plate")
 texture_margin_left = 6.0
 texture_margin_top = 6.0
 texture_margin_right = 6.0
@@ -44,10 +40,10 @@ axis_stretch_horizontal = 1
 axis_stretch_vertical = 1
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxFlat_dialogue"]
-content_margin_left = 7.0
-content_margin_top = 7.0
-content_margin_right = 8.0
-content_margin_bottom = 7.0
+content_margin_left = 6.0
+content_margin_top = 5.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
 texture = ExtResource("2_screen")
 texture_margin_left = 6.0
 texture_margin_top = 6.0
@@ -67,9 +63,9 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -60.0
-offset_top = 56.0
+offset_top = 6.0
 offset_right = 60.0
-offset_bottom = 78.0
+offset_bottom = 28.0
 grow_horizontal = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
@@ -95,85 +91,41 @@ offset_right = 480.0
 mouse_filter = 2
 color = Color(0, 0, 0, 1)
 
-[node name="BarBottom" type="ColorRect" parent="."]
-visible = false
-offset_top = 270.0
-offset_right = 480.0
-offset_bottom = 318.0
+[node name="TimerBar" type="Control" parent="."]
+offset_right = 37.0
+offset_bottom = 10.0
 mouse_filter = 2
-color = Color(0, 0, 0, 1)
 
-[node name="Objective" type="PanelContainer" parent="."]
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -144.0
-offset_top = 4.0
-offset_right = 168.0
-offset_bottom = 26.0
-grow_horizontal = 2
+[node name="Console" type="Panel" parent="."]
+offset_top = 222.0
+offset_right = 480.0
+offset_bottom = 270.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_objective")
-
-[node name="Text" type="Label" parent="Objective"]
-custom_minimum_size = Vector2(294, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
-text = "> Come here and press E!"
-autowrap_mode = 3
 
 [node name="Status" type="Control" parent="."]
 layout_mode = 3
 anchors_preset = 0
-offset_left = 4.0
-offset_top = 4.0
-offset_right = 86.0
-offset_bottom = 40.0
+offset_left = 312.0
+offset_top = 227.0
+offset_right = 474.0
+offset_bottom = 267.0
 mouse_filter = 2
-
-[node name="Cells" type="Control" parent="."]
-layout_mode = 3
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -64.0
-offset_top = 4.0
-offset_right = -4.0
-offset_bottom = 22.0
-grow_horizontal = 0
-mouse_filter = 2
-
-[node name="TimerBar" type="Control" parent="."]
-offset_left = 150.0
-offset_top = 242.0
-offset_right = 330.0
-offset_bottom = 264.0
-mouse_filter = 2
-
-[node name="Controls" type="Label" parent="."]
-offset_left = 6.0
-offset_top = 248.0
-offset_right = 140.0
-offset_bottom = 266.0
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 0.85)
-text = "[R] back to start"
 
 [node name="Keys" type="Label" parent="."]
-offset_left = 300.0
-offset_top = 248.0
+offset_left = 312.0
+offset_top = 246.0
 offset_right = 474.0
-offset_bottom = 266.0
+offset_bottom = 264.0
 theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 0.85)
 text = "[Esc] menu"
 horizontal_alignment = 2
 
 [node name="Dialogue" type="PanelContainer" parent="."]
-visible = false
-offset_left = 36.0
-offset_top = 198.0
-offset_right = 444.0
-offset_bottom = 238.0
-grow_vertical = 0
+offset_left = 4.0
+offset_top = 225.0
+offset_right = 306.0
+offset_bottom = 267.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_dialogue")
 
@@ -189,7 +141,7 @@ size_flags_vertical = 0
 mouse_filter = 2
 
 [node name="Text" type="RichTextLabel" parent="Dialogue/Row"]
-custom_minimum_size = Vector2(360, 0)
+custom_minimum_size = Vector2(256, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
@@ -306,6 +258,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
 text = "Move ............ WASD / arrows
 Grab the wire ... E / Space
+Reel back ....... E (holding wire)
 Back to START ... R
 Show a hint ..... H
 Resume .......... Esc
@@ -314,6 +267,6 @@ Quit to title ... Q"
 [node name="CellTip" type="Label" parent="Pause/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
-text = "Charge POWER CELLS by touching them
-with the live wire: +5 s of oxygen each!"
+text = "Batteries add 2 s to the wire.
+Keep them for extra suit air later."
 horizontal_alignment = 1

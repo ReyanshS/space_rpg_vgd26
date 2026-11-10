@@ -11,8 +11,13 @@
 #     python tools/solver2.py tools/out/level1.txt
 import math, heapq, sys
 TILE = 32; FEET = (6, 4); WALK = 100.0; FLING = 260.0; DRIFT = 150.0; TIME = 5.0
-R = {'N': 22.0, 'G': 20.0, 'B': 16.0}
+R = {'N': 22.0, 'G': 22.0, 'B': 20.0}
 CELL_R = 14.0
+BODY_UP = 10.0          # pads count from the feet AND from 10 px higher (level.gd _touching)
+
+
+def near(x, y, pc, r):
+    return math.dist((x, y), pc) <= r or math.dist((x, y - BODY_UP), pc) <= r
 STEP = 4
 WALK_SOLID = '# CD=~'   # your feet can't go here (open space too: mag boots need hull)
 HARD_SOLID = '# CD='    # you can't pass here at all, not even drifting
@@ -105,11 +110,11 @@ def explore(M, pads, cells, anchor, start, budget_px, used):
 
     def touching(x, y):
         return [(k, kind, pc) for k, (kind, pc) in pads.items()
-                if k not in used and math.dist((x, y), pc) <= R[kind] and M.los(anchor, pc)]
+                if k not in used and near(x, y, pc, R[kind]) and M.los(anchor, pc)]
 
     def note_cells(x, y, cost, cont):
         for c, cc in cells.items():
-            if math.dist((x, y), cc) <= CELL_R and (c not in hits or hits[c][0] > cost):
+            if near(x, y, cc, CELL_R) and (c not in hits or hits[c][0] > cost):
                 hits[c] = (cost, cont)
 
     while pq:
@@ -158,10 +163,10 @@ def fling(M, pads, cells, bend_key, pc, d, used):
         x, y = nx, ny; t += 2
         if M.cell(x, y) == 'X': return 'shock', (x, y), t, got
         for c, cc in cells.items():
-            if math.dist((x, y), cc) <= CELL_R: got.add(c)
+            if near(x, y, cc, CELL_R): got.add(c)
         for key, (kind, pcc) in pads.items():
             if key in used or key == bend_key: continue
-            if math.dist((x, y), pcc) <= R[kind] and M.los(pc, pcc):
+            if near(x, y, pcc, R[kind]) and M.los(pc, pcc):
                 return ('pad', key, kind), (x, y), t, got
 
 
@@ -181,7 +186,7 @@ def solve_room(M, pads, cells, start_key, max_depth=12):
             extra = set()
             for c, (hc, cont) in hits.items():
                 if c in got: continue
-                if math.dist(cont, pads[key][1]) <= R[pads[key][0]] + 0.1:
+                if near(cont[0], cont[1], pads[key][1], R[pads[key][0]] + 0.1):
                     extra.add(c); continue
                 ev2, _ = explore(M, pads, {}, anchor, cont, time_left * WALK - hc, used)
                 if any(k == key for (k, _s) in ev2): extra.add(c)

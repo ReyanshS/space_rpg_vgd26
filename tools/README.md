@@ -32,7 +32,9 @@ The solver checks the stages in walking order, the same way the game plays them:
 tiles are one group, and when it checks a stage, every group next to an earlier stage counts as
 open floor (it has sunk by then), and the nodes and bends of earlier stages joined to it by
 barriers can be used too. So shortcuts through opened barriers show up. It does NOT model the
-timing of blinking grates (`x` counts as floor) - test those in the game.
+timing of blinking grates (`x` counts as floor) - test those in the game - and it never counts the
++2 s a power cell gives, so routes it finds work even without the cells. Pads count as touched
+from the feet or 10 px higher, like the game (`BODY_UP`).
 
 Solver output, e.g. `S(7,14) -> N(3,10) -> G(7,6)   (tightest segment: 3.38 s spare)` means: from the
 START at tile (7, 14), touch the node at (3, 10), then the goal at (7, 6); on the hardest stretch

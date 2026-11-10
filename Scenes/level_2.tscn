@@ -84,7 +84,7 @@ pause_game = true
 position = Vector2(272, 192)
 script = ExtResource("10_beat")
 trigger = 9
-lines = PackedStringArray("Another power cell. Same as before, it only charges while you\'re holding the wire.")
+lines = PackedStringArray("Another battery. Plug it into the wire for a couple of extra seconds.")
 
 [node name="BridgeDone" type="Marker2D" parent="Story" unique_id=1711252232]
 position = Vector2(208, 192)
@@ -102,7 +102,7 @@ lines = PackedStringArray("Sealing the inner door. Mag boots on, tether locked."
 [node name="SectionAIntro" type="Marker2D" parent="Story" unique_id=813830721]
 position = Vector2(736, 192)
 script = ExtResource("10_beat")
-lines = PackedStringArray("Okay. That\'s a big view.", "There\'s no floor between the hull plates out here. Walk off an edge and you\'ll drift across to the next one.", "Watch your air in the top left. Your {cells} power cells bought you {o2_bonus} extra seconds.")
+lines = PackedStringArray("Okay. That\'s a big view.", "There\'s no floor between the hull plates out here.", "Walk straight off an edge and you\'ll drift across to the next one.", "Watch your air, bottom right. Your {cells} batteries bought you {o2_bonus} extra seconds.")
 pause_game = true
 
 [node name="SectionADrift" type="Marker2D" parent="Story" unique_id=1323036442]
@@ -115,7 +115,7 @@ lines = PackedStringArray("Zero gravity. Try not to enjoy it too much.")
 position = Vector2(800, 160)
 script = ExtResource("10_beat")
 trigger = 5
-lines = PackedStringArray("Line yourself up with the plate across the gap first, then walk straight off the edge.")
+lines = PackedStringArray("Line yourself up with the plate across the gap, then walk off the edge.")
 
 [node name="SectionADone" type="Marker2D" parent="Story" unique_id=1355726332]
 position = Vector2(704, 192)
@@ -138,7 +138,7 @@ lines = PackedStringArray("Solar array\'s feeding power again. One more.")
 [node name="CouplingIntro" type="Marker2D" parent="Story" unique_id=1524913608]
 position = Vector2(1952, 352)
 script = ExtResource("10_beat")
-lines = PackedStringArray("There\'s the main coupling, behind all that debris.", "Those sparks on the hull zap you just like the red grates did. Think before you fling.")
+lines = PackedStringArray("There\'s the main coupling, behind all that debris.", "Those hull sparks zap you just like the red grates. Think before you fling.")
 pause_game = true
 
 [node name="ShipLightsUp" type="Marker2D" parent="Story" unique_id=1599607169]

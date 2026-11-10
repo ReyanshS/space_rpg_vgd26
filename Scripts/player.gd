@@ -100,6 +100,11 @@ func _physics_process(delta: float) -> void:
 
 # ------------------------------------------------------------------ called by the level
 
+## Is he walking right now (a direction key held)?
+func is_moving() -> bool:
+	return _moving
+
+
 func is_wired() -> bool:
 	return state in [State.WIRED, State.CHOOSING, State.FLUNG] or (state in [State.LOCKED, State.DRIFT] and _carrying)
 

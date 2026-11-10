@@ -90,11 +90,14 @@ const TILE := 32
 const DIRS4: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 
 # How close (in pixels, from a pad's centre) counts as touching it. A tile is 32 px.
+# We measure from his feet AND from a point BODY_UP pixels higher: the sprite is
+# taller than a tile, so when he LOOKS like he's on a pad his feet can be just below it.
 # tools/solver2.py uses the same numbers - change them there too.
 const START_RADIUS := 20.0
 const NODE_RADIUS := 22.0
-const GOAL_RADIUS := 20.0
-const BEND_RADIUS := 16.0
+const GOAL_RADIUS := 22.0
+const BEND_RADIUS := 20.0
+const BODY_UP := 10.0
 const CELL_RADIUS := 14.0
 const AIRLOCK_RADIUS := 12.0
 const MAX_DRIFT := 640.0       # pixels: no hull within this distance = you can't push off
@@ -122,9 +125,9 @@ const MUSIC_DB := -17.0
 const PIP_LINES := {
 	"hint": "Stuck? Press H and I'll show you the way.",
 	"o2_low": "Your air's getting low. Power this section and the relay will top you up.",
-	"no_landing": "There's nothing to land on that way. Your boots only let go if there's a plate straight ahead.",
-	"cell_kept": "That cell's yours now. It's worth %d more seconds of air for your suit.",
-	"cell_lost": "Your cell drained when the wire went. They only stay charged once you reach the blue pad.",
+	"no_landing": "Nothing to land on that way. Your boots only let go with a plate ahead.",
+	"cell_kept": "That battery's yours now. Each one you keep adds %d seconds of suit air.",
+	"cell_lost": "That battery's back. You only keep them once you reach the blue pad.",
 }
 
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
@@ -148,6 +151,8 @@ const PIP_LINES := {
 @export var wire_time := 5.0
 ## Should the timer stop while you pick a direction on a BEND?
 @export var bend_pauses_timer := true
+## Seconds a POWER CELL adds to the wire's timer when you grab it with the wire.
+@export var cell_bonus := 2.0
 
 @export_group("Lighting")
 ## How dark the ship is before a room gets power (1,1,1 = no darkness at all).
@@ -266,6 +271,11 @@ var _barrier_groups: Array = []           # {"tiles": [...], "rooms": [...]}: ca
 var _group_of := {}                       # barrier tile -> index in _barrier_groups
 var _wire_pads: Array[Vector2i] = []      # the pads the wire you're carrying can use
 var _blinkers: Array[Vector2i] = []       # blinking grate tiles
+var _bend_side := {}                      # bend tile -> its first way out (for reeling back to it)
+var _preview_paths: Array = []            # [from, end, what] for each way out of the bend you're on
+var _preview_node: Node2D                 # draws those dotted fling previews
+var _reel_tween: Tween                    # the reel-back pull, while it's happening
+var _still_time := 0.0                    # how long you've stood still holding the wire
 
 # lights-on cutscene
 var _cutscene := false         # true while the cutscene moves the camera
@@ -1000,6 +1010,9 @@ func _spawn_runtime_tiles() -> void:
 	_conduit_root = _new_root("Conduits", -8)
 	_tile_root = _new_root("PuzzleTiles", -7)
 	_wire_root = _new_root("Wires", -5)
+	_preview_node = _new_root("FlingPreview", 20)
+	LightFX.glow(_preview_node)
+	_preview_node.draw.connect(_draw_fling_preview)
 	for c in _kinds:
 		var kind: String = _kinds[c]
 		if not PUZZLE_FRAME.has(kind) or kind == "crate":
@@ -1376,9 +1389,17 @@ func _physics_process(delta: float) -> void:
 	if _tick_o2(delta):
 		return
 	if _wire != null and player.is_wired():
+		# E while walking with the wire = reel back to the last pad it's wrapped round
+		var walking := player.state == Astronaut.State.WIRED
+		if walking and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact"):
+			_reel_back()
+		# stood still a moment away from the last pad? remind them they can reel back
+		_still_time = _still_time + delta if walking and not player.is_moving() else 0.0
+		hud.set_reel_prompt(_still_time > 0.7 and player.position.distance_to(_last_anchor) > 24.0)
 		_tick_timer(delta)
 	else:
 		hud.set_timer(false, 0.0, 0.0)
+		hud.set_reel_prompt(false)
 		if player.state == Astronaut.State.FREE and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact"):
 			_try_grab()
 	_update_prompts()
@@ -1491,12 +1512,139 @@ func player_moved() -> void:
 		elif kind == "goal":
 			radius = GOAL_RADIUS
 		var pc := center_of(pad)
-		if player.position.distance_to(pc) > radius:
+		if not _touching(pc, radius):
 			continue
 		if not _line_clear(_last_anchor, pc):
 			continue          # the wire can't reach that pad's centre
 		_touch_pad(pad, kind)
 		return
+
+
+## Is the astronaut touching the spot `pc`? Measured from his feet and from a
+## bit higher up his body (see BODY_UP), so it matches what you see on screen.
+func _touching(pc: Vector2, radius: float) -> bool:
+	return _touching_at(player.position, pc, radius)
+
+
+func _touching_at(feet: Vector2, pc: Vector2, radius: float) -> bool:
+	return feet.distance_to(pc) <= radius or (feet + Vector2(0, -BODY_UP)).distance_to(pc) <= radius
+
+
+func _pad_radius(kind: String) -> float:
+	match kind:
+		"node": return NODE_RADIUS
+		"goal": return GOAL_RADIUS
+	return BEND_RADIUS
+
+
+# ===================================================================== bends: preview and reel back
+
+## Where would a fling from the bend at `from` in direction `dir` end? Same
+## steps as the real fling (player.gd, 2 px at a time): it stops at anything
+## solid, on a pad the wire can reach, or on a live red tile.
+## Returns {"end": Vector2, "what": "stop" / "shock" / "node" / "bend" / "goal"}.
+func predict_fling(from: Vector2, dir: Vector2, bend: Vector2i) -> Dictionary:
+	var p := from
+	for i in 500:
+		var next := p + dir * 2.0
+		if box_blocked(next, Astronaut.FEET_HALF):
+			return {"end": p, "what": "stop"}
+		p = next
+		if _is_live_tile(cell_of(p)):
+			return {"end": p, "what": "shock"}
+		for pad in _wire_pads:
+			if pad == bend or _anchor_cells.has(pad):
+				continue
+			var kind := kind_at(pad)
+			if _touching_at(p, center_of(pad), _pad_radius(kind)) and _line_clear(from, center_of(pad)):
+				return {"end": center_of(pad), "what": kind}
+	return {"end": p, "what": "stop"}
+
+
+## Stopped on a bend: show where each of its two ways out would throw you.
+func _show_fling_preview(c: Vector2i, side: Vector2) -> void:
+	var pc := center_of(c)
+	_preview_paths.clear()
+	for d in [side, -side]:
+		var res := predict_fling(pc, d, c)
+		_preview_paths.append([pc, res["end"], res["what"]])
+	_preview_node.queue_redraw()
+
+
+func _hide_fling_preview() -> void:
+	_preview_paths.clear()
+	_preview_node.queue_redraw()
+
+
+## A dotted line for each way out, and a marker where it ends: a ring in the
+## pad's colour if you'd land on a pad, a red X if you'd get zapped, a bar if
+## you'd just hit something.
+func _draw_fling_preview() -> void:
+	for path in _preview_paths:
+		var a: Vector2 = path[0]
+		var b: Vector2 = path[1]
+		var what: String = path[2]
+		var col := Color(0.92, 0.75, 1.0, 0.9)
+		match what:
+			"node": col = Color(1.0, 0.6, 0.25)
+			"goal": col = Color(0.45, 0.75, 1.0)
+			"bend": col = Color(0.8, 0.55, 1.0)
+			"shock": col = Color(1.0, 0.3, 0.25)
+		var dist := a.distance_to(b)
+		var dir := (b - a).normalized() if dist > 0.0 else Vector2.ZERO
+		var y := -10.0                              # drawn at hand height, like the wire
+		var t := 20.0
+		while t < dist:
+			_preview_node.draw_rect(Rect2(a + dir * t + Vector2(-1, y - 1), Vector2(2, 2)), col)
+			t += 6.0
+		var e := b + Vector2(0, y)
+		match what:
+			"shock":
+				for k in range(-3, 4):
+					_preview_node.draw_rect(Rect2(e + Vector2(k, k) - Vector2.ONE * 0.5, Vector2(2, 2)), col)
+					_preview_node.draw_rect(Rect2(e + Vector2(k, -k) - Vector2.ONE * 0.5, Vector2(2, 2)), col)
+			"stop":
+				var side := Vector2(-dir.y, dir.x)
+				for k in range(-4, 5):
+					_preview_node.draw_rect(Rect2(e + side * k - Vector2.ONE, Vector2(2, 2)), col)
+			_:
+				_preview_node.draw_arc(e, 7.0, 0.0, TAU, 16, col, 2.0)
+
+
+## REEL BACK. Press E while carrying the wire and it yanks you back to the last
+## pad it's wrapped round (the START, a node or a bend). Took a bend the wrong
+## way? Reel back and pick again. The timer keeps running while you fly, so it
+## costs a little time - but you never have to stand there waiting for it to run out.
+func _reel_back() -> void:
+	var target := _last_anchor
+	var dist := player.position.distance_to(target)
+	if dist < 6.0 or _anchor_cells.is_empty():
+		return
+	player.lock(true)
+	_play("puff")
+	_wire.strain(player.hand_position())              # a flash and sparks at your hands
+	_reel_tween = create_tween()
+	var secs := clampf(dist / 420.0, 0.12, 0.7)
+	_reel_tween.tween_property(player, "position", target, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await _reel_tween.finished
+	_reel_tween = null
+	if _wire == null or _busy:
+		return                                        # the timer ran out on the way
+	var c: Vector2i = _anchor_cells[-1]
+	player.grab_wire()                                # walking with the wire again...
+	match kind_at(c):
+		"bend":                                       # ...or back to picking a way out
+			var side: Vector2 = _bend_side.get(c, Vector2.RIGHT)
+			_choosing_bend = c
+			var t: PuzzleTile = _tiles.get(c)
+			if t:
+				t.show_choice(true, side)
+			_show_fling_preview(c, side)
+			var options: Array[Vector2] = [side, -side]
+			player.choose_fling(center_of(c), options)
+		"node":
+			_set_paused_node(c)                       # standing on a node: timer paused
+	_play("clank")
 
 
 ## Charge any power cell you're touching - but only with the live wire in hand.
@@ -1506,15 +1654,18 @@ func _check_cells() -> void:
 	var wired := _wire != null and player.is_wired()
 	for c in _cells:
 		var cell: PowerCell = _cells[c]
-		if cell.charged or player.position.distance_to(center_of(c)) > CELL_RADIUS:
+		if cell.collected or not _touching(center_of(c), CELL_RADIUS):
 			continue
 		if wired and _room_of.get(c) == _wire_room:
-			cell.collect()
+			# The battery's charge goes into the wire: more time, right now.
+			cell.collect("+%ds" % int(cell_bonus))
+			_time_left = minf(_time_left + cell_bonus, wire_time + cell_bonus)
+			hud.pulse_timer()
 			_cells_pending.append(c)
 			_play("pickup")
 			hud.set_cells(_cells_banked + _cells_pending.size(), _cells.size(), true)
 			if Game.first_time("cell_charged"):
-				hud.show_toast("CELL CHARGED. NOW REACH THE BLUE PAD", 2.5)
+				hud.show_toast("+%d SECONDS ON THE WIRE" % int(cell_bonus), 2.5)
 			cell_collected.emit(_wire_room.index)
 		elif not wired and not _cell_tip_shown:
 			_cell_tip_shown = true
@@ -1541,10 +1692,12 @@ func _touch_pad(c: Vector2i, kind: String) -> void:
 			# The two ways out are 90 degrees either side of the way the wire came in.
 			var d := _snap8(pc - came_from)
 			var side := Vector2(d.y, -d.x)
+			_bend_side[c] = side                # remembered for reeling back here
 			_choosing_bend = c
 			var t: PuzzleTile = _tiles.get(c)
 			if t:
 				t.show_choice(true, side)
+			_show_fling_preview(c, side)
 			var options: Array[Vector2] = [side, -side]
 			player.choose_fling(pc, options)
 		"goal":
@@ -1557,6 +1710,7 @@ func bend_chosen() -> void:
 	if t:
 		t.show_choice(false, Vector2.ZERO)
 	_choosing_bend = Vector2i(-1, -1)
+	_hide_fling_preview()
 
 
 func _set_paused_node(c: Vector2i) -> void:
@@ -1731,6 +1885,7 @@ func _try_grab() -> void:
 		return
 	_wire_room = r
 	_wire_pads = _stage_pads(r)
+	_bend_side.clear()
 	_anchor_cells = [r.start]
 	_last_anchor = sc
 	_set_paused_node(Vector2i(-1, -1))
@@ -2023,7 +2178,11 @@ func _fail(kind: String) -> void:
 	_set_hum(false)
 	_set_paused_node(Vector2i(-1, -1))
 	bend_chosen()                   # hide the bend arrows if we were choosing
+	if _reel_tween:
+		_reel_tween.kill()          # stop a reel-back that was still pulling you
+		_reel_tween = null
 	hud.set_timer(false, 0.0, 0.0)
+	hud.set_reel_prompt(false)
 	var r := _wire_room if _wire_room != null else _current_room
 	# Pressing R while NOT carrying the wire is just a reset, not a failed try.
 	var counts := kind != "restart" or _wire != null
@@ -2323,14 +2482,18 @@ func _shake_cam(duration: float, strength: float) -> void:
 ## Follows the player but never shows outside the current AREA (all the stages
 ## joined to this one). If the area is smaller than the screen, the camera just
 ## sits in its middle. During the lights-on cutscene it looks at _cut_cam instead.
+## The HUD's console covers the bottom CONSOLE_H pixels, so the "screen" we frame
+## the room in is that much shorter, and the camera sits CONSOLE_H/2 lower than
+## the point we want in the middle of it.
 func _update_camera(delta: float, snap: bool) -> void:
 	if camera == null or _current_room == null:
 		return
+	var below := Vector2(0, GameHUD.CONSOLE_H * 0.5)
 	if _cutscene:
 		_cam_pos = _cut_cam
-		camera.position = _cam_pos.round()
+		camera.position = (_cam_pos + below).round()
 		return
-	var view := get_viewport_rect().size
+	var view := get_viewport_rect().size - Vector2(0, GameHUD.CONSOLE_H)
 	var b := _current_room.area_bounds
 	var r := Rect2(Vector2(b.position * TILE), Vector2(b.size * TILE))
 	var target := player.position + Vector2(0, -12)
@@ -2352,4 +2515,4 @@ func _update_camera(delta: float, snap: bool) -> void:
 	if _shake > 0.0:
 		_shake -= delta
 		shake = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake_strength
-	camera.position = (_cam_pos + shake).round()
+	camera.position = (_cam_pos + below + shake).round()

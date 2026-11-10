@@ -152,6 +152,13 @@ to the next section). Steps only appear once you're in their room.
   - barriers now move in groups; later stages can reuse earlier stages' nodes and bends
   - the team's STAR CIRCUIT logo on the title screen; PIP and all game text rewritten to sound
     natural (no dashes, fewer exclamation marks)
+- **Nov 9**, fourth round ("PIP covers the game, bends get you stuck, it isn't fun yet"):
+  - the HUD is now a console along the bottom; the room is framed above it, so nothing covers play.
+    The wire timer floats above the astronaut's head
+  - bends show a dotted preview of where each way throws you, and **E reels you back** to the
+    last pad, so a wrong turn costs a second instead of a whole retry
+  - power cells are full batteries: grabbing one adds 2 s to the wire right away
+  - pads count as touched where the astronaut LOOKS like he's standing (fixes missed nodes/bends)
 
 ---
 

@@ -26,6 +26,9 @@ airlock, spacewalk across one open hull).
 - **Writing (PIP, tutorial, popups):** the team wants it to sound natural, not AI-written. Short
   plain sentences, contractions, no dashes of any kind as punctuation, few exclamation marks, no
   ALL-CAPS words inside PIP's lines. PIP is a slightly nervous maintenance bot with dry humour.
+  Each line must fit the console: **80 characters max** (two lines of text).
+- **Fun > features.** The team said the game "isn't that fun". Anything that makes a player wait
+  with nothing to do (e.g. stuck after a mistake until the timer runs out) is a bug to fix.
 
 ## TSA requirements (check work against these)
 - Official event guide (2027 & 2028 nationals) — key points: game > 3 minutes of play (-5 pts if
@@ -53,8 +56,14 @@ airlock, spacewalk across one open hull).
   player's hands; it can't pass through walls, crates, doors or live red tiles, so steps that would
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
 - NODE (orange): wraps the wire, refills the timer, pauses it while you stand on it. Touch radius 22 px.
-- BEND (purple): stops you, shows two arrows, you press one and get flung 90 deg
+- BEND (purple): stops you, shows two arrows AND a dotted preview of where each one throws you
+  (`predict_fling()`, same 2 px steps as the real fling), you press one and get flung 90 deg
   (`bend_pauses_timer`). The fling stops at a wall, a node, or a hull edge.
+- REEL BACK: **E while walking with the wire** pulls you back along it to the last pad it's
+  wrapped round (`_reel_back()`); onto a bend = choose again, onto a node = timer paused. Costs
+  the flying time. After 0.7 s standing still away from that pad, an [E] key shows above you.
+- Pads/cells count as touched from the feet OR from BODY_UP (10 px) higher (`_touching()`),
+  because the sprite is taller than a tile. Radii: start 20, node 22, goal 22, bend 20, cell 14.
 - GOAL (blue): powers the stage — lights on, conduit fills, its doors open and every BARRIER
   GROUP touching the stage sinks into the floor (a wave, nearest the goal first).
 - Stages in the same area (joined by barriers) SHARE pads: a later stage's wire can wrap round
@@ -66,9 +75,11 @@ airlock, spacewalk across one open hull).
   the stage resets but the player **stays where he fell** (`_stay_after_fail()` pushes him to the
   nearest safe tile if he's on red or over space; O2 refills). He walks back to the START himself.
   **R** = fade back to the START (only counts as a retry while carrying the wire).
-- POWER CELL: touch it *while carrying the wire* to charge it (radius 14 px). Kept when the stage is
-  powered, returned if you fail. PIP explains cells at Level 1's start (a StoryBeat with
-  `point_here`); the first charge / keep / loss each get a one-time message (`Game.first_time()`).
+- POWER CELL (a full battery): touch it *while carrying the wire* and it adds `cell_bonus` (2 s)
+  to the wire timer right away - a detour that can pay for itself. Kept when the stage is
+  powered (star + suit oxygen later), back if you fail. PIP explains cells at Level 1's start (a
+  StoryBeat with `point_here`); first use / keep / loss get one-time messages (`Game.first_time()`).
+  The solver does NOT count the bonus time (so it never relies on it).
 - All rooms powered -> the **lights-on cutscene** (`_power_tour()` in level.gd): film bars, the
   camera glides back through every room and lights each one at full power (`full_power_light`).
   StoryBeats with trigger SHIP_LIGHTS_UP play during it, ALL_POWERED ones after it.
@@ -125,12 +136,12 @@ airlock, spacewalk across one open hull).
   arrows; barriers shudder and sink, `open_door(delay)`).
 - `Scripts/power_cell.gd`: the collectible battery (draws itself, collect/restore animations).
 - `Scripts/wire.gd`: carried wire + floor conduits (Line2D + `Shaders/wire_current.gdshader`).
-- `Scripts/hud.gd` + `Scenes/hud.tscn`: objective box + arrow, toasts, timer bar, fades, PIP's speech
-  box (`say(lines, speaker, blocking, point_at)`, typewriter; it picks the top or bottom ONCE when
-  it opens - top if the player is low on screen - and turns see-through when he walks behind it;
-  a blocking speech cuts casual chatter short; `point_at` = PIP's blue arrow), power meter, cell
-  counter, O2 gauge, results screen with stars + suit upgrade, pause menu, cutscene film bars
-  (`set_cinematic`: hides the objective, lines go in the bottom bar, E skips a line).
+- `Scripts/hud.gd` + `Scenes/hud.tscn`: a fixed **console** along the bottom (`CONSOLE_H` 48 px;
+  level.gd frames the room ABOVE it, so the HUD never covers play): PIP's CRT face + his speech
+  (`say(lines, speaker, blocking, point_at)`, typewriter; when quiet it shows the tutorial
+  objective dimmed), ship power LEDs, cell counter, O2 bar (outside) or key reminders. The wire
+  timer is a 5-LED bar floating above the astronaut's head. Also: tutorial/PIP arrows, toasts
+  (top), fades, results with stars + suit upgrade, pause menu, cutscene film bar (top).
 - **UI look** (the team asked for "less AI"): ship hardware outside, old green terminal inside.
   Panels are 9-slice `StyleBoxTexture`s of `Assets/ui/frame_screen.png` (riveted bezel + green
   scanline screen) and `frame_plate.png` (riveted plate), drawn by `tools/art_ui.py`, margin 6.

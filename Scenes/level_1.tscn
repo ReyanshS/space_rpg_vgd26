@@ -98,14 +98,14 @@ script = ExtResource("9_story")
 position = Vector2(208, 656)
 script = ExtResource("10_beat")
 trigger = 0
-lines = PackedStringArray("Oh good, you\'re awake. I\'m PIP. I keep this ship running. Usually.", "A solar storm fried the main power and everything went dark. I really don\'t like the dark.", "The yellow pad is a power socket. Grab the wire there and carry it to the blue pad.")
+lines = PackedStringArray("Oh good, you\'re awake. I\'m PIP. I keep this ship running. Usually.", "A solar storm fried the main power. I really don\'t like the dark.", "Grab the wire on the yellow pad and carry it to the blue one.")
 pause_game = true
 
 [node name="CellIntro" type="Marker2D" parent="Story" unique_id=1843054413]
 position = Vector2(304, 624)
 script = ExtResource("10_beat")
 trigger = 0
-lines = PackedStringArray("That little battery is a power cell. It\'s empty right now.", "Run through it while you\'re holding the live wire and it\'ll charge.", "Every cell you keep gives your suit {o2_per_cell} more seconds of air later on. Trust me, you\'ll want those.")
+lines = PackedStringArray("See that battery? It\'s a power cell, and it\'s still got juice in it.", "Run through it while you\'re holding the wire. It adds 2 seconds to your timer.", "Keep the ones you use and your suit gets extra air later. You\'ll want that.")
 pause_game = true
 point_here = true
 
@@ -113,7 +113,7 @@ point_here = true
 position = Vector2(240, 656)
 script = ExtResource("10_beat")
 trigger = 9
-lines = PackedStringArray("Nothing happens unless you\'re holding the wire. Grab it first.")
+lines = PackedStringArray("Batteries only plug into the live wire. Grab the wire first.")
 
 [node name="Room1Done" type="Marker2D" parent="Story" unique_id=130734455]
 position = Vector2(176, 656)
@@ -130,7 +130,7 @@ lines = PackedStringArray("Standing on a node stops the clock. Remember that one
 [node name="Room3Intro" type="Marker2D" parent="Story" unique_id=372436841]
 position = Vector2(656, 240)
 script = ExtResource("10_beat")
-lines = PackedStringArray("Purple pads are bends. Touch one with the wire and you\'ll stop dead.", "Pick a direction with the arrow keys and it throws you round the corner. The wire bends with you.")
+lines = PackedStringArray("Purple pads are bends. Touch one with the wire and you\'ll stop dead.", "The dotted lines show where each arrow key will throw you. Pick one.", "Wrong way? Press E and the wire reels you back to the bend.")
 pause_game = true
 
 [node name="Room3Done" type="Marker2D" parent="Story" unique_id=450323481]
@@ -142,13 +142,13 @@ lines = PackedStringArray("Nice flying.")
 [node name="Room4Intro" type="Marker2D" parent="Story" unique_id=1388293789]
 position = Vector2(912, 720)
 script = ExtResource("10_beat")
-lines = PackedStringArray("Careful. Those red grates are live. Step on one and you get zapped, wire or no wire.", "The wire won\'t cross them either, so plan your way round before you grab it.")
+lines = PackedStringArray("Careful. Those red grates are live. Step on one and you get zapped.", "The wire won\'t cross them either, so plan your way round first.")
 pause_game = true
 
 [node name="GeneratorIntro" type="Marker2D" parent="Story"]
 position = Vector2(528, 1072)
 script = ExtResource("10_beat")
-lines = PackedStringArray("This is the generator room. It\'s three machines in one.", "Every time you power one, the cargo lifts drop and the room changes. Have a look around before you grab the next wire.")
+lines = PackedStringArray("This is the generator room. It\'s three machines in one.", "Every time you power one, the cargo lifts drop and the room changes.", "So have a look around before you grab the next wire.")
 pause_game = true
 
 [node name="GeneratorB" type="Marker2D" parent="Story"]
@@ -159,7 +159,7 @@ lines = PackedStringArray("That node from before is still live. You can wrap thi
 [node name="GeneratorC" type="Marker2D" parent="Story"]
 position = Vector2(1040, 1296)
 script = ExtResource("10_beat")
-lines = PackedStringArray("These grates blink on and off. When they\'re lit they zap your boots. The wire doesn\'t care.", "The light moves across the floor like a wave. Walk in the dark gap behind it. The node in the middle stops the clock while you wait.")
+lines = PackedStringArray("These grates blink on and off. Lit ones zap your boots. The wire\'s fine.", "The light moves like a wave. Walk in the dark gap right behind it.", "The node in the middle stops the clock, so wait there if you need to.")
 pause_game = true
 
 [node name="ShipLightsUp" type="Marker2D" parent="Story" unique_id=2024546782]

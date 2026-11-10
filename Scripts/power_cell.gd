@@ -1,23 +1,25 @@
 # ---------------------------------------------------------------------------
-# power_cell.gd  -  a collectible POWER CELL (a small floating battery with a
-# lightning bolt on it - the same picture as the cell counter, top right).
+# power_cell.gd  -  a POWER CELL: a spare battery lying around the ship (a small
+# floating battery with a lightning bolt - the same picture as the cell counter).
 #
-# Cells are painted on the Layout layer like any tile (kind "cell"). They start
-# EMPTY: walking over one does nothing. You charge one by touching it while you
-# carry the LIVE WIRE - so collecting cells means finding a route that passes
-# them and still reaches the next pad before the timer runs out. Like the stars
-# in a phone puzzle game: optional, but they reward a clever route.
+# Cells are painted on the Layout layer like any tile (kind "cell"). Walking
+# over one does nothing. Touch one while you carry the LIVE WIRE and its charge
+# jumps into the wire: your timer gets cell_bonus more seconds (level.gd).
+# So a cell is a choice in the middle of a puzzle: is it worth the detour?
+# Every cell you keep also counts for a star, and your suit stores the extra
+# power as oxygen for spacewalks later (Game.o2_bonus()).
 #
-# If you fail the room, the cells you charged on that try come back (uncharged).
-# You only KEEP them once the room is powered. The level does all the counting;
-# this script only draws the cell and plays its animations.
+# If you fail, the cells you used on that try come back. You only KEEP them once
+# you reach the goal. The level does all the counting; this script only draws
+# the cell and plays its animations.
 # ---------------------------------------------------------------------------
 class_name PowerCell
 extends Node2D
 
-var charged := false
+var collected := false
 var _t := 0.0
-var _float_text := 0.0      # > 0 while the "+1" floats up
+var _float_text := 0.0      # > 0 while the "+2s" floats up
+var _label := "+1"
 var _light: PointLight2D
 
 
@@ -25,17 +27,17 @@ func _ready() -> void:
 	LightFX.glow(self)         # the cell shines in the dark ship
 	z_index = 3                # above the pads, still under the player
 	_t = randf() * TAU
-	_light = LightFX.make(Color(0.5, 0.85, 1.0), 34.0, 0.45)   # a little light on the floor
+	_light = LightFX.make(Color(1.0, 0.8, 0.35), 34.0, 0.5)   # a warm glow on the floor
 	add_child(_light)
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	if _float_text > 0.0:
-		# (stops at exactly 0, and the redraw at 0 wipes the last faint "+1")
+		# (stops at exactly 0, and the redraw at 0 wipes the last faint label)
 		_float_text = maxf(0.0, _float_text - delta)
 		queue_redraw()
-	elif not charged:
+	elif not collected:
 		queue_redraw()
 
 
@@ -54,25 +56,27 @@ static func draw_battery(ci: CanvasItem, o: Vector2, body: Color, bolt: Color) -
 
 
 func _draw() -> void:
-	if not charged:
+	if not collected:
 		var bob := roundf(sin(_t * 3.0) * 1.5)
-		var pulse := 0.18 + 0.1 * sin(_t * 4.0)
-		draw_circle(Vector2(0, bob - 1), 11.0, Color(0.5, 0.85, 1.0, pulse))   # soft halo
-		# EMPTY: a grey battery whose bolt only flickers faintly = "needs power"
-		var bolt := Color(0.45, 0.4, 0.15).lerp(Color(1.0, 0.85, 0.3), 0.5 + 0.5 * sin(_t * 5.0))
-		draw_battery(self, Vector2(-5, -9 + bob), Color(0.26, 0.31, 0.4), bolt)
+		var pulse := 0.2 + 0.1 * sin(_t * 4.0)
+		draw_circle(Vector2(0, bob - 1), 11.0, Color(1.0, 0.8, 0.35, pulse))   # warm halo
+		# FULL: an amber battery whose bolt glows white-hot now and then
+		var bolt := Color(1.0, 0.95, 0.75).lerp(Color.WHITE, 0.5 + 0.5 * sin(_t * 5.0))
+		draw_battery(self, Vector2(-5, -9 + bob), Color(0.95, 0.62, 0.15), bolt)
 	if _float_text > 0.0:
 		var a := clampf(_float_text / 0.3, 0.0, 1.0)
 		var y := -14.0 - (0.9 - _float_text) * 26.0
 		# the project's pixel font (Project Settings > GUI > Theme > Custom)
 		var theme := ThemeDB.get_project_theme()
 		var font: Font = theme.default_font if theme and theme.default_font else ThemeDB.fallback_font
-		draw_string(font, Vector2(-7, y), "+1", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.3, a))
+		draw_string(font, Vector2(-9, y), _label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.3, a))
 
 
-## Charged by the live wire: burst of sparks, "+1" floats up, the cell disappears.
-func collect() -> void:
-	charged = true
+## Plugged into the live wire: burst of sparks, the label (e.g. "+2s") floats
+## up, the cell disappears.
+func collect(label := "+1") -> void:
+	collected = true
+	_label = label
 	_float_text = 0.9
 	var p := Wire.make_sparks(Color(1.0, 0.9, 0.35), 18, 0.5)
 	p.one_shot = true
@@ -83,11 +87,11 @@ func collect() -> void:
 	create_tween().tween_property(_light, "energy", 0.0, 0.3)
 
 
-## You failed the room: the cell comes back, empty.
+## You failed: the cell comes back, full again.
 func restore() -> void:
-	charged = false
+	collected = false
 	_float_text = 0.0
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.4)
-	_light.energy = 0.45
+	_light.energy = 0.5
 	queue_redraw()
