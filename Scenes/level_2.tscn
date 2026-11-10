@@ -67,7 +67,7 @@ points = PackedVector2Array(1200, 432, 1392, 432, 1392, 336, 1424, 304, 1488, 33
 hint_only = true
 
 [node name="HintCoupling" parent="Hints" unique_id=1250194335 instance=ExtResource("6_guide")]
-points = PackedVector2Array(2000, 368, 2000, 208, 2352, 208, 2384, 240, 2384, 336, 2448, 368)
+points = PackedVector2Array(2000, 368, 2000, 208, 2320, 208, 2448, 208, 2448, 368)
 hint_only = true
 
 [node name="Story" type="Node2D" parent="." unique_id=674583227]

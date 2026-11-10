@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="TSA Video Game Design 2027"
+config/name="Star Circuit"
 run/main_scene="res://Scenes/title.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
