@@ -138,6 +138,8 @@ const PIP_LINES := {
 	"no_landing": "Nothing to land on that way. Your boots only let go with a plate ahead.",
 	"cell_kept": "That battery's yours now. Each one you keep adds %d seconds of suit air.",
 	"cell_lost": "That battery's back. You only keep them once you reach the blue pad.",
+	"strain": "The wire can't go through that. Wrap it round a node to change its angle.",
+	"shared": "That node from the last machine is still live. Wrap this wire round it.",
 }
 
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
@@ -294,6 +296,7 @@ var _preview_paths: Array = []            # [from, end, what] for each way out o
 var _preview_node: Node2D                 # draws those dotted fling previews
 var _reel_tween: Tween                    # the reel-back pull, while it's happening
 var _still_time := 0.0                    # how long you've stood still holding the wire
+var _last_safe := Vector2.INF             # the last spot you stood on safely (for after a zap)
 
 # --- the core (Level 3)
 var _alert := false            # red alert: the ship's tinted red, the boss music plays
@@ -369,6 +372,7 @@ func _ready() -> void:
 		return
 	player.level = self
 	player.position = center_of(_spawn)
+	_last_safe = player.position
 	_current_room = _room_of.get(_spawn)
 	hud.dialogue_blocking.connect(_on_dialogue_blocking)
 	hud.can_block = can_pause_for_dialogue
@@ -1514,6 +1518,8 @@ func _process(delta: float) -> void:
 func player_moved() -> void:
 	if _busy or _complete:
 		return
+	if _safe_to_stand(player.position):
+		_last_safe = player.position      # remembered, so a zap sends you back the way you came
 	var c := cell_of(player.position)
 	if _is_live_tile(c):
 		_fail("shock")
@@ -1873,6 +1879,8 @@ func wire_strained(at: Vector2) -> void:
 	_strain_cd = 0.4
 	_wire.strain(_first_blocked_point(_last_anchor, at))
 	_play("tick")
+	if Game.first_time("strain"):
+		hud.say(PackedStringArray([PIP_LINES["strain"]]))     # the first time ever: why it stopped you
 
 
 ## A fling hit a wall or crate before reaching a pad.
@@ -2035,7 +2043,26 @@ func _try_grab() -> void:
 	_play("grab")
 	_set_hum(true)
 	_tile_hit(r.start)
+	_show_shared_pads(r)
 	wire_grabbed.emit(r.index)      # the tutorial listens for this
+
+
+## Nodes and bends from stages you already powered in this area work for this
+## wire too - but they're easy to miss. So when you grab the wire, each of them
+## flashes, one after another. The first time ever, PIP points one out.
+func _show_shared_pads(r: Room) -> void:
+	var shared: Array[Vector2i] = []
+	for p in _wire_pads:
+		if not r.pads.has(p):
+			shared.append(p)
+	if shared.is_empty():
+		return
+	if Game.first_time("shared_pads"):
+		hud.say(PackedStringArray([PIP_LINES["shared"]]), "PIP", false, center_of(shared[0]))
+	for i in shared.size():
+		var t: PuzzleTile = _tiles.get(shared[i])
+		if t:
+			get_tree().create_timer(0.15 + i * 0.12).timeout.connect(t.hit)
 
 
 func _tile_hit(c: Vector2i) -> void:
@@ -2401,12 +2428,12 @@ func _return_cells() -> void:
 
 ## After a fail: the wire is gone, but you stay where you are. If that spot is
 ## somewhere you can't stand (a red tile, open space), a little push moves you
-## to the nearest safe floor - no teleport, no fade.
+## back to safe floor - no teleport, no fade.
 func _stay_after_fail() -> void:
 	var r := _wire_room if _wire_room != null else _current_room
 	_wire_room = null
 	_anchor_cells.clear()
-	var safe := _nearest_safe_spot(player.position)
+	var safe := _spot_after_fail(player.position)
 	if safe.distance_to(player.position) > 0.5:
 		var tw := create_tween()
 		tw.tween_property(player, "position", safe, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -2417,6 +2444,19 @@ func _stay_after_fail() -> void:
 	_release_player()
 	if r != null and not r.solved:
 		room_restarted.emit(r.index)   # the tutorial points you back to the START
+
+
+## Where to put you after a fail. Where you are, if that's safe. Otherwise back
+## to the last spot you stood on safely: that's the side you came FROM. (Just
+## taking the nearest safe tile could push you THROUGH a wall of red tiles into
+## a corner you can't get out of without crossing them again.) Only if that
+## spot is far away or no longer safe do we search for the nearest one.
+func _spot_after_fail(pos: Vector2) -> Vector2:
+	if _safe_to_stand(pos):
+		return pos
+	if _last_safe.is_finite() and _last_safe.distance_to(pos) < 96.0 and _safe_to_stand(_last_safe):
+		return _last_safe
+	return _nearest_safe_spot(pos)
 
 
 ## The closest place you can safely stand: not a red tile, not open space,
@@ -2501,6 +2541,7 @@ func _respawn() -> void:
 		target = r.airlock
 	_release_player()
 	player.position = center_of(target)
+	_last_safe = player.position
 	_current_room = _room_of.get(target, r)
 	if r != null and not r.solved:
 		room_restarted.emit(r.index)   # the tutorial rewinds to this room's first step

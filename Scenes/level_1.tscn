@@ -154,7 +154,8 @@ pause_game = true
 [node name="GeneratorB" type="Marker2D" parent="Story"]
 position = Vector2(976, 1040)
 script = ExtResource("10_beat")
-lines = PackedStringArray("That node from before is still live. You can wrap this wire round it too.")
+lines = PackedStringArray("No straight line from here to that blue pad. Not with all that cargo.", "But the cargo lift dropped, so this side can reach the first machine now.")
+pause_game = true
 
 [node name="GeneratorC" type="Marker2D" parent="Story"]
 position = Vector2(1040, 1296)
