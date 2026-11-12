@@ -19,9 +19,13 @@ BODY_UP = 10.0          # pads count from the feet AND from 10 px higher (level.
 def near(x, y, pc, r):
     return math.dist((x, y), pc) <= r or math.dist((x, y - BODY_UP), pc) <= r
 STEP = 4
-WALK_SOLID = '# CD=~'   # your feet can't go here (open space too: mag boots need hull)
-HARD_SOLID = '# CD='    # you can't pass here at all, not even drifting
-WIRE_SOLID = '# CD=EX'  # the wire can't cross these (it CAN cross open space)
+HANDS_UP = 9.0          # the wire ends at his hands, 9 px above his feet (player.gd hand_position)
+CORE_MAX_TIME = 30.0    # core rooms: routes slower than this (seconds) aren't worth listing
+WALK_SOLID = '# CD=~@'  # your feet can't go here (open space too: mag boots need hull)
+HARD_SOLID = '# CD=@'   # you can't pass here at all, not even drifting
+WIRE_SOLID = '# CD=EX@' # the wire can't cross these (it CAN cross open space)
+# '@' is a CORE (Level 3): its room is solved by wrapping the wire all the way
+# round it (the wire's angle round the core adds up to a full turn) - no goal pad.
 # '=' is a BARRIER that hasn't moved yet. When a stage is checked, the barriers next
 # to the stages you've already powered have sunk into the floor: they become '.'.
 
@@ -49,7 +53,7 @@ def floating_cells(g):
 
 
 class Map:
-    def __init__(s, g): s.g = g; s.H = len(g); s.W = len(g[0])
+    def __init__(s, g): s.g = g; s.H = len(g); s.W = len(g[0]); s._los = {}
 
     def ch(s, c, r):
         if r < 0 or r >= s.H or c < 0 or c >= s.W: return ' '
@@ -66,11 +70,16 @@ class Map:
         return True
 
     def los(s, a, b):
+        # remembered: the same straight line gets checked many, many times
+        key = (a, b)
+        if key in s._los: return s._los[key]
+        ok = True
         d = math.dist(a, b); n = max(1, int(d / 2))
         for i in range(n + 1):
             t = i / n; x = a[0] + (b[0] - a[0]) * t; y = a[1] + (b[1] - a[1]) * t
-            if s.cell(x, y) in WIRE_SOLID: return False
-        return True
+            if s.cell(x, y) in WIRE_SOLID: ok = False; break
+        s._los[key] = ok
+        return ok
 
 
 def center(c, r): return (c * TILE + 16.0, r * TILE + 16.0)
@@ -151,7 +160,18 @@ def explore(M, pads, cells, anchor, start, budget_px, used):
             for i, p in enumerate(pts):
                 note_cells(p[0], p[1], cost, land)
             push(land[0], land[1], cost)
-    return events, hits
+    return events, hits, dist
+
+
+def sweep(core, a, b):
+    """The angle (radians, with a sign) the straight wire a->b sweeps round the
+    core, as seen from the core. Same as Vector2.angle_to in level.gd."""
+    a1 = math.atan2(a[1] - core[1], a[0] - core[0])
+    b1 = math.atan2(b[1] - core[1], b[0] - core[0])
+    d = b1 - a1
+    while d > math.pi: d -= 2 * math.pi
+    while d <= -math.pi: d += 2 * math.pi
+    return d
 
 
 def fling(M, pads, cells, bend_key, pc, d, used):
@@ -173,13 +193,29 @@ def fling(M, pads, cells, bend_key, pc, d, used):
 def name(key, kind): return f'{kind}({key[0]},{key[1]})'
 
 
-def solve_room(M, pads, cells, start_key, max_depth=12):
-    """Every route from START to GOAL: (labels, spare seconds on its tightest segment, cells)."""
+def solve_room(M, pads, cells, start_key, max_depth=12, core=None):
+    """Every route from START to GOAL: (labels, spare seconds on its tightest segment,
+    cells, total seconds). With `core` (a pixel position) there's no goal: a route
+    is finished as soon as the wire (pads touched + his hands) winds a full turn
+    round the core."""
     sols = []
 
-    def rec(anchor, pos, time_left, used, labels, got, depth, ms):
+    def rec(anchor, pos, time_left, used, labels, got, depth, ms, wind, el):
         if depth > max_depth: return
-        events, hits = explore(M, pads, cells, anchor, pos, time_left * WALK, used)
+        if core is not None and el > CORE_MAX_TIME: return    # far too slow: PIP would have cut it
+        events, hits, dist = explore(M, pads, cells, anchor, pos, time_left * WALK, used)
+        if core is not None:
+            # the fastest spot (walking from this pad) where the loop closes
+            best = None
+            for (kx, ky), cost in dist.items():
+                if abs(wind + sweep(core, anchor, (kx, ky - HANDS_UP))) >= 2 * math.pi - 1e-9:
+                    if best is None or cost < best[0]: best = (cost, (kx, ky))
+            if best is not None:
+                sols.append((labels + [f'loop@({best[1][0]},{best[1][1]})'], min(ms, time_left - best[0] / WALK),
+                             got, el + best[0] / WALK))
+                return    # the loop can close from here: going on to more pads isn't needed
+            if abs(wind) > 2.5 * math.pi:
+                return    # wound round more than once without closing: a dead end
         for (key, side), (g, p) in events.items():
             tl = time_left - g / WALK
             # cells you could grab on the way: get there, then still reach this pad in time
@@ -188,17 +224,24 @@ def solve_room(M, pads, cells, start_key, max_depth=12):
                 if c in got: continue
                 if near(cont[0], cont[1], pads[key][1], R[pads[key][0]] + 0.1):
                     extra.add(c); continue
-                ev2, _ = explore(M, pads, {}, anchor, cont, time_left * WALK - hc, used)
+                ev2, _, _ = explore(M, pads, {}, anchor, cont, time_left * WALK - hc, used)
                 if any(k == key for (k, _s) in ev2): extra.add(c)
-            arrive(key, side, p, tl, used, labels, got | extra, depth, anchor, min(ms, tl))
+            arrive(key, side, p, tl, used, labels, got | extra, depth, anchor, min(ms, tl), wind, el + g / WALK)
 
-    def arrive(key, side, p, tl, used, labels, got, depth, prev_anchor, ms):
+    def arrive(key, side, p, tl, used, labels, got, depth, prev_anchor, ms, wind, el):
         kind, pc = pads[key]
         lab = name(key, kind) + (f'[{side}]' if side else '')
+        if core is not None:
+            sw = sweep(core, prev_anchor, pc)
+            # a loop that turns back round the core loses time it doesn't have:
+            # skip pads that take the wire backwards (keeps the search fast)
+            if abs(wind) > 0.3 and abs(sw) > 0.35 and (sw > 0) != (wind > 0):
+                return
+            wind += sw
         if kind == 'G':
-            sols.append((labels + [lab], ms, got)); return
+            sols.append((labels + [lab], ms, got, el)); return
         if kind == 'N':
-            rec(pc, p, TIME + R['N'] / WALK, used | {key}, labels + [lab], got, depth + 1, ms); return
+            rec(pc, p, TIME + R['N'] / WALK, used | {key}, labels + [lab], got, depth + 1, ms, wind, el); return
         if kind == 'B':
             d = snap8((pc[0] - prev_anchor[0], pc[1] - prev_anchor[1]))
             nd = (d[1], -d[0]) if side == 'L' else (-d[1], d[0])
@@ -206,13 +249,16 @@ def solve_room(M, pads, cells, start_key, max_depth=12):
             tl2 = tl - t / FLING
             if res == 'shock' or tl2 <= 0: return
             if res == 'stop':
-                rec(pc, pos, tl2, used | {key}, labels + [lab, f'fling->({pos[0]:.0f},{pos[1]:.0f})'], got | passed, depth + 1, min(ms, tl2))
+                rec(pc, pos, tl2, used | {key}, labels + [lab, f'fling->({pos[0]:.0f},{pos[1]:.0f})'], got | passed,
+                    depth + 1, min(ms, tl2), wind, el + t / FLING)
             else:
                 _, k2, kind2 = res
                 for sd in (('L', 'R') if kind2 == 'B' else (None,)):
-                    arrive(k2, sd, pos, tl2, used | {key}, labels + [lab, 'fling'], got | passed, depth + 1, pc, min(ms, tl2))
+                    arrive(k2, sd, pos, tl2, used | {key}, labels + [lab, 'fling'], got | passed, depth + 1, pc,
+                           min(ms, tl2), wind, el + t / FLING)
 
-    rec(pads[start_key][1], pads[start_key][1], TIME, frozenset([start_key]), [name(start_key, 'S')], frozenset(), 0, TIME)
+    rec(pads[start_key][1], pads[start_key][1], TIME, frozenset([start_key]), [name(start_key, 'S')], frozenset(), 0,
+        TIME, 0.0, 0.0)
     return sols
 
 
@@ -296,7 +342,9 @@ if __name__ == '__main__':
     g, floating = floating_cells(load(sys.argv[1]))
     rms = rooms(g)
     order, room_of, groups, area = walking_order(g, rms)
+    only = {int(a) for a in sys.argv[2:]}          # e.g.  solver2.py map.txt 3  = only stage 3
     for k, ri in enumerate(order):
+        if only and k + 1 not in only: continue
         cells_of_room = rms[ri]
         done = set(order[:k])
         M = Map(open_barriers(g, groups, done))
@@ -312,16 +360,21 @@ if __name__ == '__main__':
                 if g[r][c] in 'NB': pads[(c, r)] = (g[r][c], center(c, r))
         st = [k for k, v in pads.items() if v[0] == 'S']
         if not st: continue
-        sols = solve_room(M, pads, cells, st[0])
-        print(f'Stage {k + 1} (start {st[0]}): {len(sols)} solutions')
+        cores = [(c, r) for (c, r) in cells_of_room if g[r][c] == '@']
+        core = center(*cores[0]) if cores else None
+        sols = solve_room(M, pads, cells, st[0], max_depth=6 if core else 12, core=core)
+        kind = f'CORE {cores[0]}: wrap the wire round it' if cores else 'goal'
+        print(f'Stage {k + 1} (start {st[0]}, {kind}): {len(sols)} solutions')
         best = {}
-        for labels, spare, got in sols:
+        for labels, spare, got, total in sols:
             key = ' -> '.join(labels)
             if key not in best or best[key][0] < spare or len(best[key][1]) < len(got):
-                best[key] = (max(spare, best.get(key, (spare,))[0]), got)
-        for key, (spare, got) in list(best.items())[:12]:
-            print(f'    {key}   (tightest segment: {spare:.2f} s spare)')
+                best[key] = (max(spare, best.get(key, (spare,))[0]), got, total)
+        # fastest first: in a core room PIP's shutdown meter is racing you
+        ranked = sorted(best.items(), key=lambda kv: kv[1][2])
+        for key, (spare, got, total) in ranked[:12]:
+            print(f'    {key}   (tightest segment: {spare:.2f} s spare, {total:.1f} s in all)')
         if cells:
             for c in sorted(cells):
-                ok = [k for k, (s, got) in best.items() if c in got]
+                ok = [k for k, (s, got, _t) in best.items() if c in got]
                 print(f'    cell {c}: ' + ('collectible' if ok else 'NOT collectible on any route'))

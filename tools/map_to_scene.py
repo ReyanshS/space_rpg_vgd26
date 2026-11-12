@@ -8,7 +8,7 @@
 #   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
 #   x blinking grate   C crate   D door   P spawn   E exit
 #   * power cell   , hull (outside floor)   ~ open space   A airlock pad   = barrier
-#   (space) = nothing
+#   @ core (Level 3: wrap the wire round it)   (space) = nothing
 #
 # Run from the project folder:   python tools/map_to_scene.py tools/maps/level2.txt Scenes/level_2.tscn
 #
@@ -18,7 +18,7 @@ import re, struct, sys
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
 SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
           'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
-          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '='}
+          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@'}
 
 if len(sys.argv) < 3:
     sys.exit('usage: python tools/map_to_scene.py <map.txt> <scene.tscn>')

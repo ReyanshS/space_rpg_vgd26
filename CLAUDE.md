@@ -6,7 +6,8 @@ power to a dead spaceship by carrying a live wire from pad to pad, helped by PIP
 maintenance AI. `Scenes/title.tscn` is the main scene (logo: `Assets/images/ui/logo.png`) ->
 `level_1.tscn` (Engineering Deck: the team's 4 rooms joined by doors, then the Generator Room: 3
 stages split by cargo barriers, ending in blinking grates) -> `level_2.tscn` (Main Deck: bridge,
-airlock, spacewalk across one open hull).
+airlock, spacewalk across one open hull) -> `level_3.tscn` (The Core: PIP malfunctions and you
+reboot him by looping the wire round his core three times; the team's idea, see "The core" below).
 - The team works in `D:\Godot\tsa-project\space_rpg_vgd26` (GitHub `ReyanshS/space_rpg_vgd26`,
   branch `nilay-claude`, public) and pushes with GitHub Desktop - the command line here can't sign
   in to GitHub. A teammate also edits the maps: fetch before working.
@@ -26,7 +27,9 @@ airlock, spacewalk across one open hull).
 - **Writing (PIP, tutorial, popups):** the team wants it to sound natural, not AI-written. Short
   plain sentences, contractions, no dashes of any kind as punctuation, few exclamation marks, no
   ALL-CAPS words inside PIP's lines. PIP is a slightly nervous maintenance bot with dry humour.
-  Each line must fit the console: **80 characters max** (two lines of text).
+  Each line must fit the console: **two lines of text** (about 72 characters; the speaker name
+  counts too). Exception on purpose: in Level 3 the malfunctioning PIP talks in CAPS as speaker
+  "P!P" (red), and the real PIP whispers through in lowercase as "PIP" (green).
 - **Fun > features.** The team said the game "isn't that fun". Anything that makes a player wait
   with nothing to do (e.g. stuck after a mistake until the timer runs out) is a bug to fix.
 
@@ -41,7 +44,7 @@ airlock, spacewalk across one open hull).
 - 2026-27 theme: *"Create a deep space-themed RPG where the primary method of progression is
   puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), collectibles
   (power cells) that upgrade the suit (+5 s oxygen each on spacewalks), results/stars per level.
-- **Level 3 is not built yet** — the guide says judges play to level 3.
+- Level 3 exists (the guide says judges play to level 3). A full bot run of it takes ~75 s of play.
 - Judges play from a link, so the game needs a **web export**. Web builds run on WebGL 2 (Godot's
   Compatibility renderer); this project is set to Forward+, so test a web export early and check
   that the lighting still looks right.
@@ -103,11 +106,35 @@ airlock, spacewalk across one open hull).
 - `airlock` pad: stepping on it (once) closes the door behind, vents the air, opens the outer door
   and starts the oxygen meter (`_cycle_airlock`).
 
+## The core (Level 3)
+- `core` tile (map char `@`): a round socket, solid for feet and wire. A room with a core has no
+  goal: it's powered when the wire (START -> pads -> hands) winds a full turn round the core
+  (`_winding()`: sum of `angle_to` of each straight piece, seen from the core; `_check_loop()` in
+  `player_moved()`). The socket shows a yellow ring = how far round (`PuzzleTile.show_loop`), with a
+  tick at the START's direction: the loop closes when your hands cross that line.
+- Story: Level 3's first room (CORE ACCESS) teaches the loop on a harmless "sync pylon". Powering
+  it overloads PIP (`RoguePip.malfunction_room`): red alert (`set_alert`: `alert_light` tint,
+  every emergency light flashes, `music_core.wav`), he talks as "P!P", and hides in the core
+  chamber: 3 stages joined by barriers, one core each (open ring / behind cargo + bend / between
+  blinking grates). Each loop reboots him a bit; he flies to the next socket. The last one shuts
+  him down, he reboots, then the normal lights-on cutscene plays.
+- `Scripts/rogue_pip.gd` (`RoguePip`, node in level_3.tscn) is NOT a rule: it listens to
+  `room_solved`, and calls level.gd's small public API: `core_spots()`, `wire_room_index()`,
+  `cut_wire()` (fail kind "cut"), `set_alert()`, `shake()`, `hold()`/`let_go()` (`_solve()`
+  waits for every hold before opening doors / the cutscene). Its SHUTDOWN METER (12 red LEDs over
+  his head) fills only while you carry the wire in his stage: `shutdown_seconds` per phase
+  (18, 15, 19). Full = pulse that cuts the wire. A Mood enum (ASLEEP, ROGUE, HIT, OFF, BOOT, AWAKE)
+  drives how he's drawn (code-drawn monitor, 2x scale via `draw_set_transform`).
+- HUD: `set_rogue(on)` turns PIP's console face red and angry; any line with speaker
+  `GameHUD.ROGUE_SPEAKER` ("P!P") is red.
+- Solver: `@` rooms are solved by winding (it reports "s in all" = total route time, compare it
+  with `shutdown_seconds`); it skips pads that turn the loop backwards. It doesn't model grates.
+
 ## Architecture (data -> logic -> visuals)
 - **The map is painted**, not coded: the `Layout` TileMapLayer uses
   `Assets/images/tiles/layout_tileset.tres`; each tile has Custom Data `kind` (floor, wall, start,
   goal, node, bend, discharge, blinker, crate, door, spawn, exit, cell, hull, space, airlock,
-  barrier). Rooms (= puzzle STAGES) are found by flood fill (walls/doors/barriers separate them;
+  barrier, core). Rooms (= puzzle STAGES) are found by flood fill (walls/doors/barriers separate them;
   space and void separate hull sections) and numbered in walking order from the spawn. Each needs
   exactly one START (airlocks none). Doors open when the room before them is solved; touching
   barrier tiles form a GROUP (`_build_barrier_groups()`) that sinks when any stage next to it is.
@@ -204,5 +231,9 @@ the team's design, checked with a Python solver; Claude placed Level 1's power c
 team's request, designed Level 1's Generator Room (multistage barriers, shared nodes, blinking
 grates). The title logo was provided by the team; `tools/logo_import.py` (Claude) removed its
 painted-on checkerboard background and shrank it to game pixels - record where the logo came from.
+Level 3: the IDEA (PIP malfunctions, you surround him with wire before he destroys it, which brings
+him back) is the team's (Discord, Nov 2026); Claude designed the loop rule, the layout and puzzles
+(solver-checked), wrote `rogue_pip.gd` and the dialogue, drew the core tile (`tools/art_core.py`)
+and made the boss sounds/music (`tools/sfx_pip.py`).
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

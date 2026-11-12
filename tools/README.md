@@ -19,6 +19,9 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | `maps/build_level2.py` | How Level 2's first map was pasted together from separately-solved pieces (reference only — edit Level 2 in Godot now) | `python tools/maps/build_level2.py` |
 | `art_barrier.py` | Draws the BARRIER tile (crate on a lift, hazard stripes) into `puzzle_tiles.png` frame 12 and its palette icon into `layout_tiles.png` frame 16 | `python tools/art_barrier.py` |
 | `art_ui.py` | Draws the UI frames `Assets/ui/frame_screen.png` (riveted bezel + green screen) and `frame_plate.png` (riveted plate) | `python tools/art_ui.py` |
+| `art_core.py` | Draws the CORE tile (Level 3's round socket) into `puzzle_tiles.png` frame 13 and its palette icon into `layout_tiles.png` frame 17 | `python tools/art_core.py` |
+| `sfx_pip.py` | Generates only the Level 3 boss sounds (`glitch`, `pulse`, `warn`, `boot`) and the boss loop `music_core.wav` - the other sounds stay as they are | `python tools/sfx_pip.py` |
+| `maps/build_level3.py` | How Level 3's first map was drafted as text (reference only - edit Level 3 in Godot now) | `python tools/maps/build_level3.py` |
 | `logo_import.py` | Turns a big pixel-art logo picture with a fake (painted-on) checkerboard background into a crisp, transparent, game-sized `Assets/images/ui/logo.png` | `python tools/logo_import.py <picture> [pixel size]` |
 
 Run `map_from_scene.py` first whenever the map changed — the solver and previews read its output.
@@ -26,7 +29,15 @@ Run `map_from_scene.py` first whenever the map changed — the solver and previe
 **Map characters:** `#` wall, `.` floor, `S` start, `G` goal, `N` node, `B` bend, `X` red tile,
 `x` blinking grate, `C` crate (or floating debris), `D` door (gangway when no wall is beside it),
 `P` spawn, `E` exit, `*` power cell, `,` hull, `~` open space, `A` airlock pad, `=` barrier,
-space = nothing.
+`@` core (Level 3), space = nothing.
+
+**Core rooms (`@`):** there's no goal. A route is finished when the wire (START, the pads it's
+wrapped round, then his hands) has gone a full turn round the core. Those routes end in
+`loop@(x,y)` = the pixel he has to walk to (with the wire) to close the loop, and the line also
+says `s in all` = the whole route's time, fastest first. Compare that with PIP's
+`shutdown_seconds` in `level_3.tscn` (a real player is slower than the solver). To keep it fast,
+the solver skips pads that would take the loop backwards. Check one stage on its own with
+`python tools/solver2.py tools/out/level3.txt 3` (stage numbers after the file).
 
 The solver checks the stages in walking order, the same way the game plays them: touching `=`
 tiles are one group, and when it checks a stage, every group next to an earlier stage counts as

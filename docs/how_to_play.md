@@ -60,5 +60,13 @@ they leave behind. At the end of each level you get up to three stars.
 - **Floating debris** blocks the wire and your drift. **Sparking hull tiles** shock you like red tiles.
 - Watch your **oxygen** (bottom right). Powering a section refills it.
 
+## The Core (Level 3)
+- Some rooms have a round **core** instead of a blue pad. Take the wire **all the way round it**,
+  using the nodes as corners. A yellow ring on the core shows how far round you are; the loop
+  closes when you get back past the line towards your START pad.
+- PIP malfunctions and tries to switch the ship off. Loop the wire round his core three times to
+  reboot him. While you hold the wire near him, the **red lights over his head** fill up. When
+  they're full he cuts your wire, so plan the loop before you grab it.
+
 ## Stars
 1. Finish the level. 2. Charge every power cell. 3. Few retries (no more than one per puzzle).

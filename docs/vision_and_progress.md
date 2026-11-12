@@ -183,16 +183,28 @@ to the next section). Steps only appear once you're in their room.
 4. Power the last stage: the lights-on cutscene. Finish Level 1: stars, then E → Level 2.
 5. Bridge → airlock → Section A: drift across, watch the oxygen bar, try walking off where there's
    no plate (you should stay put).
-6. Finish Level 2 and check the results screen.
+6. Finish Level 2 and check the results screen, then E → Level 3.
+7. Level 3: loop the wire round the pylon (watch the yellow ring). PIP malfunctions: red alert.
+   In his chamber, grab the wire and stand still on a node: his red meter fills and he cuts it.
+   Then beat all three phases; after the last one he reboots and the lights-on cutscene plays.
+
+**Level 3 (The Core), added Nov 2026.** The team's idea from Discord: PIP malfunctions and you
+have to surround him with wires fast enough, or he destroys them; doing it brings him back. How it
+was built: a new `core` tile; a room with a core is powered by wrapping the wire a full turn round
+it (the angles add up to 360 degrees). Room 1 teaches that on a harmless pylon; powering it
+overloads PIP. Then three stages, one socket each, with a shutdown meter that cuts your wire if
+you're too slow (18 / 15 / 19 s): an open ring, a socket behind cargo (with a bend to whip round),
+and a socket between blinking grates. A bot played it start to finish (about 75 s, no retries)
+and checked that the meter really cuts the wire.
 
 ---
 
 ## 5. What's next
 
 **Required for TSA:**
-1. **Level 3.** The official guide says judges play *to the third level*, and play time must be
-   over 3 minutes (a careful first-time player should already pass that with Levels 1-2). Add it to
-   `Game.LEVELS` in `game_state.gd`; until then Level 2's results screen returns to the title.
+1. **Playtest Level 3 with real people.** Is the loop rule clear from the pylon room? Are PIP's
+   shutdown times fair (`shutdown_seconds` on the RoguePip node)? It's the ending, so it should feel
+   tense but beatable in a few tries.
 2. **Web export.** Judges play from a link (if they can't open it, the entry isn't judged).
    Browser builds use Godot's Compatibility renderer and the project is set to Forward+, so test a
    web export early, especially the lighting and the music loops.
@@ -226,3 +238,6 @@ Tool: Claude (Anthropic), in the Claude app; later Claude Code.
 - **Writing**: PIP's dialogue, the title screen text and these docs were drafted by Claude.
 - **Design decisions** (rules, tutorial wording, look and feel, what Level 2 should be about)
   came from the team; the spacewalk mechanics (drift, oxygen) were Claude's proposal.
+- **Level 3**: the boss idea (PIP malfunctions, surround him with wire in time to bring him back)
+  came from the team's Discord. Claude turned it into the loop rule, designed and solver-checked
+  the rooms, wrote `rogue_pip.gd` and the dialogue, drew the core tile and made the boss sounds.

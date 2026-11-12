@@ -65,6 +65,16 @@
 #     out when the room before it is powered.
 #   - "airlock" pad: stand on it and the airlock cycles: the door behind you
 #     shuts, the air hisses out, the outer door opens and the oxygen meter starts.
+#
+# THE CORE (Level 3)
+#   - A "core" tile is a round machine socket. A room with a core has no goal
+#     pad: you power it by wrapping the wire ALL the way round the core.
+#   - How we know: add up the angle each straight piece of wire sweeps round
+#     the core, as seen from the core (_winding). A full turn = TAU radians
+#     (360 degrees). A ring on the socket shows how far round you are.
+#   - In Level 3, PIP's body docks on the cores (rogue_pip.gd). That script
+#     isn't part of the rules: it LISTENS to the level's signals, and it can
+#     call cut_wire(), set_alert(), hold() and let_go().
 # ---------------------------------------------------------------------------
 @tool
 class_name WireLevel
@@ -109,7 +119,7 @@ const PUZZLE_TEX := "res://Assets/images/tiles/puzzle_tiles.png"
 const HULL_TEX := "res://Assets/images/tiles/hull.png"
 # Which picture in puzzle_tiles.png belongs to which kind.
 const PUZZLE_FRAME := {"start": 0, "goal": 1, "node": 2, "bend": 3, "discharge": 4,
-	"blinker": 5, "crate": 6, "door": 7, "airlock": 11, "barrier": 12}
+	"blinker": 5, "crate": 6, "door": 7, "airlock": 11, "barrier": 12, "core": 13}
 const GANGWAY_FRAME := 9
 const SRC_WALL := 0
 const SRC_FLOOR := 1
@@ -117,7 +127,7 @@ const SRC_ROOF := 2
 const SRC_PUZZLE := 3
 const SRC_HULL := 4
 const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "door", "complete", "tick",
-	"pickup", "hiss", "puff", "clank", "alarm", "fanfare"]
+	"pickup", "hiss", "puff", "clank", "alarm", "fanfare", "pulse"]
 const MUSIC_DB := -17.0
 
 ## Things PIP says that are part of the RULES, not the story.
@@ -164,6 +174,9 @@ const PIP_LINES := {
 ## How bright the inside of the ship gets once EVERY room has power
 ## (after the lights-on cutscene). Should be lighter than `darkness`.
 @export var full_power_light := Color(0.42, 0.43, 0.52)
+## The red tint inside the ship during an ALERT (Level 3: PIP is trying to shut
+## everything down). Something else turns the alert on and off with set_alert().
+@export var alert_light := Color(0.4, 0.15, 0.17)
 
 @export_group("Blinking grates")
 ## Seconds for one full on + off cycle of a blinking grate.
@@ -212,6 +225,11 @@ class Room:
 	var full_power := false             # lit up by the lights-on cutscene
 	var area_id := -1                   # stages joined by barriers/catwalks share an area...
 	var area_bounds := Rect2i()         # ...and the camera can roam across all of it
+	var core := Vector2i(-1, -1)        # a CORE socket: wrap the wire round it instead of a goal
+
+	## The spot that powers this room: its GOAL pad, or its CORE. (-1, -1) = none.
+	func target() -> Vector2i:
+		return goal if goal.x >= 0 else core
 
 
 # --- map data
@@ -276,6 +294,10 @@ var _preview_paths: Array = []            # [from, end, what] for each way out o
 var _preview_node: Node2D                 # draws those dotted fling previews
 var _reel_tween: Tween                    # the reel-back pull, while it's happening
 var _still_time := 0.0                    # how long you've stood still holding the wire
+
+# --- the core (Level 3)
+var _alert := false            # red alert: the ship's tinted red, the boss music plays
+var _holds := 0                # how many other nodes asked the level to wait (hold / let_go)
 
 # lights-on cutscene
 var _cutscene := false         # true while the cutscene moves the camera
@@ -463,12 +485,12 @@ func _is_room_cell(kind: String) -> bool:
 	return _walkable(kind) and kind != "door" and kind != "barrier"
 
 
-## Can't WALK through: nothing, walls, crates, closed doors and barriers that
-## haven't moved yet - and open space, unless space_blocks is false (used for
-## drifting: you float over space).
+## Can't WALK through: nothing, walls, crates, cores, closed doors and barriers
+## that haven't moved yet - and open space, unless space_blocks is false (used
+## for drifting: you float over space).
 func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
 	var kind := kind_at(c)
-	if kind == "" or kind == "wall" or kind == "crate":
+	if kind == "" or kind == "wall" or kind == "crate" or kind == "core":
 		return true
 	if kind == "space":
 		return space_blocks
@@ -477,13 +499,13 @@ func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
 	return false
 
 
-## The WIRE can't pass over: nothing, walls, crates, doors, the exit, live red
-## tiles, and barriers until they've sunk away. (It CAN stretch across open space.)
+## The WIRE can't pass over: nothing, walls, crates, cores, doors, the exit, live
+## red tiles, and barriers until they've sunk away. (It CAN stretch across open space.)
 func is_solid_for_wire(c: Vector2i) -> bool:
 	var kind := kind_at(c)
 	if kind == "barrier":
 		return not _open_doors.has(c)
-	return kind in ["", "wall", "crate", "door", "exit", "discharge"]
+	return kind in ["", "wall", "crate", "core", "door", "exit", "discharge"]
 
 
 ## True if a box (centre `pos`, half-size `half`) overlaps anything solid.
@@ -649,7 +671,7 @@ func _make_tileset() -> TileSet:
 	_add_atlas(ts, SRC_WALL, WALL_TEX, Vector2i(6, 4))
 	_add_atlas(ts, SRC_FLOOR, FLOOR_TEX, Vector2i(3, 1))
 	_add_atlas(ts, SRC_ROOF, ROOF_TEX, Vector2i(16, 16))
-	var puzzle := _add_atlas(ts, SRC_PUZZLE, PUZZLE_TEX, Vector2i(13, 1))
+	var puzzle := _add_atlas(ts, SRC_PUZZLE, PUZZLE_TEX, Vector2i(14, 1))
 	for frame in [PUZZLE_FRAME["door"], GANGWAY_FRAME]:
 		var alt := puzzle.create_alternative_tile(Vector2i(frame, 0), 1)
 		puzzle.get_tile_data(Vector2i(frame, 0), alt).transpose = true   # turned sideways
@@ -840,6 +862,7 @@ func _build_rooms() -> void:
 				"node", "bend": room.pads.append(cur)
 				"exit": room.is_exit = true
 				"airlock": room.airlock = cur
+				"core": room.core = cur
 				"hull", "space": room.outside = true
 			for d in DIRS4:
 				var n := cur + d
@@ -897,7 +920,7 @@ func _build_rooms() -> void:
 		order[j].index = j
 	_rooms_with_goal = 0
 	for r in _rooms:
-		if r.goal.x >= 0 and not r.is_exit:
+		if r.target().x >= 0 and not r.is_exit:
 			_rooms_with_goal += 1
 	_check_rooms()
 
@@ -983,8 +1006,8 @@ func _check_rooms() -> void:
 		if r.airlock.x < 0:          # airlocks don't need pads
 			if r.start.x < 0:
 				push_warning("Room %d has no START pad." % n)
-			if r.goal.x < 0:
-				push_warning("Room %d has no GOAL pad." % n)
+			if r.target().x < 0:
+				push_warning("Room %d has no GOAL pad (or CORE)." % n)
 		if _exit_doors(r).is_empty() and _barrier_groups_of(r).is_empty():
 			push_warning("Room %d has no door or barrier leading onward." % n)
 
@@ -1189,13 +1212,18 @@ func _update_environment(snap: bool) -> void:
 		_dark.color = col
 	else:
 		_tween_env(col, 1.2)
-	_set_music("space" if _current_room.outside else "ship")
+	if _alert:
+		_set_music("core")
+	else:
+		_set_music("space" if _current_room.outside else "ship")
 
 
 ## The darkness tint for room `r`. full = the whole ship has power.
 func _env_color(r: Room, full: bool) -> Color:
 	if r.outside:
 		return space_light
+	if _alert:
+		return alert_light
 	return full_power_light if full else darkness
 
 
@@ -1207,10 +1235,10 @@ func _tween_env(col: Color, secs: float) -> void:
 	_env_tween.tween_property(_dark, "color", col, secs)
 
 
-## Draws an unpowered cable on the floor from each goal to the door it unlocks.
+## Draws an unpowered cable on the floor from each goal (or core) to the door it unlocks.
 func _build_conduits() -> void:
 	for r in _rooms:
-		if r.goal.x < 0:
+		if r.target().x < 0:
 			continue
 		var targets := _exit_doors(r)
 		for d in r.doors:
@@ -1232,11 +1260,12 @@ func _build_conduits() -> void:
 ## Following the "came from" links backwards gives the shortest path.
 ## (Cables can't cross open space, so they go round the hull.)
 func _conduit_path(r: Room, doors: Array[Vector2i]) -> PackedVector2Array:
-	var prev := {r.goal: r.goal}
-	var q: Array[Vector2i] = [r.goal]
+	var from := r.target()
+	var prev := {from: from}
+	var q: Array[Vector2i] = [from]
 	var head := 0
 	var found := false
-	var end_cell := r.goal
+	var end_cell := from
 	var door := Vector2i.ZERO
 	while head < q.size() and not found:
 		var cur := q[head]
@@ -1260,10 +1289,10 @@ func _conduit_path(r: Room, doors: Array[Vector2i]) -> PackedVector2Array:
 		return pts
 	var cells: Array[Vector2i] = []
 	var c := end_cell
-	while c != r.goal:
+	while c != from:
 		cells.append(c)
 		c = prev[c]
-	cells.append(r.goal)
+	cells.append(from)
 	cells.reverse()
 	for cc in cells:
 		pts.append(center_of(cc))
@@ -1300,8 +1329,9 @@ func _setup_audio() -> void:
 	_sfx["tick"].volume_db = -6.0
 	_sfx["alarm"].volume_db = -6.0
 	_sfx["hum"].finished.connect(_on_hum_finished)   # loop the hum while carrying
-	# Background music: two soft loops, one for inside the ship, one for space.
-	for n in ["ship", "space"]:
+	# Background music: soft loops for inside the ship and for space, and a
+	# tense one for red alerts (the PIP boss in Level 3).
+	for n in ["ship", "space", "core"]:
 		var p := AudioStreamPlayer.new()
 		p.name = "Music_" + n
 		var path := "res://Assets/audio/music_%s.wav" % n
@@ -1463,7 +1493,9 @@ func _process(delta: float) -> void:
 	_light_t += delta
 	for pair in _emergency:
 		var r: Room = pair[1]
-		if not r.solved and not r.full_power:
+		if _alert:
+			pair[0].energy = 0.55 + 0.35 * sin(_light_t * 6.0)    # red alert: every room flashes
+		elif not r.solved and not r.full_power:
 			pair[0].energy = 0.35 + 0.2 * sin(_light_t * 2.2)
 	# powered hull sections: beacons blink one after another
 	# (in the cutscene a section's beacons flash all together for a moment)
@@ -1518,6 +1550,109 @@ func player_moved() -> void:
 			continue          # the wire can't reach that pad's centre
 		_touch_pad(pad, kind)
 		return
+	_check_loop()
+
+
+# ===================================================================== the core: wrap the wire round it
+
+## How far the wire winds round room r's core, in radians (TAU = one full turn).
+## The wire is straight lines: START -> each pad it's wrapped round -> your hands.
+## Stand on the core and look at one straight piece: it sweeps some angle in
+## front of you (angle_to gives it, with a sign for which way round). Add the
+## pieces up. Going round and coming back cancels out; a full loop adds to TAU.
+func _winding(r: Room) -> float:
+	var c := center_of(r.core)
+	var pts: Array[Vector2] = []
+	for a in _anchor_cells:
+		pts.append(center_of(a))
+	pts.append(player.hand_position())
+	var total := 0.0
+	for i in range(1, pts.size()):
+		total += (pts[i - 1] - c).angle_to(pts[i] - c)
+	return total
+
+
+## While you carry the wire in a core room: update the ring on the socket, and
+## power the room once the wire has gone all the way round.
+func _check_loop() -> void:
+	var r := _wire_room
+	if r == null or r.core.x < 0 or _wire == null or _busy:
+		return
+	var turn := _winding(r)
+	var t: PuzzleTile = _tiles.get(r.core)
+	if t:
+		t.show_loop(true, (center_of(r.start) - center_of(r.core)).angle(), turn)
+	if absf(turn) >= TAU:
+		_wire.add_anchor(player.hand_position())    # the loop's last piece stays where it is
+		_solve(r)
+
+
+func _hide_loop(r: Room) -> void:
+	if r == null or r.core.x < 0:
+		return
+	var t: PuzzleTile = _tiles.get(r.core)
+	if t:
+		t.show_loop(false, 0.0, 0.0)
+
+
+## Where each core room's socket is, in walking order: [room index, pixel position].
+## rogue_pip.gd uses this to know where to dock.
+func core_spots() -> Array:
+	var out: Array = []
+	for r in _rooms:
+		if r.core.x >= 0:
+			out.append([r.index, center_of(r.core)])
+	out.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	return out
+
+
+## The room you're carrying the wire in right now (-1 = you aren't carrying it).
+func wire_room_index() -> int:
+	return _wire_room.index if _wire != null and _wire_room != null and not _busy else -1
+
+
+## PIP's shutdown pulse (rogue_pip.gd) cuts the wire you're carrying.
+func cut_wire() -> void:
+	if _wire != null and not _busy:
+		_fail("cut")
+
+
+## RED ALERT on/off: the ship goes red, the emergency lights flash in every
+## room and the boss music plays (off: back to normal).
+func set_alert(on: bool) -> void:
+	_alert = on
+	for r in _rooms:
+		for l in _room_lights.get(r, []):
+			if r.solved:
+				create_tween().tween_property(l, "energy", 0.12 if on else room_light_energy, 0.4)
+	if not on:
+		for pair in _emergency:
+			if pair[1].solved:
+				create_tween().tween_property(pair[0], "energy", 0.0, 0.6)
+	_update_environment(false)
+
+
+## Shake the camera (other scripts can't reach _shake_cam: names starting with
+## _ are "private" by convention).
+func shake(duration: float, strength: float) -> void:
+	_shake_cam(duration, strength)
+
+
+## Another node asks the level to WAIT before it carries on after a room is
+## powered (before it opens the doors and starts the lights-on cutscene).
+## Like holding a lift door: the level waits until everyone has let go.
+## rogue_pip.gd holds while PIP glitches, gets rebooted or flies away.
+func hold() -> void:
+	_holds += 1
+
+
+func let_go() -> void:
+	_holds = maxi(0, _holds - 1)
+
+
+func _wait_for_holds() -> void:
+	while _holds > 0 and is_inside_tree():
+		await get_tree().process_frame
 
 
 ## Is the astronaut touching the spot `pc`? Measured from his feet and from a
@@ -1957,7 +2092,8 @@ func _solve(r: Room) -> void:
 	_wire = null
 	w.finish()
 	await w.power_flow(0.8)
-	for c in [r.goal, r.start]:
+	_hide_loop(r)
+	for c in [r.goal, r.start, r.core]:
 		var t: PuzzleTile = _tiles.get(c)
 		if t:
 			t.set_powered(true)
@@ -1976,6 +2112,7 @@ func _solve(r: Room) -> void:
 		hud.say(PackedStringArray([PIP_LINES["cell_kept"] % int(Game.O2_PER_CELL)]))
 	if r.conduit:
 		await r.conduit.power_flow(0.5)
+	await _wait_for_holds()         # e.g. PIP glitching (rogue_pip.gd called hold())
 	_open_exit_doors(r)
 	if _rooms_powered >= _rooms_with_goal:
 		await _all_powered()        # the lights-on cutscene: wait here until it's over
@@ -2010,7 +2147,7 @@ func _open_exit_doors(r: Room) -> void:
 ## The power reaches the barriers: they sink into the floor one after another,
 ## starting with the one nearest the goal (so it looks like the power travels).
 func _move_barriers(r: Room, barriers: Array[Vector2i]) -> void:
-	var from := center_of(r.goal) if r.goal.x >= 0 else center_of(barriers[0])
+	var from := center_of(r.target()) if r.target().x >= 0 else center_of(barriers[0])
 	var nearer := func(a: Vector2i, b: Vector2i) -> bool: return from.distance_to(center_of(a)) < from.distance_to(center_of(b))
 	barriers.sort_custom(nearer)
 	for i in barriers.size():
@@ -2107,8 +2244,8 @@ func _light_up(r: Room, step: int) -> void:
 		p.play()
 	if r.conduit:
 		r.conduit.power_flow(0.6)
-	if r.goal.x >= 0:
-		_tile_hit(r.goal)
+	if r.target().x >= 0:
+		_tile_hit(r.target())
 	if r.outside:
 		# The hull is sunlit already, so a quick bright surge shows the power arriving.
 		if _env_tween:
@@ -2192,6 +2329,7 @@ func _fail(kind: String) -> void:
 		_retries += 1
 	var lost_cells := not _cells_pending.is_empty()
 	_return_cells()
+	_hide_loop(r)
 	player.lock(_wire != null)
 	match kind:
 		"shock":
@@ -2214,6 +2352,13 @@ func _fail(kind: String) -> void:
 			_shake_cam(0.3, 2.0)
 			hud.show_toast("OUT OF AIR")
 			await get_tree().create_timer(0.8).timeout
+		"cut":
+			# PIP's shutdown pulse (rogue_pip.gd) reached the wire
+			_play("pulse")
+			_play("snap")
+			hud.flash(Color(1.0, 0.25, 0.2), 0.6)
+			_shake_cam(0.45, 3.5)
+			hud.show_toast("PIP CUT THE POWER")
 	if _wire != null:
 		var w := _wire
 		_wire = null

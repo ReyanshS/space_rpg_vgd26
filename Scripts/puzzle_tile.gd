@@ -3,7 +3,9 @@
 # red discharge, door, GANGWAY (a door out in space: a catwalk that extends
 # across the gap when the hull section is powered), AIRLOCK pad, BARRIER
 # (a cargo stack on a lift that sinks into the floor when its stage is powered),
-# or BLINKING GRATE (Kind.DISCHARGE_OFF: the level turns it on and off).
+# BLINKING GRATE (Kind.DISCHARGE_OFF: the level turns it on and off), or CORE
+# (Level 3: a round socket you wrap the wire round; a ring shows how far round
+# you've got - show_loop).
 #
 # The level creates these in code (PuzzleTile.new() + setup()). Each one has:
 #   - a Sprite2D showing the right 32x32 picture (gets darker when the ship is dark)
@@ -21,7 +23,7 @@ extends Node2D
 # The order matches the pictures in puzzle_tiles.png from left to right
 # (DOOR_OPEN and GANGWAY_OPEN are the "after" pictures of a door / gangway).
 enum Kind { START, GOAL, NODE, BEND, DISCHARGE, DISCHARGE_OFF, CRATE, DOOR,
-	DOOR_OPEN, GANGWAY, GANGWAY_OPEN, AIRLOCK, BARRIER }
+	DOOR_OPEN, GANGWAY, GANGWAY_OPEN, AIRLOCK, BARRIER, CORE }
 
 const SHEET_PATH := "res://Assets/images/tiles/puzzle_tiles.png"
 const DOOR_OPEN_FRAME := 8
@@ -36,7 +38,9 @@ const GLOW := {
 	Kind.GANGWAY: Color(1.0, 0.75, 0.3),
 	Kind.AIRLOCK: Color(1.0, 0.78, 0.3),
 	Kind.BARRIER: Color(1.0, 0.6, 0.2),
+	Kind.CORE: Color(0.35, 1.0, 0.6),
 }
+const LOOP_COLOR := Color(1.0, 0.82, 0.25)    # the same yellow as the live wire
 const DOOR_LOCKED := Color(1.0, 0.3, 0.25)
 
 # "static" = shared by ALL tiles, so the picture is only loaded once.
@@ -65,6 +69,10 @@ var _prompt_node: Node2D
 var _preview_node: Node2D
 var _preview_on := false
 var _preview_side := Vector2.ZERO
+var _loop_node: Node2D
+var _loop_on := false
+var _loop_from := 0.0         # the angle the loop starts at (towards the START pad)
+var _loop_turn := 0.0         # how far round the wire has gone (TAU = all the way)
 var _t := 0.0
 var _flick := 0.0
 
@@ -109,6 +117,9 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 		_prompt_node = _make_overlay(_draw_prompt)
 	if kind == Kind.BEND:
 		_preview_node = _make_overlay(_draw_preview)
+	if kind == Kind.CORE:
+		_loop_node = _make_overlay(_draw_loop)
+		_loop_node.z_index = 6      # relative to the tile (-7): -1, so just under the player
 	_t = randf() * TAU
 	return self
 
@@ -142,7 +153,7 @@ func _process(delta: float) -> void:
 	if _glow and not is_open:
 		var a := 0.0
 		match kind:
-			Kind.START, Kind.GOAL, Kind.NODE, Kind.BEND, Kind.AIRLOCK:
+			Kind.START, Kind.GOAL, Kind.NODE, Kind.BEND, Kind.AIRLOCK, Kind.CORE:
 				a = 0.18 + 0.12 * sin(_t * 3.0)     # slow gentle pulse
 			Kind.DISCHARGE:
 				a = 0.3 + 0.2 * sin(_t * 9.0)
@@ -174,6 +185,8 @@ func _process(delta: float) -> void:
 		_prompt_node.queue_redraw()
 	if _preview_on and _preview_node:
 		_preview_node.queue_redraw()     # keep the bend arrows pulsing
+	if _loop_on and _loop_node:
+		_loop_node.queue_redraw()
 
 
 ## Draws a little keyboard key with an "E" on it above the START pad.
@@ -214,6 +227,36 @@ func _draw_preview() -> void:
 		var tri := PackedVector2Array([tip, base + side, base - side])
 		_preview_node.draw_colored_polygon(tri, col)
 		_preview_node.draw_polyline(PackedVector2Array([tip, base + side, base - side, tip]), outline, 1.0)
+
+
+## CORE: the level calls this every frame while you carry the wire in its room.
+## `from` = the angle the loop starts at, `turn` = how far round the wire has
+## gone (radians, + or - depending on which way you're going round).
+func show_loop(on: bool, from: float, turn: float) -> void:
+	_loop_on = on
+	_loop_from = from
+	_loop_turn = turn
+	if _loop_node:
+		_loop_node.queue_redraw()
+
+
+## A dim circle round the socket, and a bright yellow arc over it: as far round
+## as the wire has gone. When the arc meets its own start, the loop is closed.
+func _draw_loop() -> void:
+	if not _loop_on:
+		return
+	var r := 22.0
+	_loop_node.draw_arc(Vector2.ZERO, r, 0.0, TAU, 40, Color(LOOP_COLOR, 0.18), 3.0)
+	# a tick where the loop starts (and has to end)
+	var tick := Vector2.RIGHT.rotated(_loop_from)
+	_loop_node.draw_line(tick * (r - 4.0), tick * (r + 4.0), Color(1, 1, 1, 0.8), 2.0)
+	var amount := clampf(_loop_turn, -TAU, TAU)
+	if absf(amount) > 0.02:
+		var near_done := absf(amount) > TAU * 0.75
+		var col := LOOP_COLOR.lerp(Color.WHITE, 0.4 + 0.3 * sin(_t * 12.0)) if near_done else LOOP_COLOR
+		var steps := maxi(4, int(absf(amount) / TAU * 40.0))
+		_loop_node.draw_arc(Vector2.ZERO, r, _loop_from, _loop_from + amount, steps, Color(0.1, 0.06, 0.0), 5.0)
+		_loop_node.draw_arc(Vector2.ZERO, r, _loop_from, _loop_from + amount, steps, col, 3.0)
 
 
 ## BLINKING GRATES: the level switches them on and off every frame.

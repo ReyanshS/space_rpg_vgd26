@@ -39,6 +39,8 @@ texture_region_size = Vector2i(32, 32)
 15:0/0/custom_data_0 = "airlock"
 16:0/0 = 0
 16:0/0/custom_data_0 = "barrier"
+17:0/0 = 0
+17:0/0/custom_data_0 = "core"
 
 [resource]
 tile_size = Vector2i(32, 32)

@@ -39,6 +39,11 @@ const DIM_COLOR := "#6f9c74"      # dim green: the standing objective
 const KEY_COLOR := "#ffc24d"
 const AMBER := Color(1.0, 0.76, 0.3)
 const PHOSPHOR := Color(0.66, 0.94, 0.63)
+# Level 3: when PIP malfunctions he talks as "P!P" in red, with an angry face.
+const ROGUE_SPEAKER := "P!P"
+const ROGUE_NAME_COLOR := "#ff5a4a"
+const ROGUE_TEXT_COLOR := "#ffb09c"
+const ROGUE_RED := Color(1.0, 0.33, 0.27)
 const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
 
 @onready var toast: PanelContainer = $Toast
@@ -97,6 +102,8 @@ var _skip_line := false           # cut the current (non-blocking) line short...
 var _cut_speech := false          # ...and skip the rest of that speech
 var _line_bbcode := ""
 var _speech_point := Vector2.INF  # PIP's blue arrow points here while he talks (INF = no arrow)
+var _rogue := false               # PIP has malfunctioned: his face is red when he's quiet
+var _line_rogue := false          # the line on screen is said by the malfunctioning PIP
 
 # results screen
 var _stars_earned := 0
@@ -282,6 +289,13 @@ func is_blocking() -> bool:
 	return _blocking
 
 
+## Level 3: PIP has malfunctioned (on) or been rebooted (off). His face in the
+## console turns red and angry. Lines said by speaker ROGUE_SPEAKER ("P!P") are
+## red too; lines by "PIP" stay green (the real PIP getting a word in).
+func set_rogue(on: bool) -> void:
+	_rogue = on
+
+
 ## Is PIP saying anything right now (or about to)?
 func is_talking() -> bool:
 	return _talking
@@ -324,6 +338,7 @@ func _run_dialogue() -> void:
 		_blocking = false
 		dialogue_blocking.emit(false)
 	_talking = false
+	_line_rogue = false
 	_show_idle()                      # back to showing the objective
 
 
@@ -334,7 +349,10 @@ func _frame() -> bool:
 
 
 func _show_line(speaker: String, line: String, blocking: bool) -> void:
-	_line_bbcode = "[color=%s]%s>[/color] [color=%s]%s[/color]" % [NAME_COLOR, speaker, TEXT_COLOR, line]
+	_line_rogue = speaker == ROGUE_SPEAKER
+	var name_col := ROGUE_NAME_COLOR if _line_rogue else NAME_COLOR
+	var text_col := ROGUE_TEXT_COLOR if _line_rogue else TEXT_COLOR
+	_line_bbcode = "[color=%s]%s>[/color] [color=%s]%s[/color]" % [name_col, speaker, text_col, line]
 	dialogue_text.text = _line_bbcode
 	var total := float(dialogue_text.get_total_character_count())
 	var shown := float(speaker.length() + 2)
@@ -386,23 +404,39 @@ func _show_line(speaker: String, line: String, blocking: bool) -> void:
 ## PIP's face: a little green CRT monitor in a metal case. Two eyes that blink,
 ## a mouth that moves while talking, and dark scanlines across the glass.
 ## When he's quiet the screen is dimmer.
+## Malfunctioning (Level 3): a red screen, slanted angry eyes, and now and then
+## a "glitch" that shifts the face sideways and draws a bright bar across it.
 func _draw_portrait() -> void:
 	var s := portrait.size
-	var ink := PHOSPHOR if _talking else PHOSPHOR.darkened(0.45)
+	var angry := _line_rogue if _talking else _rogue
+	var base := ROGUE_RED if angry else PHOSPHOR
+	var ink := base if _talking else base.darkened(0.45)
 	portrait.draw_rect(Rect2(Vector2.ZERO, s), Color(0.29, 0.32, 0.38))                  # metal case
 	portrait.draw_rect(Rect2(Vector2.ZERO, Vector2(s.x, 1)), Color(0.54, 0.58, 0.65))    # its top edge catches the light
-	portrait.draw_rect(Rect2(Vector2(2, 2), s - Vector2(4, 4)), Color(0.03, 0.09, 0.05)) # the glass
-	var blink := fmod(_t, 3.2) < 0.12
+	var glass := Color(0.1, 0.03, 0.03) if angry else Color(0.03, 0.09, 0.05)
+	portrait.draw_rect(Rect2(Vector2(2, 2), s - Vector2(4, 4)), glass)                    # the glass
+	var glitch := angry and fmod(_t * 7.0, 5.0) < 0.6       # a short burst every so often
+	var o := Vector2(signf(sin(_t * 40.0)) if glitch else 0.0, 0.0)
+	var blink := fmod(_t, 3.2) < 0.12 and not angry
 	for x in [8.0, 16.0]:
 		if blink:
-			portrait.draw_rect(Rect2(Vector2(x, 12), Vector2(4, 1)), ink)
+			portrait.draw_rect(Rect2(o + Vector2(x, 12), Vector2(4, 1)), ink)
+		elif angry:
+			# slanted eyes: each one a short staircase, high at the outside edge
+			var inner := 3.0 if x < 12.0 else 0.0
+			for k in 4:
+				var drop := absf(k - inner)       # lower towards the nose = a frown
+				portrait.draw_rect(Rect2(o + Vector2(x + k, 9 + drop * 0.5), Vector2(1, 4)), ink)
 		else:
-			portrait.draw_rect(Rect2(Vector2(x, 9), Vector2(4, 5)), ink)
-			portrait.draw_rect(Rect2(Vector2(x + 2, 10), Vector2(1, 2)), ink.lightened(0.6))
+			portrait.draw_rect(Rect2(o + Vector2(x, 9), Vector2(4, 5)), ink)
+			portrait.draw_rect(Rect2(o + Vector2(x + 2, 10), Vector2(1, 2)), ink.lightened(0.6))
 	var mouth := 1.0
 	if _typing:
 		mouth = 1.0 + float(int(_t * 14.0) % 3)
-	portrait.draw_rect(Rect2(Vector2(10, 18), Vector2(8, mouth)), ink)
+	portrait.draw_rect(Rect2(o + Vector2(10, 18), Vector2(8, mouth)), ink)
+	if glitch:
+		var y := 4.0 + float(int(_t * 23.0) % int(s.y - 8.0))
+		portrait.draw_rect(Rect2(2, y, s.x - 4, 1), ink.lightened(0.5))
 	for y in range(3, int(s.y) - 2, 2):
 		portrait.draw_rect(Rect2(2, y, s.x - 4, 1), Color(0, 0, 0, 0.35))                # scanlines
 	var tip := AMBER if fmod(_t, 1.0) < 0.5 else Color(0.5, 0.3, 0.1)
@@ -589,7 +623,7 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 		secs / 60, secs % 60, stats.get("cells", 0), stats.get("cells_total", 0), stats.get("retries", 0)]
 	# cells you keep also make your suit's air last longer on spacewalks
 	var bonus := int(stats.get("cells", 0)) * int(Game.O2_PER_CELL)
-	$Complete/VBox/Bonus.visible = bonus > 0
+	$Complete/VBox/Bonus.visible = bonus > 0 and has_next     # no spacewalks after the last level
 	$Complete/VBox/Bonus.text = "Suit upgrade: +%d s of oxygen" % bonus
 	$Complete/VBox/StarHelp.text = "Stars for finishing, every cell, and %d retries or fewer" % stats.get("retry_goal", 0)
 	$Complete/VBox/Again.text = ("[E] next level" if has_next else "[E] back to title") + "    [R] play again"

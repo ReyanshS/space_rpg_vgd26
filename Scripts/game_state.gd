@@ -11,10 +11,11 @@
 # ---------------------------------------------------------------------------
 extends Node
 
-## The levels in the order you play them. Add Level 3 here when it exists.
+## The levels in the order you play them.
 const LEVELS: Array[String] = [
 	"res://Scenes/level_1.tscn",
 	"res://Scenes/level_2.tscn",
+	"res://Scenes/level_3.tscn",
 ]
 const TITLE_SCENE := "res://Scenes/title.tscn"
 
