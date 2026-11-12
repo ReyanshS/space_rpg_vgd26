@@ -44,8 +44,22 @@ func _start() -> void:
 	_level.all_rooms_powered.connect(func() -> void: _fire(StoryBeat.Trigger.ALL_POWERED, -1))
 	_level.ship_lighting_up.connect(func() -> void: _fire(StoryBeat.Trigger.SHIP_LIGHTS_UP, -1))
 	_level.empty_cell_touched.connect(func() -> void: _fire(StoryBeat.Trigger.TOUCH_EMPTY_CELL, -1))
-	_fire(StoryBeat.Trigger.LEVEL_START, -1)
+	if _level.test_room >= 0:
+		_skip_to_test_room()
+	if not (_level.test_room >= 0 and _level.test_skip_intro):
+		_fire(StoryBeat.Trigger.LEVEL_START, -1)
 	_fire(StoryBeat.Trigger.ENTER_ROOM, _level.current_room_index())   # you start inside a room
+
+
+## Playtesting from a TestStart marker (F6): the rooms before it count as done,
+## so their beats are marked as played. Beats that don't belong to one room
+## (level start, all powered...) stay.
+func _skip_to_test_room() -> void:
+	var any_room := [StoryBeat.Trigger.LEVEL_START, StoryBeat.Trigger.ALL_POWERED,
+		StoryBeat.Trigger.TOUCH_EMPTY_CELL, StoryBeat.Trigger.SHIP_LIGHTS_UP]
+	for i in _beats.size():
+		if not any_room.has(_beats[i].trigger) and _rooms[i] >= 0 and _rooms[i] < _level.test_room:
+			_played[_beats[i]] = true
 
 
 ## Plays every beat (not played yet) with this trigger in this room.
@@ -66,7 +80,7 @@ func _play(b: StoryBeat) -> void:
 	var lines := PackedStringArray()
 	for line in b.lines:
 		lines.append(line.format(values))
-	var point := b.global_position if b.point_here else Vector2.INF   # INF = no arrow
+	var point := b.arrow_position() if b.point_here else Vector2.INF   # INF = no arrow
 	_level.hud.say(lines, b.speaker, b.pause_game and _level.can_pause_for_dialogue(), point)
 
 

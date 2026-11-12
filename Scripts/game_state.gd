@@ -25,6 +25,10 @@ const O2_PER_CELL := 5.0
 
 # One entry per level number, e.g. results[1] = {"time": 140.2, "cells": 7, ...}
 var results := {}
+## True once a level was loaded BY THE GAME (title -> level, or "next level").
+## Stays false when you run one level scene straight from the editor with F6:
+## that's the only time a level's TestStart marker is used.
+var playing_through := false
 # Tips PIP already gave (so he explains something only once, even across levels)
 var _tips_seen := {}
 
@@ -66,6 +70,7 @@ func has_level(number: int) -> bool:
 
 func go_to_level(number: int) -> void:
 	if has_level(number):
+		playing_through = true
 		get_tree().change_scene_to_file(LEVELS[number - 1])
 	else:
 		go_to_title()

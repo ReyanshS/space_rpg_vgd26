@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://Scripts/story.gd" id="9_story"]
 [ext_resource type="Script" path="res://Scripts/story_beat.gd" id="10_beat"]
 [ext_resource type="Script" path="res://Scripts/rogue_pip.gd" id="11_pip"]
+[ext_resource type="Script" path="res://Scripts/test_start.gd" id="20_test"]
 
 [node name="Level3" type="Node2D" node_paths=PackedStringArray("layout")]
 script = ExtResource("1_level")
@@ -139,6 +140,10 @@ pause_game = true
 position = Vector2(688, 224)
 script = ExtResource("11_pip")
 shutdown_seconds = PackedFloat32Array(18, 15, 19)
+
+[node name="TestStart" type="Marker2D" parent="."]
+position = Vector2(80, 208)
+script = ExtResource("20_test")
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(80, 208)

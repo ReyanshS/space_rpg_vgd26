@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://cml13d8bk10wd" path="res://Scripts/tutorial_step.gd" id="8_step"]
 [ext_resource type="Script" uid="uid://c376rpkh5mn8t" path="res://Scripts/story.gd" id="9_story"]
 [ext_resource type="Script" uid="uid://dy31ilbjnrg0t" path="res://Scripts/story_beat.gd" id="10_beat"]
+[ext_resource type="Script" path="res://Scripts/test_start.gd" id="20_test"]
 
 [node name="Level1" type="Node2D" unique_id=709955476 node_paths=PackedStringArray("layout")]
 script = ExtResource("1_level")
@@ -174,6 +175,10 @@ position = Vector2(944, 720)
 script = ExtResource("10_beat")
 trigger = 7
 lines = PackedStringArray("The lift to the main deck is in the bottom corner. Let\'s go.")
+
+[node name="TestStart" type="Marker2D" parent="."]
+position = Vector2(272, 688)
+script = ExtResource("20_test")
 
 [node name="Player" parent="." unique_id=2038257149 instance=ExtResource("2_player")]
 position = Vector2(272, 688)

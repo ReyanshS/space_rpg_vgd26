@@ -29,7 +29,14 @@
 #   OFF     the last loop shut him down: black screen
 #   BOOT    restarting: a loading bar
 #   AWAKE   himself again (green, smiling)
+#
+# WHERE HE GOES: you don't place PIP himself. Paint CORE tiles (@) in the map:
+# the core in room `malfunction_room` is the sync pylon that turns him, and the
+# cores in the rooms after it are his sockets, in walking order. This script is
+# a @tool, so the editor shows a preview: a PIP on each socket with its number
+# and shutdown time, and a dotted line for the way he flies.
 # ---------------------------------------------------------------------------
+@tool
 class_name RoguePip
 extends Node2D
 
@@ -98,10 +105,14 @@ var _flight: Array = []       # [start, top, end] of the curve he's flying along
 var _t := 0.0
 var _light: PointLight2D
 var _sfx := {}
+var _preview: Array = []      # editor only: [room index, pixel position] of every core
+var _preview_wait := 0.0
 
 
 func _ready() -> void:
 	z_index = 5                    # he floats above the floor and the player's feet
+	if Engine.is_editor_hint():
+		return                     # in the editor we only draw a preview (see _process)
 	LightFX.glow(self)             # his screen shines in the dark
 	visible = false
 	_start.call_deferred()         # the level isn't ready yet (children go first)
@@ -117,7 +128,15 @@ func _start() -> void:
 	if _spots.is_empty():
 		push_warning("RoguePip: no CORE tiles after room %d to dock on." % malfunction_room)
 		return
-	_home = _dock(0)
+	# Playtesting from a TestStart marker (F6) further in? Then the rooms before
+	# it are done: count the sockets he already lost, and start on the next one.
+	var testing := _level.test_room > malfunction_room
+	var start_phase := 0
+	if testing:
+		for spot in _spots:
+			if spot[0] < _level.test_room:
+				start_phase += 1
+	_home = _dock(mini(start_phase, _spots.size() - 1))
 	position = _home
 	visible = true
 	_light = LightFX.make(GREEN, 70.0, 0.5)
@@ -131,6 +150,14 @@ func _start() -> void:
 		_sfx[n] = p
 	_sfx["warn"].volume_db = -8.0
 	_level.room_solved.connect(_on_room_solved)
+	if testing:
+		if start_phase < _spots.size():
+			_phase = start_phase            # already rogue, defending this socket
+			mood = Mood.ROGUE
+			_level.set_alert(true)
+			_level.hud.set_rogue(true)
+		else:
+			mood = Mood.AWAKE               # every socket is behind you: he's rebooted
 
 
 ## Where he hovers over socket number i.
@@ -147,7 +174,7 @@ func _play(n: String) -> void:
 # ------------------------------------------------------------------ every frame
 
 func _physics_process(delta: float) -> void:
-	if _level == null or _spots.is_empty():
+	if Engine.is_editor_hint() or _level == null or _spots.is_empty():
 		return
 	_t += delta
 	position = (_home + Vector2(0, roundf(sin(_t * 2.2) * 2.0))).round()   # bob up and down
@@ -326,7 +353,62 @@ func _sparks(amount: int) -> void:
 
 # ------------------------------------------------------------------ drawing
 
+## Editor only: twice a second, ask the level where the cores are (the map may
+## have just been painted) and redraw the preview.
+func _process(delta: float) -> void:
+	if not Engine.is_editor_hint():
+		return
+	_preview_wait -= delta
+	if _preview_wait > 0.0:
+		return
+	_preview_wait = 0.5
+	var level := get_parent() as WireLevel
+	_preview = level.editor_core_spots() if level else []
+	queue_redraw()
+
+
+## Editor only: the sync pylon, then PIP on each socket he'll defend, numbered,
+## with how long his shutdown meter takes there, joined by his flight path.
+func _draw_preview() -> void:
+	var level := get_parent() as WireLevel
+	if level == null:
+		return
+	var font := ThemeDB.fallback_font
+	var prev := Vector2.INF
+	var n := 0
+	var keep := mood
+	mood = Mood.ROGUE
+	for spot in _preview:
+		var at := to_local(level.to_global(spot[1]))
+		if spot[0] == malfunction_room:
+			draw_string(font, at + Vector2(-30, -22), "SYNC PYLON", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, GREEN)
+			draw_string(font, at + Vector2(-44, 30), "powering it turns PIP", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, GREEN)
+			continue
+		if spot[0] < malfunction_room:
+			continue
+		var hover := at + Vector2(0, -HOVER)
+		if prev.is_finite():
+			var d := prev.distance_to(hover)
+			var t := 0.0
+			while t < d:
+				draw_rect(Rect2(prev.lerp(hover, t / d) - Vector2.ONE, Vector2(2, 2)), Color(RED, 0.7))
+				t += 8.0
+		prev = hover
+		draw_line(hover + Vector2(0, 20), at - Vector2(0, 6), OUTLINE, 3.0)
+		draw_set_transform(hover, 0.0, Vector2(SIZE, SIZE))
+		_draw_body()
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var secs := shutdown_seconds[n] if n < shutdown_seconds.size() else 16.0
+		draw_string(font, hover + Vector2(-34, -40), "PIP %d   %d s" % [n + 1, int(secs)],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 12, RED)
+		n += 1
+	mood = keep
+
+
 func _draw() -> void:
+	if Engine.is_editor_hint():
+		_draw_preview()
+		return
 	var bob := position - _home
 	var socket := Vector2(0, HOVER) - bob          # the socket's centre, from where he is now
 	# his shadow on the socket, and the cable that plugs him into it

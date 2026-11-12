@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://cml13d8bk10wd" path="res://Scripts/tutorial_step.gd" id="8_step"]
 [ext_resource type="Script" uid="uid://c376rpkh5mn8t" path="res://Scripts/story.gd" id="9_story"]
 [ext_resource type="Script" uid="uid://dy31ilbjnrg0t" path="res://Scripts/story_beat.gd" id="10_beat"]
+[ext_resource type="Script" path="res://Scripts/test_start.gd" id="20_test"]
 
 [node name="Level2" type="Node2D" unique_id=741676181 node_paths=PackedStringArray("layout")]
 script = ExtResource("1_level")
@@ -153,6 +154,10 @@ script = ExtResource("10_beat")
 trigger = 7
 lines = PackedStringArray("Nice work. Now get back inside. The hatch under the coupling is open.")
 pause_game = true
+
+[node name="TestStart" type="Marker2D" parent="."]
+position = Vector2(48, 336)
+script = ExtResource("20_test")
 
 [node name="Player" parent="." unique_id=1280366845 instance=ExtResource("2_player")]
 position = Vector2(48, 336)

@@ -178,9 +178,23 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Story** (`Scripts/story.gd` on the `Story` node + `Scripts/story_beat.gd` Marker2D children):
   each beat has `trigger` (LEVEL_START, ENTER_ROOM, SOLVE_ROOM, REACH_HERE, GRAB_WIRE, FAIL_IN_ROOM,
   AIRLOCK, ALL_POWERED, FIRST_DRIFT, TOUCH_EMPTY_CELL, SHIP_LIGHTS_UP), `lines`, `pause_game`,
-  `point_here` (blue arrow at the marker while it plays); its room = where the marker sits. Plays
-  once. Blocking beats never freeze a player who carries the wire. New triggers go at the END of
-  the enum (scenes store the number).
+  `point_here` (blue arrow at the marker while it plays, or at the beat's first Node2D child if
+  it has one: `arrow_position()`); its room = where the marker sits. Plays once. Blocking beats
+  never freeze a player who carries the wire. New triggers go at the END of the enum (scenes store
+  the number). In the editor each beat draws a bubble + trigger + first line (red for "P!P").
+- **Editing levels in Godot** (the team does this themselves; guide: `docs/level_editing.md`).
+  Text that isn't story is in the level's Inspector too: groups "PIP's rule lines" (`pip_hint`,
+  `pip_o2_low`, `pip_no_landing`, `pip_cell_kept`, `pip_cell_lost`, `pip_strain`, `pip_shared`;
+  said via `_pip_say()`, `{cells}`-style values, empty = silent) and "Popup texts" (`popup_...`).
+  Don't hard-code new player-facing text in level.gd: add an export in one of those groups.
+  `RoguePip` is `@tool`: in the editor it previews the pylon, each socket (number + shutdown
+  time) and the flight path, using `level.editor_core_spots()` (a quiet `_build_rooms(true)`).
+- **TestStart** (`Scripts/test_start.gd`, one per level scene, `active` off by default): drag it,
+  tick Active, F6 = start there with every earlier room powered quietly (`_apply_test_start()`,
+  `_power_quietly()`); `test_room` / `test_skip_intro` on the level let story.gd, tutorial.gd and
+  rogue_pip.gd catch up. Only used when the level scene is run on its own from the editor
+  (`OS.has_feature("editor")` and not `Game.playing_through`), so F5 and exports ignore it.
+  Bots that load a level with `change_scene_to_file` count as "on its own": keep markers inactive.
 - **Tutorial**: `Scripts/tutorial.gd` on the `Tutorial` node runs its `TutorialStep` children
   (`Scripts/tutorial_step.gd`, Marker2D) in tree order. Each step has `text`, `advance_when`
   (GRAB_WIRE, TOUCH_NODE, TOUCH_BEND, SOLVE_ROOM, ENTER_NEXT_ROOM, REACH_HERE, DRIFT) and its

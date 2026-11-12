@@ -130,18 +130,6 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 	"pickup", "hiss", "puff", "clank", "alarm", "fanfare", "pulse"]
 const MUSIC_DB := -17.0
 
-## Things PIP says that are part of the RULES, not the story.
-## (Story lines are StoryBeat nodes under the "Story" node in each level.)
-const PIP_LINES := {
-	"hint": "Stuck? Press H and I'll show you the way.",
-	"o2_low": "Your air's getting low. Power this section and the relay will top you up.",
-	"no_landing": "Nothing to land on that way. Your boots only let go with a plate ahead.",
-	"cell_kept": "That battery's yours now. Each one you keep adds %d seconds of suit air.",
-	"cell_lost": "That battery's back. You only keep them once you reach the blue pad.",
-	"strain": "The wire can't go through that. Wrap it round a node to change its angle.",
-	"shared": "That node from the last machine is still live. Wrap this wire round it.",
-}
-
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
 @export var layout: TileMapLayer
 ## Show the painted icons on top of the finished look while editing (off = preview the real look).
@@ -204,6 +192,41 @@ const PIP_LINES := {
 	"ROOM 3",
 	"ROOM 4",
 ]
+
+# Things PIP says because of the RULES, not the story. Each plays once at most.
+# (Story lines are StoryBeat nodes under the "Story" node - see story_beat.gd.)
+# You can write {cells}, {o2_bonus} or {o2_per_cell} and the real number goes in.
+# Keep each one short enough for two lines in the console (about 72 letters).
+@export_group("PIP's rule lines")
+## You failed the same room twice and it has a hint route.
+@export var pip_hint := "Stuck? Press H and I'll show you the way."
+## Spacewalk: your oxygen dropped below 30%.
+@export var pip_o2_low := "Your air's getting low. Power this section and the relay will top you up."
+## You walked towards open space with no hull plate ahead to land on.
+@export var pip_no_landing := "Nothing to land on that way. Your boots only let go with a plate ahead."
+## The first time you power a room with a battery charged.
+@export var pip_cell_kept := "That battery's yours now. Each one you keep adds {o2_per_cell} seconds of suit air."
+## The first time a charged battery goes back because you failed.
+@export var pip_cell_lost := "That battery's back. You only keep them once you reach the blue pad."
+## The first time the wire stops you walking.
+@export var pip_strain := "The wire can't go through that. Wrap it round a node to change its angle."
+## The first time you grab a wire that can use a node from an earlier stage (PIP points at it).
+@export var pip_shared := "That node from the last machine is still live. Wrap this wire round it."
+
+# The short messages that pop up at the top of the screen.
+@export_group("Popup texts")
+@export var popup_power_on := "POWER ON"
+@export var popup_relay_online := "RELAY ONLINE"
+@export var popup_all_online := "ALL SYSTEMS ONLINE"
+## {bonus} = the seconds a battery adds (cell_bonus).
+@export var popup_cell_bonus := "+{bonus} SECONDS ON THE WIRE"
+@export var popup_zap := "ZAP!"
+@export var popup_overload := "WIRE OVERLOADED"
+@export var popup_out_of_air := "OUT OF AIR"
+@export var popup_pip_cut := "PIP CUT THE POWER"
+@export var popup_wire_gone := "WIRE'S GONE. WALK BACK OR PRESS R"
+@export var popup_hint := "FOLLOW THE ARROWS"
+@export var popup_outer_door := "OUTER DOOR OPEN"
 
 
 # An inner class: a little bundle of data describing one room.
@@ -302,6 +325,13 @@ var _last_safe := Vector2.INF             # the last spot you stood on safely (f
 var _alert := false            # red alert: the ship's tinted red, the boss music plays
 var _holds := 0                # how many other nodes asked the level to wait (hold / let_go)
 
+# --- playtesting from the editor (TestStart marker, F6)
+## The room a TestStart marker put you in (-1 = normal start). The story,
+## tutorial and rogue PIP read this to catch up with the rooms you skipped.
+var test_room := -1
+## The marker said "skip PIP's level intro".
+var test_skip_intro := false
+
 # lights-on cutscene
 var _cutscene := false         # true while the cutscene moves the camera
 var _cut_cam := Vector2.ZERO   # where the cutscene camera looks (a Tween moves it)
@@ -380,6 +410,7 @@ func _ready() -> void:
 	hud.set_cells(0, _cells.size())
 	hud.set_power(0, _rooms_with_goal)
 	_update_hint_label.call_deferred()     # after the floor guides know their rooms
+	_apply_test_start()
 	if camera:
 		camera.make_current()
 		_update_camera(0.0, true)
@@ -430,6 +461,78 @@ func _add_key_action(action: String, keys: Array) -> void:
 		var ev := InputEventKey.new()
 		ev.physical_keycode = k
 		InputMap.action_add_event(action, ev)
+
+
+# ===================================================================== playtesting (TestStart)
+
+## A TestStart marker (test_start.gd) that's switched on - or null.
+## Only counts when you run THIS level scene from the editor (F6): exported
+## games don't have the "editor" feature, and Game.playing_through is true
+## whenever the game itself loaded the level (F5 from the title).
+func _active_test_start() -> TestStart:
+	if not OS.has_feature("editor") or Game.playing_through:
+		return null
+	for child in get_children():
+		if child is TestStart and child.active:
+			return child
+	return null
+
+
+## Start the playtest at the TestStart marker. Every room before it is powered
+## QUIETLY (no cutscenes, no PIP lines): lights on, doors open, cargo sunk.
+## The story, tutorial and rogue PIP read `test_room` and catch up themselves.
+func _apply_test_start() -> void:
+	var ts := _active_test_start()
+	if ts == null:
+		return
+	var at := to_local(ts.global_position)
+	var r: Room = _room_of.get(cell_of(at))
+	if r == null:
+		push_warning("TestStart isn't on the floor of a room - starting at the spawn.")
+		return
+	test_room = r.index
+	test_skip_intro = not ts.play_intro
+	player.position = _nearest_safe_spot(at)
+	_last_safe = player.position
+	_current_room = r
+	if ts.skip_earlier_rooms:
+		for o in _rooms:
+			if o.index < r.index and not o.is_exit:
+				_power_quietly(o)
+	if r.outside and (_o2_on or ts.skip_earlier_rooms):
+		_o2_on = true                       # you're outside: the airlock was "used" already
+		_o2_max = o2_seconds + Game.o2_bonus()
+		_refill_o2()
+	player.set_lamp(not r.solved)
+	hud.set_power(_rooms_powered, _rooms_with_goal)
+	print("TestStart: playtest starts in room %d (%d rooms before it powered)." % [r.index + 1, _rooms_powered])
+
+
+## A skipped room: everything a win would change, but instantly and silently.
+func _power_quietly(o: Room) -> void:
+	o.solved = true
+	if o.airlock.x >= 0:
+		o.cycled = true
+		_o2_on = true
+		_o2_max = o2_seconds + Game.o2_bonus()
+	if o.target().x >= 0:
+		_rooms_powered += 1
+	for c in [o.goal, o.start, o.core]:
+		var t: PuzzleTile = _tiles.get(c)
+		if t:
+			t.powered = true
+	if o.conduit:
+		o.conduit.set_powered()
+	if o.outside:
+		_light_hull(o)
+	else:
+		for pair in _emergency:
+			if pair[1] == o:
+				pair[0].energy = 0.0
+		for l in _room_lights.get(o, []):
+			l.visible = true
+			l.energy = room_light_energy
+	_open_exit_doors(o, true)
 
 
 # ===================================================================== map helpers
@@ -841,7 +944,8 @@ func _draw_hull_edges() -> void:
 
 ## "Flood fill": start on a floor tile and keep stepping to neighbouring floor
 ## tiles until you can't. Everything you reached is one room.
-func _build_rooms() -> void:
+## quiet = don't warn about missing pads (used for previews in the editor).
+func _build_rooms(quiet := false) -> void:
 	_rooms.clear()
 	_room_of.clear()
 	_door_rooms.clear()
@@ -904,7 +1008,8 @@ func _build_rooms() -> void:
 			r.bounds = Rect2i(mn.x - 1, mn.y - 3, mx.x - mn.x + 3, mx.y - mn.y + 5)
 	_build_areas()
 	if not spawn_found:
-		push_warning("No spawn tile painted - starting next to the first START pad.")
+		if not quiet:
+			push_warning("No spawn tile painted - starting next to the first START pad.")
 		for r in _rooms:
 			if r.start.x >= 0:
 				_spawn = r.start + Vector2i.DOWN
@@ -926,7 +1031,8 @@ func _build_rooms() -> void:
 	for r in _rooms:
 		if r.target().x >= 0 and not r.is_exit:
 			_rooms_with_goal += 1
-	_check_rooms()
+	if not quiet:
+		_check_rooms()
 
 
 ## BARRIER GROUPS. Barrier tiles that touch each other form one group: a whole
@@ -1469,7 +1575,7 @@ func _tick_o2(delta: float) -> bool:
 	hud.set_o2(true, _o2 / _o2_max)
 	if _o2 < _o2_max * 0.3 and not _o2_warned:
 		_o2_warned = true
-		hud.say(PackedStringArray([PIP_LINES["o2_low"]]))
+		_pip_say(pip_o2_low)
 	if _o2 < _o2_max * 0.15:
 		_o2_beep -= delta
 		if _o2_beep <= 0.0:
@@ -1610,6 +1716,16 @@ func core_spots() -> Array:
 			out.append([r.index, center_of(r.core)])
 	out.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	return out
+
+
+## The same, but for previews IN THE EDITOR (rogue_pip.gd): works the rooms out
+## from the map as it's painted right now. "quiet" = no warnings in the Output
+## panel about rooms you're still busy painting.
+func editor_core_spots() -> Array:
+	if _kinds.is_empty():
+		_read_layout()
+	_build_rooms(true)
+	return core_spots()
 
 
 ## The room you're carrying the wire in right now (-1 = you aren't carrying it).
@@ -1806,7 +1922,7 @@ func _check_cells() -> void:
 			_play("pickup")
 			hud.set_cells(_cells_banked + _cells_pending.size(), _cells.size(), true)
 			if Game.first_time("cell_charged"):
-				hud.show_toast("+%d SECONDS ON THE WIRE" % int(cell_bonus), 2.5)
+				hud.show_toast(popup_cell_bonus.format({"bonus": int(cell_bonus)}), 2.5)
 			cell_collected.emit(_wire_room.index)
 		elif not wired and not _cell_tip_shown:
 			_cell_tip_shown = true
@@ -1880,7 +1996,7 @@ func wire_strained(at: Vector2) -> void:
 	_wire.strain(_first_blocked_point(_last_anchor, at))
 	_play("tick")
 	if Game.first_time("strain"):
-		hud.say(PackedStringArray([PIP_LINES["strain"]]))     # the first time ever: why it stopped you
+		_pip_say(pip_strain)     # the first time ever: why it stopped you
 
 
 ## A fling hit a wall or crate before reaching a pad.
@@ -1955,7 +2071,7 @@ func player_drift_refused(at: Vector2, dir: Vector2) -> void:
 	tw.tween_callback(warn.queue_free)
 	if not _drift_tip_shown:
 		_drift_tip_shown = true
-		hud.say(PackedStringArray([PIP_LINES["no_landing"]]))
+		_pip_say(pip_no_landing)
 
 
 # ===================================================================== rooms, hints, prompts
@@ -2015,7 +2131,7 @@ func _try_hint() -> void:
 	_hints_shown[r] = true
 	_hints_used += 1
 	hint_shown.emit(r.index)        # the room's hint guide fades in
-	hud.show_toast("FOLLOW THE ARROWS")
+	hud.show_toast(popup_hint)
 	_update_hint_label()
 
 
@@ -2058,7 +2174,7 @@ func _show_shared_pads(r: Room) -> void:
 	if shared.is_empty():
 		return
 	if Game.first_time("shared_pads"):
-		hud.say(PackedStringArray([PIP_LINES["shared"]]), "PIP", false, center_of(shared[0]))
+		_pip_say(pip_shared, center_of(shared[0]))
 	for i in shared.size():
 		var t: PuzzleTile = _tiles.get(shared[i])
 		if t:
@@ -2072,6 +2188,15 @@ func _tile_hit(c: Vector2i) -> void:
 
 
 # ===================================================================== dialogue
+
+## PIP says one of his RULE lines (the pip_... texts in the Inspector, group
+## "PIP's rule lines"). {cells}, {o2_bonus} and {o2_per_cell} get the real
+## numbers. An empty line = PIP keeps quiet. `point_at` = his blue arrow.
+func _pip_say(text: String, point_at := Vector2.INF) -> void:
+	if text.strip_edges() == "":
+		return
+	hud.say(PackedStringArray([text.format(Game.story_values())]), "PIP", false, point_at)
+
 
 ## PIP started / stopped a speech the player has to read: freeze / unfreeze him.
 func _on_dialogue_blocking(on: bool) -> void:
@@ -2127,16 +2252,16 @@ func _solve(r: Room) -> void:
 	if r.outside:
 		_light_hull(r)              # beacons start blinking
 		_refill_o2()                # ...and the relay tops up your suit
-		hud.show_toast("RELAY ONLINE")
+		hud.show_toast(popup_relay_online)
 	else:
 		_power_room(r)              # the lights come on!
-		hud.show_toast("POWER ON")
+		hud.show_toast(popup_power_on)
 	player.set_lamp(false)          # ...so he doesn't need his helmet lamp any more
 	hud.set_power(_rooms_powered, _rooms_with_goal)
 	_update_hint_label()
 	room_solved.emit(r.index)       # the tutorial, story and floor guides listen for this
 	if kept > 0 and Game.first_time("cell_kept"):
-		hud.say(PackedStringArray([PIP_LINES["cell_kept"] % int(Game.O2_PER_CELL)]))
+		_pip_say(pip_cell_kept)
 	if r.conduit:
 		await r.conduit.power_flow(0.5)
 	await _wait_for_holds()         # e.g. PIP glitching (rogue_pip.gd called hold())
@@ -2147,7 +2272,8 @@ func _solve(r: Room) -> void:
 	_release_player()
 
 
-func _open_exit_doors(r: Room) -> void:
+## quiet = no sounds or camera shake (used when a playtest skips rooms).
+func _open_exit_doors(r: Room, quiet := false) -> void:
 	var opened := false
 	for d in _exit_doors(r):
 		if _open_doors.has(d):
@@ -2157,7 +2283,7 @@ func _open_exit_doors(r: Room) -> void:
 		var t: PuzzleTile = _tiles.get(d)
 		if t:
 			t.open_door()
-	if opened:
+	if opened and not quiet:
 		_play("door")
 	# every barrier group touching this stage sinks - the whole group, even the
 	# crates that aren't right next to the stage
@@ -2168,12 +2294,12 @@ func _open_exit_doors(r: Room) -> void:
 				_open_doors[c] = true
 				barriers.append(c)
 	if not barriers.is_empty():
-		_move_barriers(r, barriers)
+		_move_barriers(r, barriers, quiet)
 
 
 ## The power reaches the barriers: they sink into the floor one after another,
 ## starting with the one nearest the goal (so it looks like the power travels).
-func _move_barriers(r: Room, barriers: Array[Vector2i]) -> void:
+func _move_barriers(r: Room, barriers: Array[Vector2i], quiet := false) -> void:
 	var from := center_of(r.target()) if r.target().x >= 0 else center_of(barriers[0])
 	var nearer := func(a: Vector2i, b: Vector2i) -> bool: return from.distance_to(center_of(a)) < from.distance_to(center_of(b))
 	barriers.sort_custom(nearer)
@@ -2181,6 +2307,8 @@ func _move_barriers(r: Room, barriers: Array[Vector2i]) -> void:
 		var t: PuzzleTile = _tiles.get(barriers[i])
 		if t:
 			t.open_door(i * 0.06)
+	if quiet:
+		return
 	_play("clank")
 	_shake_cam(0.3 + barriers.size() * 0.06, 1.5)
 
@@ -2191,7 +2319,7 @@ func _all_powered() -> void:
 	_play("fanfare")
 	hud.flash(Color(1.0, 0.95, 0.7), 0.5)
 	_shake_cam(0.4, 2.5)
-	hud.show_toast("ALL SYSTEMS ONLINE", 2.5)
+	hud.show_toast(popup_all_online, 2.5)
 	await get_tree().create_timer(0.8).timeout
 	await _power_tour()
 	all_rooms_powered.emit()        # PIP says what to do next (StoryBeat: ALL_POWERED)
@@ -2364,7 +2492,7 @@ func _fail(kind: String) -> void:
 			player.play_shock()
 			hud.flash(Color(0.75, 0.95, 1.0), 0.85)
 			_shake_cam(0.5, 4.0)
-			hud.show_toast("ZAP!")
+			hud.show_toast(popup_zap)
 			await get_tree().create_timer(0.85).timeout
 			player.play_burnt()
 			await get_tree().create_timer(0.45).timeout
@@ -2372,12 +2500,12 @@ func _fail(kind: String) -> void:
 			_play("snap")
 			hud.flash(Color(1.0, 0.45, 0.15), 0.45)
 			_shake_cam(0.25, 2.0)
-			hud.show_toast("WIRE OVERLOADED")
+			hud.show_toast(popup_overload)
 		"oxygen":
 			_play("alarm")
 			hud.flash(Color(0.4, 0.7, 1.0), 0.5)
 			_shake_cam(0.3, 2.0)
-			hud.show_toast("OUT OF AIR")
+			hud.show_toast(popup_out_of_air)
 			await get_tree().create_timer(0.8).timeout
 		"cut":
 			# PIP's shutdown pulse (rogue_pip.gd) reached the wire
@@ -2385,7 +2513,7 @@ func _fail(kind: String) -> void:
 			_play("snap")
 			hud.flash(Color(1.0, 0.25, 0.2), 0.6)
 			_shake_cam(0.45, 3.5)
-			hud.show_toast("PIP CUT THE POWER")
+			hud.show_toast(popup_pip_cut)
 	if _wire != null:
 		var w := _wire
 		_wire = null
@@ -2405,15 +2533,15 @@ func _fail(kind: String) -> void:
 		if _o2_on:
 			_refill_o2()            # the suit switches to its reserve tank
 		if had_wire and Game.first_time("fail_walk_back"):
-			hud.show_toast("WIRE'S GONE. WALK BACK OR PRESS R", 3.0)
+			hud.show_toast(popup_wire_gone, 3.0)
 	_busy = false
 	# The first time a charged cell drains, PIP explains why.
 	if lost_cells and Game.first_time("cell_lost"):
-		hud.say(PackedStringArray([PIP_LINES["cell_lost"]]))
+		_pip_say(pip_cell_lost)
 	# Failed twice here? PIP offers a hint (once per room).
 	if counts and r != null and not r.solved and r.fails >= 2 and _room_has_hint(r) and not _hint_offered.has(r):
 		_hint_offered[r] = true
-		hud.say(PackedStringArray([PIP_LINES["hint"]]))
+		_pip_say(pip_hint)
 
 
 ## Cells charged on a failed try come back, uncharged.
@@ -2589,7 +2717,7 @@ func _cycle_airlock(r: Room) -> void:
 	_o2_on = true
 	_o2_max = o2_seconds + Game.o2_bonus()
 	_refill_o2()
-	hud.show_toast("OUTER DOOR OPEN", 2.0)
+	hud.show_toast(popup_outer_door, 2.0)
 	_busy = false
 	_release_player()
 

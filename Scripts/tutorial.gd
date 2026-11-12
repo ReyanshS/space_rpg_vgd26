@@ -47,7 +47,12 @@ func _start() -> void:
 	_level.room_entered.connect(_on_room_entered)
 	_level.room_restarted.connect(_on_room_restarted)
 	_level.drift_started.connect(_on_drift_started)
-	_go_to(0)
+	# Playtesting from a TestStart marker (F6)? Skip the steps of the rooms before it.
+	var first := 0
+	if _level.test_room >= 0:
+		while first < _steps.size() and _rooms[first] < _level.test_room:
+			first += 1
+	_go_to(first)
 
 
 func _go_to(i: int) -> void:

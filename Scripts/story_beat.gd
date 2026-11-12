@@ -42,16 +42,60 @@ enum Trigger {
 		queue_redraw()
 ## Freeze the player until every line is read (press E to go on). Only works when
 ## the player isn't carrying the wire - otherwise the lines just play normally.
-@export var pause_game := false
-## While these lines play, a blue arrow points at this marker. Put the marker
-## on the thing PIP is talking about (it still has to be in the right room).
-@export var point_here := false
+@export var pause_game := false:
+	set(value):
+		pause_game = value
+		queue_redraw()
+## While these lines play, PIP's blue arrow points at this marker - or, if you
+## give the marker a child Marker2D, at that child instead. (Add one with
+## right-click > Add Child Node > Marker2D and drag it onto what PIP is talking
+## about. The beat itself still has to sit in the right ROOM.)
+@export var point_here := false:
+	set(value):
+		point_here = value
+		queue_redraw()
 
 
-# Only drawn in the editor: the trigger and the start of the first line.
+## Where the blue arrow points: the first Node2D child if there is one, else here.
+func arrow_position() -> Vector2:
+	for child in get_children():
+		if child is Node2D:
+			return child.global_position
+	return global_position
+
+
+# In the editor, keep redrawing so the line to a dragged arrow target follows it.
+func _process(_delta: float) -> void:
+	if Engine.is_editor_hint():
+		queue_redraw()
+
+
+# Only drawn in the editor: a speech bubble, the trigger, the first line, and
+# (with point_here) a dotted line to where the arrow will point.
+# Red = said by the malfunctioning PIP ("P!P"), blue = anyone else.
 func _draw() -> void:
 	if not Engine.is_editor_hint():
 		return
-	var first := lines[0] if lines.size() > 0 else ""
-	var label := "%s: %s" % [Trigger.keys()[trigger], first.left(24)]
-	draw_string(ThemeDB.fallback_font, Vector2(6, 10), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.9, 1.0))
+	var col := Color(1.0, 0.45, 0.4) if speaker == "P!P" else Color(0.55, 0.9, 1.0)
+	draw_rect(Rect2(-6, -6, 12, 8), col)                                   # speech bubble
+	draw_colored_polygon(PackedVector2Array([Vector2(-3, 2), Vector2(1, 2), Vector2(-4, 6)]), col)
+	var first := lines[0] if lines.size() > 0 else "(no lines yet)"
+	var head: String = str(Trigger.keys()[trigger]) + ("  [pauses]" if pause_game else "")
+	var font := ThemeDB.fallback_font
+	draw_string(font, Vector2(9, -2), head, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col)
+	draw_string(font, Vector2(9, 10), "%s: %s" % [speaker, first.left(34)], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col.lightened(0.4))
+	if lines.size() > 1:
+		draw_string(font, Vector2(9, 21), "+%d more line%s" % [lines.size() - 1, "s" if lines.size() > 2 else ""],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col.darkened(0.2))
+	if point_here:
+		var target := to_local(arrow_position())
+		var d := target.length()
+		if d > 8.0:
+			var dir := target / d
+			var t := 6.0
+			while t < d:
+				draw_rect(Rect2(dir * t - Vector2.ONE, Vector2(2, 2)), Color(0.5, 0.9, 1.0))
+				t += 6.0
+		# a small arrow pointing down at the target, like the one in the game
+		var tip := target + Vector2(0, -6)
+		draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-5, -7), tip + Vector2(5, -7)]), Color(0.5, 0.9, 1.0))
