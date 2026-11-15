@@ -106,7 +106,7 @@ pause_game = true
 position = Vector2(304, 624)
 script = ExtResource("10_beat")
 trigger = 0
-lines = PackedStringArray("See that battery? It\'s a power cell, and it\'s still got juice in it.", "Run through it while you\'re holding the wire. It adds 2 seconds to your timer.", "Keep the ones you use and your suit gets extra air later. You\'ll want that.")
+lines = PackedStringArray("See that battery? It\'s a power cell, and it\'s still got juice in it.", "Grab it while you\'re holding the wire. It adds 2 seconds to your timer.", "Keep them and your suit gets extra air later. You\'ll want that.")
 pause_game = true
 point_here = true
 

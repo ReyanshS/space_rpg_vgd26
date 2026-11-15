@@ -216,7 +216,7 @@ const MUSIC_DB := -17.0
 ## The first time a charged battery goes back because you failed.
 @export var pip_cell_lost := "That battery's back. You only keep them once you reach the blue pad."
 ## The first time the wire stops you walking.
-@export var pip_strain := "The wire can't go through that. Wrap it round a node to change its angle."
+@export var pip_strain := "The wire can't go through that. Wrap it round a node to get a new angle."
 ## The first time you grab a wire that can use a node from an earlier stage (PIP points at it).
 @export var pip_shared := "That node from the last machine is still live. Wrap this wire round it."
 ## After a fail, when there's no way back to the START without crossing red tiles or grates.

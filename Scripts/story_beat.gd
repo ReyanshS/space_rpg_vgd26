@@ -111,17 +111,12 @@ func _draw() -> void:
 		draw_string(font, Vector2(9, y), "+%d more line%s" % [lines.size() - 1, "s" if lines.size() > 2 else ""],
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col.darkened(0.2))
 		y += 11.0
-	# Will every line fit in PIP's console? (Same sizes as hud.gd: 16, or 12 if needed.)
-	var worst := 0
+	# Will every line fit in the two rows of PIP's console? Too long = it gets
+	# split in two in the game, and people miss half of it.
 	for i in lines.size():
-		if _rows(lines[i], 12) > 2:
-			worst = 2
+		if _rows(lines[i], 16) > 2:
 			draw_string(font, Vector2(9, y), "line %d TOO LONG: shorten it" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.3, 0.25))
 			y += 11.0
-		elif _rows(lines[i], 16) > 2 and worst < 1:
-			worst = 1
-	if worst == 1:
-		draw_string(font, Vector2(9, y), "long line: shows in smaller text", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.7, 0.3))
 	if point_here:
 		var target := to_local(arrow_position())
 		var d := target.length()

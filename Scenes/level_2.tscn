@@ -78,7 +78,7 @@ script = ExtResource("9_story")
 position = Vector2(240, 192)
 script = ExtResource("10_beat")
 trigger = 0
-lines = PackedStringArray("Main deck. Hear that hum? That\'s the reactor, and that\'s your doing.", "Power still isn\'t reaching the bridge though. Let\'s sort the consoles out first.")
+lines = PackedStringArray("Main deck. Hear that hum? That\'s the reactor, and that\'s your doing.", "The bridge still has no power. Let\'s sort the consoles out first.")
 pause_game = true
 
 [node name="CellTip" type="Marker2D" parent="Story" unique_id=1741676386]
@@ -91,7 +91,7 @@ lines = PackedStringArray("Another battery. Plug it into the wire for a couple o
 position = Vector2(208, 192)
 script = ExtResource("10_beat")
 trigger = 2
-lines = PackedStringArray("Running diagnostics... oh no.", "A micrometeoroid hit the main power coupling. It\'s on the outside of the hull.", "Someone has to go out there and rewire it, and you\'re the only someone on board.", "The airlock\'s open. Suit up.")
+lines = PackedStringArray("Running diagnostics... oh no.", "A micrometeoroid hit the main power coupling. It\'s outside, on the hull.", "Someone has to go out and rewire it. You\'re the only someone on board.", "The airlock\'s open. Suit up.")
 pause_game = true
 
 [node name="Airlock" type="Marker2D" parent="Story" unique_id=1831506672]
@@ -103,7 +103,7 @@ lines = PackedStringArray("Sealing the inner door. Mag boots on, tether locked."
 [node name="SectionAIntro" type="Marker2D" parent="Story" unique_id=813830721]
 position = Vector2(736, 192)
 script = ExtResource("10_beat")
-lines = PackedStringArray("Okay. That\'s a big view.", "There\'s no floor between the hull plates out here.", "Walk straight off an edge and you\'ll drift across to the next one.", "Watch your air, bottom right. Your {cells} batteries bought you {o2_bonus} extra seconds.")
+lines = PackedStringArray("Okay. That\'s a big view.", "There\'s no floor between the hull plates out here.", "Walk straight off an edge and you\'ll drift across to the next one.", "Air\'s bottom right. Your {cells} batteries bought you {o2_bonus} extra seconds.")
 pause_game = true
 
 [node name="SectionADrift" type="Marker2D" parent="Story" unique_id=1323036442]

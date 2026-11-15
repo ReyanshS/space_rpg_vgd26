@@ -64,10 +64,10 @@ editor each one shows as a speech bubble with its trigger and first line.
 | SHIP_LIGHTS_UP | during the lights-on cutscene (any room) |
 
 - **Speaker:** `PIP` (green), `P!P` (the malfunctioning PIP: red, angry face), or any name.
-- **Lines:** one entry = one speech bubble. The console fits two rows. A line that's a
-  bit too long shows in smaller text (the editor says "shows in smaller text" in
-  orange). Much too long and it gets split, which people miss: the editor says
-  **TOO LONG** in red, so shorten it. `{cells}`, `{o2_bonus}` and `{o2_per_cell}` become real numbers.
+- **Lines:** one entry = one speech bubble. The console fits two rows (about 70 letters,
+  counting "PIP> "). A longer line gets split in two, and people miss half of it, so the
+  editor writes **TOO LONG** in red under the beat: shorten it.
+  `{cells}`, `{o2_bonus}` and `{o2_per_cell}` become real numbers.
 - **Pause Game:** freeze the player until they press E through the lines. (Never
   happens while they're holding the wire.)
 - **Point Here:** PIP's blue arrow points at the marker while the lines play. To point

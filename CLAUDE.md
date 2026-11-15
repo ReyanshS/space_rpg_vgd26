@@ -27,10 +27,11 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Writing (PIP, tutorial, popups):** the team wants it to sound natural, not AI-written. Short
   plain sentences, contractions, no dashes of any kind as punctuation, few exclamation marks, no
   ALL-CAPS words inside PIP's lines. PIP is a slightly nervous maintenance bot with dry humour.
-  Each line should fit the console: **two rows at 16 px** (about 72 characters; the speaker name
-  counts too). Slightly longer lines automatically show at 12 px (`hud.gd _fit_size`, all at
-  once); far too long ones get split into pages, which players miss - the editor marks those
-  red ("TOO LONG"). The team wants every line seen whole: never rely on splitting.
+  Each line MUST fit the console: **two rows at 16 px** (about 70 characters; the speaker name
+  counts too). One text size everywhere (the team tried 12 px for long lines and said no).
+  A longer line gets split into pages, which players miss, so the editor marks it red on
+  the story beat ("TOO LONG"): shorten it. The "press E" key is its own HUD node (`NextKey`,
+  under PIP's portrait), never part of the text.
   Exception on purpose: in Level 3 the malfunctioning PIP talks in CAPS as speaker
   "P!P" (red), and the real PIP whispers through in lowercase as "PIP" (green).
 - **Fun > features.** The team said the game "isn't that fun". Anything that makes a player wait

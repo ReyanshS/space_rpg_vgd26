@@ -67,6 +67,10 @@ const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
 @onready var level_up: Control = $LevelUp
 @onready var level_up_title: Label = $LevelUp/VBox/Title
 @onready var cards: Array[Control] = [$LevelUp/VBox/Cards/Card0, $LevelUp/VBox/Cards/Card1, $LevelUp/VBox/Cards/Card2]
+## The E key that bobs just under PIP's little screen when you have to press E
+## to go on (never on top of the text). It's its own node in hud.tscn: move it
+## there to put it somewhere else.
+@onready var next_key: Control = $NextKey
 
 ## The level sets this to false on the results screen.
 var allow_pause := true
@@ -135,6 +139,7 @@ func _ready() -> void:
 	status_box.draw.connect(_draw_status)
 	portrait.draw.connect(_draw_portrait)
 	stars_box.draw.connect(_draw_stars)
+	next_key.draw.connect(_draw_next_key)
 	timer_bar.visible = false
 	complete_panel.visible = false
 	toast.visible = false
@@ -170,6 +175,9 @@ func _process(delta: float) -> void:
 		timer_bar.queue_redraw()
 	if complete_panel.visible:
 		stars_box.queue_redraw()
+	next_key.visible = _waiting_key
+	if _waiting_key:
+		next_key.queue_redraw()        # it bobs
 	for f in _floats:
 		f[1] += delta
 	_floats = _floats.filter(func(f: Array) -> bool: return f[1] < 1.4)
@@ -226,7 +234,6 @@ func set_objective(text: String, world_pos: Vector2, arrow: bool) -> void:
 func _show_idle() -> void:
 	_line_bbcode = ""
 	dialogue_text.visible_characters = -1
-	dialogue_text.add_theme_font_size_override("normal_font_size", _fit_size("", _objective))
 	dialogue_text.text = ("[color=%s]> %s[/color]" % [DIM_COLOR, _objective]) if _objective != "" else ""
 
 
@@ -274,6 +281,13 @@ func _draw_arrow(world: Vector2, col: Color, dark: Color) -> void:
 		var tri := PackedVector2Array([p + dir * 9.0, p - dir * 5.0 + side * 7.0, p - dir * 5.0 - side * 7.0])
 		marker.draw_colored_polygon(tri, col)
 		marker.draw_polyline(tri + PackedVector2Array([tri[0]]), dark, 1.0)
+
+
+## The E key under PIP's screen: "press E to go on". It bobs up and down a
+## little so the eye notices it.
+func _draw_next_key() -> void:
+	var bob := roundf(absf(sin(_t * 4.0)) * -2.0)
+	_draw_key(Vector2(6, 6 + bob), "E", next_key)
 
 
 ## A little keyboard key with a letter on it (13 x 13 px, centre at `at`),
@@ -372,11 +386,10 @@ func _run_dialogue() -> void:
 		_cut_speech = false
 		_speech_point = item[3]
 		for line in item[0]:
-			var fsize := _fit_size(item[1], line)
-			for page in _pages(item[1], line, fsize):
+			for page in _pages(item[1], line):
 				if _cut_speech:
 					break
-				await _show_line(item[1], page, blocking, fsize)
+				await _show_line(item[1], page, blocking)
 				if not is_inside_tree():
 					return
 		_speech_point = Vector2.INF
@@ -388,27 +401,14 @@ func _run_dialogue() -> void:
 	_show_idle()                      # back to showing the objective
 
 
-## The console has room for TWO rows of text. The whole line should be on
-## screen at once (split lines get missed), so:
-##   1. it fits in two rows at the normal size (16)?  -> normal text
-##   2. it fits in two rows at SMALL_TEXT (12)?       -> smaller text, all at once
-##   3. still too long?                               -> small text, split into pages
-## Case 3 shouldn't happen: the editor marks lines that long in red (story_beat.gd).
-## (The blinking E key sits on PIP's screen, not in the text, so it never adds a row.)
-const NORMAL_TEXT := 16
-const SMALL_TEXT := 12
-
-
-## Which font size line `line` needs to fit in the console's two rows.
-func _fit_size(speaker: String, line: String) -> int:
-	if _pages(speaker, line, NORMAL_TEXT).size() <= 1:
-		return NORMAL_TEXT
-	return SMALL_TEXT
-
-
-## Splits a line into "pages" of two rows each at font size `fsize` (usually one page).
-func _pages(speaker: String, line: String, fsize: int) -> PackedStringArray:
+## The console has room for TWO rows of text, and every line should fit in them,
+## so the whole line is on screen at once. (The E key sits under PIP's screen,
+## not in the text, so it never adds a row.) If a line is still too long,
+## it's split into "pages" here so nothing runs off the screen - but split lines
+## get missed, so the editor marks those lines in red: shorten them.
+func _pages(speaker: String, line: String) -> PackedStringArray:
 	var font := dialogue_text.get_theme_font("normal_font")
+	var fsize := dialogue_text.get_theme_font_size("normal_font_size")
 	var width := maxf(dialogue_text.size.x, dialogue_text.custom_minimum_size.x) - 2.0
 	var prefix := speaker + "> "
 	var pages := PackedStringArray()
@@ -443,12 +443,11 @@ func _frame() -> bool:
 	return is_inside_tree()
 
 
-func _show_line(speaker: String, line: String, blocking: bool, fsize := NORMAL_TEXT) -> void:
+func _show_line(speaker: String, line: String, blocking: bool) -> void:
 	_line_rogue = speaker == ROGUE_SPEAKER
 	var name_col := ROGUE_NAME_COLOR if _line_rogue else NAME_COLOR
 	var text_col := ROGUE_TEXT_COLOR if _line_rogue else TEXT_COLOR
 	_line_bbcode = "[color=%s]%s>[/color] [color=%s]%s[/color]" % [name_col, speaker, text_col, line]
-	dialogue_text.add_theme_font_size_override("normal_font_size", fsize)
 	dialogue_text.text = _line_bbcode
 	var total := float(dialogue_text.get_total_character_count())
 	var shown := float(speaker.length() + 2)
@@ -538,9 +537,6 @@ func _draw_portrait() -> void:
 		portrait.draw_rect(Rect2(2, y, s.x - 4, 1), Color(0, 0, 0, 0.35))                # scanlines
 	var tip := AMBER if fmod(_t, 1.0) < 0.5 else Color(0.5, 0.3, 0.1)
 	portrait.draw_rect(Rect2(Vector2(s.x - 4, 1), Vector2(2, 1)), tip)                   # status light
-	# waiting for you to press E: an E key blinks in the corner of his screen
-	if _waiting_key and int(_t * 3.0) % 2 == 0:
-		_draw_key(s - Vector2(5, 5), "E", portrait)
 
 
 # ------------------------------------------------------------------ toast
