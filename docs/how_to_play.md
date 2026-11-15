@@ -68,5 +68,17 @@ they leave behind. At the end of each level you get up to three stars.
   reboot him. While you hold the wire near him, the **red lights over his head** fill up. When
   they're full he cuts your wire, so plan the loop before you grab it.
 
+## Levelling up (the RPG part)
+- You earn **XP** for powering rooms, for doing it without failing first, for every battery
+  you keep, and for finishing a level. Your level (**LV**) and XP bar are in the console.
+- Every **level up**, the game pauses and you pick **one suit upgrade** out of three
+  (A / D to choose, E to take it). They stay with you for the whole game:
+  longer wire timer, stronger batteries, faster legs, rubber boots that shrug off one zap
+  per room, or a bigger air tank for spacewalks.
+
+## If you get stuck
+- Zapped somewhere with no safe way back to the START? An **[R]** appears over you:
+  press R to go straight back to the START.
+
 ## Stars
 1. Finish the level. 2. Charge every power cell. 3. Few retries (no more than one per puzzle).

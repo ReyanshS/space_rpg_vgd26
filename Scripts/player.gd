@@ -42,6 +42,8 @@ const FEET_HALF := Vector2(6, 4)
 @export var drift_speed := 150.0
 
 var level: WireLevel = null   # set by the level when the game starts
+## Walking speed is multiplied by this (the LEG SERVOS suit upgrade raises it).
+var speed_mult := 1.0
 var state: State = State.FREE
 var facing := Vector2i(0, 1)  # which way he looks: (0,1) = down, towards the camera
 var _last_x := 1              # last left/right he faced (for sprites with no "walk_up")
@@ -188,7 +190,7 @@ func _walk(delta: float) -> void:
 		velocity = input * walk_speed
 		move_and_slide()
 		return
-	var step := input * walk_speed * delta
+	var step := input * walk_speed * speed_mult * delta
 	# Move X and Y separately so you slide along walls instead of sticking.
 	_slide(Vector2(step.x, 0.0), absf(input.y) < 0.2)
 	if state == State.FREE or state == State.WIRED:     # not if that started a drift

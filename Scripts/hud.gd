@@ -27,6 +27,8 @@ extends CanvasLayer
 
 ## Emitted when a speech that freezes the player starts (true) / ends (false).
 signal dialogue_blocking(on: bool)
+## Emitted when the player picks a card on the LEVEL UP screen (the upgrade's id).
+signal upgrade_chosen(id: String)
 
 ## Height of the console at the bottom. level.gd keeps the room above it.
 const CONSOLE_H := 48
@@ -62,6 +64,9 @@ const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
 @onready var pause_panel: Control = $Pause
 @onready var pause_level: Label = $Pause/VBox/Level
 @onready var bar_top: ColorRect = $BarTop
+@onready var level_up: Control = $LevelUp
+@onready var level_up_title: Label = $LevelUp/VBox/Title
+@onready var cards: Array[Control] = [$LevelUp/VBox/Cards/Card0, $LevelUp/VBox/Cards/Card1, $LevelUp/VBox/Cards/Card2]
 
 ## The level sets this to false on the results screen.
 var allow_pause := true
@@ -79,6 +84,7 @@ var _marker_world := Vector2.ZERO   # where the arrow points, in level (world) p
 var _objective := ""                # the tutorial instruction, shown when PIP is quiet
 var _cinematic := false             # a cutscene is playing (film bar on)
 var _reel_prompt := false           # show the [E] "reel back" key above the astronaut
+var _restart_prompt := false        # show the [R] key: no safe way back to the START
 var _hint_on := false               # this room has an H hint
 var _t := 0.0
 
@@ -109,6 +115,15 @@ var _line_rogue := false          # the line on screen is said by the malfunctio
 var _stars_earned := 0
 var _stars_shown := 0
 
+# RPG: level, XP, and the LEVEL UP screen
+var _lv := 1
+var _xp_frac := 0.0
+var _floats: Array = []             # [text, age]: "+45 XP" rising over the astronaut
+var _picking := false               # the LEVEL UP screen is open
+var _pick_ids: Array = []           # the upgrade ids on the cards
+var _pick_index := 0                # which card is selected
+var _pick_ready_at := 0.0           # keys only count after this time (no accidental picks)
+
 var _sfx := {}
 
 
@@ -128,6 +143,7 @@ func _ready() -> void:
 	fade_rect.color.a = 0.0
 	bar_top.visible = false
 	bar_top.position.y = -bar_top.size.y        # the film bar waits just above the screen
+	level_up.visible = false
 	_show_idle()
 	_update_keys()
 	for n in ["blip", "star"]:
@@ -152,11 +168,13 @@ func _process(delta: float) -> void:
 		# the timer floats above the astronaut's head
 		timer_bar.position = (_player_on_screen() + Vector2(-timer_bar.size.x * 0.5, -54)).round()
 		timer_bar.queue_redraw()
-	if _waiting_key:
-		var blink := int(_t * 3.0) % 2 == 0
-		dialogue_text.text = _line_bbcode + ("  [color=%s][E][/color]" % KEY_COLOR if blink else "")
 	if complete_panel.visible:
 		stars_box.queue_redraw()
+	for f in _floats:
+		f[1] += delta
+	_floats = _floats.filter(func(f: Array) -> bool: return f[1] < 1.4)
+	if _picking:
+		_pick_input()
 	if Input.is_action_just_pressed("pause") and allow_pause:
 		_set_paused(not get_tree().paused)
 
@@ -172,6 +190,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _set_paused(on: bool) -> void:
 	get_tree().paused = on
 	pause_panel.visible = on
+	if on:
+		$Pause/VBox/Suit.text = "LV %d: %s" % [Game.lv, Game.perks_text()]
 
 
 ## The pause menu shows which level you're on.
@@ -206,6 +226,7 @@ func set_objective(text: String, world_pos: Vector2, arrow: bool) -> void:
 func _show_idle() -> void:
 	_line_bbcode = ""
 	dialogue_text.visible_characters = -1
+	dialogue_text.add_theme_font_size_override("normal_font_size", _fit_size("", _objective))
 	dialogue_text.text = ("[color=%s]> %s[/color]" % [DIM_COLOR, _objective]) if _objective != "" else ""
 
 
@@ -220,6 +241,17 @@ func _draw_marker() -> void:
 		_draw_arrow(_speech_point, Color(0.5, 0.9, 1.0), Color(0.0, 0.1, 0.18))
 	if _reel_prompt and not _cinematic:
 		_draw_key(_player_on_screen() + Vector2(16, -58 + roundf(sin(_t * 5.0))), "E")
+	if _restart_prompt and not _cinematic:
+		_draw_key(_player_on_screen() + Vector2(0, -48 + roundf(sin(_t * 5.0))), "R")
+	# "+45 XP" floating up over the astronaut and fading out
+	var font := marker.get_theme_default_font()
+	for f in _floats:
+		var age: float = f[1]
+		var w := font.get_string_size(f[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+		var at := (_player_on_screen() + Vector2(-w * 0.5, -44.0 - age * 22.0)).round()
+		var a := clampf(1.6 - age * 1.2, 0.0, 1.0)
+		marker.draw_string_outline(font, at, f[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 2, Color(0.1, 0.05, 0.0, a))
+		marker.draw_string(font, at, f[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(AMBER, a))
 
 
 func _draw_arrow(world: Vector2, col: Color, dark: Color) -> void:
@@ -244,14 +276,17 @@ func _draw_arrow(world: Vector2, col: Color, dark: Color) -> void:
 		marker.draw_polyline(tri + PackedVector2Array([tri[0]]), dark, 1.0)
 
 
-## A little keyboard key with a letter on it (13 x 13 px, centre at `at`).
-func _draw_key(at: Vector2, letter: String) -> void:
+## A little keyboard key with a letter on it (13 x 13 px, centre at `at`),
+## drawn on `ci` (the arrow layer unless you say otherwise).
+func _draw_key(at: Vector2, letter: String, ci: CanvasItem = null) -> void:
+	if ci == null:
+		ci = marker
 	var o := (at - Vector2(6, 6)).round()
-	marker.draw_rect(Rect2(o + Vector2(0, 1), Vector2(13, 13)), Color(0.05, 0.05, 0.1, 0.9))
-	marker.draw_rect(Rect2(o, Vector2(13, 13)), Color(0.95, 0.95, 1.0))
-	marker.draw_rect(Rect2(o + Vector2(1, 1), Vector2(11, 10)), Color(0.82, 0.84, 0.92))
+	ci.draw_rect(Rect2(o + Vector2(0, 1), Vector2(13, 13)), Color(0.05, 0.05, 0.1, 0.9))
+	ci.draw_rect(Rect2(o, Vector2(13, 13)), Color(0.95, 0.95, 1.0))
+	ci.draw_rect(Rect2(o + Vector2(1, 1), Vector2(11, 10)), Color(0.82, 0.84, 0.92))
 	var font := marker.get_theme_default_font()
-	marker.draw_string(font, o + Vector2(3, 11), letter, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.12, 0.12, 0.2))
+	ci.draw_string(font, o + Vector2(3, 11), letter, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.12, 0.12, 0.2))
 
 
 ## While he holds the wire and stands still away from the last pad: show the
@@ -260,6 +295,15 @@ func set_reel_prompt(on: bool) -> void:
 	if on == _reel_prompt:
 		return
 	_reel_prompt = on
+	_update_keys()
+
+
+## Stranded after a fail (no safe way back to the START): an [R] key floats
+## over the astronaut, and the console's key reminder says what it does.
+func set_restart_prompt(on: bool) -> void:
+	if on == _restart_prompt:
+		return
+	_restart_prompt = on
 	_update_keys()
 
 
@@ -328,11 +372,13 @@ func _run_dialogue() -> void:
 		_cut_speech = false
 		_speech_point = item[3]
 		for line in item[0]:
-			if _cut_speech:
-				break
-			await _show_line(item[1], line, blocking)
-			if not is_inside_tree():
-				return
+			var fsize := _fit_size(item[1], line)
+			for page in _pages(item[1], line, fsize):
+				if _cut_speech:
+					break
+				await _show_line(item[1], page, blocking, fsize)
+				if not is_inside_tree():
+					return
 		_speech_point = Vector2.INF
 	if _blocking:
 		_blocking = false
@@ -342,17 +388,67 @@ func _run_dialogue() -> void:
 	_show_idle()                      # back to showing the objective
 
 
+## The console has room for TWO rows of text. The whole line should be on
+## screen at once (split lines get missed), so:
+##   1. it fits in two rows at the normal size (16)?  -> normal text
+##   2. it fits in two rows at SMALL_TEXT (12)?       -> smaller text, all at once
+##   3. still too long?                               -> small text, split into pages
+## Case 3 shouldn't happen: the editor marks lines that long in red (story_beat.gd).
+## (The blinking E key sits on PIP's screen, not in the text, so it never adds a row.)
+const NORMAL_TEXT := 16
+const SMALL_TEXT := 12
+
+
+## Which font size line `line` needs to fit in the console's two rows.
+func _fit_size(speaker: String, line: String) -> int:
+	if _pages(speaker, line, NORMAL_TEXT).size() <= 1:
+		return NORMAL_TEXT
+	return SMALL_TEXT
+
+
+## Splits a line into "pages" of two rows each at font size `fsize` (usually one page).
+func _pages(speaker: String, line: String, fsize: int) -> PackedStringArray:
+	var font := dialogue_text.get_theme_font("normal_font")
+	var width := maxf(dialogue_text.size.x, dialogue_text.custom_minimum_size.x) - 2.0
+	var prefix := speaker + "> "
+	var pages := PackedStringArray()
+	var page := ""            # the words on the page we're filling
+	var row := 0              # which of the two rows we're on
+	var row_text := prefix    # what's on that row so far
+	for word in line.split(" ", false):
+		if _text_width(font, fsize, row_text + word) <= width:
+			row_text += word + " "
+			page = word if page == "" else page + " " + word
+		elif row == 0:
+			row = 1                                    # carry on in the second row
+			row_text = word + " "
+			page = word if page == "" else page + " " + word
+		else:
+			pages.append(page)                         # page full: start a new one
+			row = 0
+			row_text = prefix + word + " "
+			page = word
+	if page != "":
+		pages.append(page)
+	return pages
+
+
+func _text_width(font: Font, fsize: int, text: String) -> float:
+	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x
+
+
 ## Waits one frame. Returns false if the HUD left the scene meanwhile (level changed).
 func _frame() -> bool:
 	await get_tree().process_frame
 	return is_inside_tree()
 
 
-func _show_line(speaker: String, line: String, blocking: bool) -> void:
+func _show_line(speaker: String, line: String, blocking: bool, fsize := NORMAL_TEXT) -> void:
 	_line_rogue = speaker == ROGUE_SPEAKER
 	var name_col := ROGUE_NAME_COLOR if _line_rogue else NAME_COLOR
 	var text_col := ROGUE_TEXT_COLOR if _line_rogue else TEXT_COLOR
 	_line_bbcode = "[color=%s]%s>[/color] [color=%s]%s[/color]" % [name_col, speaker, text_col, line]
+	dialogue_text.add_theme_font_size_override("normal_font_size", fsize)
 	dialogue_text.text = _line_bbcode
 	var total := float(dialogue_text.get_total_character_count())
 	var shown := float(speaker.length() + 2)
@@ -376,14 +472,15 @@ func _show_line(speaker: String, line: String, blocking: bool) -> void:
 	dialogue_text.visible_characters = -1
 	_typing = false
 	if blocking:
-		_waiting_key = true
+		_waiting_key = true                   # an E key blinks on PIP's screen (_draw_portrait)
+		_update_keys()
 		if not await _frame():                # the press that finished typing doesn't count
 			return
 		while (not Input.is_action_just_pressed("interact") or get_tree().paused) and not _skip_line:
 			if not await _frame():
 				return
 		_waiting_key = false
-		dialogue_text.text = _line_bbcode
+		_update_keys()
 	else:
 		# reading time grows with the length of the line (and stops while paused).
 		# In a cutscene the pictures move on by themselves, so lines go a bit
@@ -441,6 +538,9 @@ func _draw_portrait() -> void:
 		portrait.draw_rect(Rect2(2, y, s.x - 4, 1), Color(0, 0, 0, 0.35))                # scanlines
 	var tip := AMBER if fmod(_t, 1.0) < 0.5 else Color(0.5, 0.3, 0.1)
 	portrait.draw_rect(Rect2(Vector2(s.x - 4, 1), Vector2(2, 1)), tip)                   # status light
+	# waiting for you to press E: an E key blinks in the corner of his screen
+	if _waiting_key and int(_t * 3.0) % 2 == 0:
+		_draw_key(s - Vector2(5, 5), "E", portrait)
 
 
 # ------------------------------------------------------------------ toast
@@ -548,13 +648,17 @@ func set_hint_available(on: bool) -> void:
 
 
 func _update_keys() -> void:
-	if _reel_prompt:
+	if _waiting_key:
+		keys_label.text = "[E] next"
+	elif _restart_prompt:
+		keys_label.text = "[R] back to start"
+	elif _reel_prompt:
 		keys_label.text = "[E] reel back"
 	elif _hint_on:
 		keys_label.text = "[H] hint  [Esc] menu"
 	else:
 		keys_label.text = "[R] restart  [Esc] menu"
-	keys_label.visible = not _o2_on or _reel_prompt
+	keys_label.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key
 
 
 ## The right side of the console: SHIP POWER LEDs and the cell counter on top,
@@ -565,15 +669,19 @@ func _draw_status() -> void:
 		var flash := _power_flash > 0.0 and int(_t * 10.0) % 2 == 0
 		var ink := Color.WHITE if flash else AMBER
 		_bolt(status_box, Vector2(4, 2), ink)
-		var seg_w := floorf((66.0 - 2.0 * (_power_total - 1)) / _power_total)
+		var seg_w := floorf((52.0 - 2.0 * (_power_total - 1)) / _power_total)
 		for i in _power_total:
 			_led(status_box, Rect2(16 + i * (seg_w + 2.0), 5, seg_w, 8), i < _power_on, ink)
 	if _cells_total > 0:
-		var o := Vector2(98, 1 - roundf(_cell_bump * 3.0))
+		var o := Vector2(74, 1 - roundf(_cell_bump * 3.0))
 		PowerCell.draw_battery(status_box, o, AMBER.lerp(Color.WHITE, _cell_bump), Color(0.4, 0.25, 0.02))
 		var ink2 := PHOSPHOR if _cells < _cells_total else AMBER
-		status_box.draw_string(font, Vector2(112, 14), "%d/%d" % [_cells, _cells_total], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink2)
-	if _o2_on and not _reel_prompt:
+		status_box.draw_string(font, Vector2(88, 14), "%d/%d" % [_cells, _cells_total], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink2)
+	# your RPG level, with a thin XP bar under it
+	status_box.draw_string(font, Vector2(126, 13), "LV%d" % _lv, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, AMBER)
+	status_box.draw_rect(Rect2(126, 15, 34, 2), LED_OFF)
+	status_box.draw_rect(Rect2(126, 15, roundf(34.0 * _xp_frac), 2), PHOSPHOR)
+	if _o2_on and not _reel_prompt and not _restart_prompt and not _waiting_key:
 		var col := Color(0.5, 0.85, 1.0)
 		if _o2_frac < 0.3:
 			col = Color(1.0, 0.3, 0.25) if int(_t * 6.0) % 2 == 0 else Color(1.0, 0.7, 0.6)
@@ -583,6 +691,84 @@ func _draw_status() -> void:
 		var fill := Rect2(bar.position, Vector2(roundf(bar.size.x * _o2_frac), bar.size.y))
 		status_box.draw_rect(fill, col)
 		status_box.draw_rect(Rect2(fill.position, Vector2(fill.size.x, 1)), col.lightened(0.45))
+
+
+# ------------------------------------------------------------------ RPG: XP and LEVEL UP
+
+## Your level and how full the XP bar is (0..1). Shown in the console.
+func set_xp(lv: int, frac: float) -> void:
+	_lv = lv
+	_xp_frac = clampf(frac, 0.0, 1.0)
+
+
+## Text that floats up over the astronaut and fades (e.g. "+45 XP").
+func float_text(text: String) -> void:
+	_floats.append([text, 0.0])
+
+
+func is_picking() -> bool:
+	return _picking
+
+
+## The LEVEL UP screen: the game pauses and shows one card per upgrade id in
+## `choices`. Left / right picks a card, E takes it. This is a coroutine: the
+## level writes   var id = await hud.pick_upgrade(...)   and gets the answer
+## once the player has chosen. (The HUD keeps running while the game is
+## paused - its Process Mode is "Always" - so it can still read the keys.)
+func pick_upgrade(choices: Array, new_level: int) -> String:
+	_picking = true
+	_pick_ids = choices
+	_pick_index = 0
+	allow_pause = false
+	get_tree().paused = true
+	level_up_title.text = "LEVEL UP!  LV %d" % new_level
+	for i in cards.size():
+		var card := cards[i]
+		card.visible = i < choices.size()
+		if not card.visible:
+			continue
+		var id: String = choices[i]
+		var u: Dictionary = Game.UPGRADES[id]
+		card.get_node("VBox/Name").text = u["name"]
+		card.get_node("VBox/Text").text = u["text"]
+		card.get_node("VBox/Count").text = "have %d of %d" % [Game.perk(id), int(u["max"])]
+	_show_pick()
+	level_up.visible = true
+	level_up.pivot_offset = level_up.size * 0.5
+	level_up.scale = Vector2(0.7, 0.7)
+	create_tween().tween_property(level_up, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_sfx["star"].pitch_scale = 1.3
+	_sfx["star"].play()
+	_pick_ready_at = _t + 0.4
+	var chosen: String = await upgrade_chosen
+	level_up.visible = false
+	get_tree().paused = false
+	allow_pause = true
+	_picking = false
+	return chosen
+
+
+## Keys on the LEVEL UP screen (called every frame while it's open).
+func _pick_input() -> void:
+	if _t < _pick_ready_at or _pick_ids.is_empty():
+		return
+	var n := _pick_ids.size()
+	if Input.is_action_just_pressed("ui_left"):
+		_pick_index = (_pick_index + n - 1) % n
+		_show_pick()
+	elif Input.is_action_just_pressed("ui_right"):
+		_pick_index = (_pick_index + 1) % n
+		_show_pick()
+	elif Input.is_action_just_pressed("interact"):
+		upgrade_chosen.emit(_pick_ids[_pick_index])
+
+
+## The selected card is bright and lifted a little; the others are dimmed.
+func _show_pick() -> void:
+	for i in cards.size():
+		var on := i == _pick_index
+		cards[i].modulate = Color.WHITE if on else Color(0.5, 0.52, 0.58)
+	_sfx["blip"].play()
 
 
 # ------------------------------------------------------------------ screen effects
@@ -624,6 +810,7 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	# cells you keep also make your suit's air last longer on spacewalks
 	var bonus := int(stats.get("cells", 0)) * int(Game.O2_PER_CELL)
 	$Complete/VBox/Bonus.visible = bonus > 0 and has_next     # no spacewalks after the last level
+	$Complete/VBox/Xp.text = "LV %d   |   +%d XP this level" % [Game.lv, int(stats.get("xp", 0))]
 	$Complete/VBox/Bonus.text = "Suit upgrade: +%d s of oxygen" % bonus
 	$Complete/VBox/StarHelp.text = "Stars for finishing, every cell, and %d retries or fewer" % stats.get("retry_goal", 0)
 	$Complete/VBox/Again.text = ("[E] next level" if has_next else "[E] back to title") + "    [R] play again"

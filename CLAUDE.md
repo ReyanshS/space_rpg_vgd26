@@ -27,8 +27,11 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Writing (PIP, tutorial, popups):** the team wants it to sound natural, not AI-written. Short
   plain sentences, contractions, no dashes of any kind as punctuation, few exclamation marks, no
   ALL-CAPS words inside PIP's lines. PIP is a slightly nervous maintenance bot with dry humour.
-  Each line must fit the console: **two lines of text** (about 72 characters; the speaker name
-  counts too). Exception on purpose: in Level 3 the malfunctioning PIP talks in CAPS as speaker
+  Each line should fit the console: **two rows at 16 px** (about 72 characters; the speaker name
+  counts too). Slightly longer lines automatically show at 12 px (`hud.gd _fit_size`, all at
+  once); far too long ones get split into pages, which players miss - the editor marks those
+  red ("TOO LONG"). The team wants every line seen whole: never rely on splitting.
+  Exception on purpose: in Level 3 the malfunctioning PIP talks in CAPS as speaker
   "P!P" (red), and the real PIP whispers through in lowercase as "PIP" (green).
 - **Fun > features.** The team said the game "isn't that fun". Anything that makes a player wait
   with nothing to do (e.g. stuck after a mistake until the timer runs out) is a bug to fix.
@@ -42,8 +45,12 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - Rating form: Creativity x2, Technical skill x2, Storyline/flow between levels x1, Overall appeal x2
   (game design 70); video, portfolio, directions/controls, storyboard, AI reflection (50).
 - 2026-27 theme: *"Create a deep space-themed RPG where the primary method of progression is
-  puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), collectibles
-  (power cells) that upgrade the suit (+5 s oxygen each on spacewalks), results/stars per level.
+  puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), XP + character
+  levels (LV) with a pick-one-of-three suit upgrade on every level up, collectibles (power cells:
+  XP, +5 s oxygen each on spacewalks), results/stars per level. See "RPG" below.
+- Wire timer check (Nov 2026, solver): the tightest stretch of each room needs at most 3.4 s of
+  the 5 s with a perfect route (Generator B, Level 2's bridge); most need 1.5-3 s. Feels easy to
+  someone who knows the routes, about right for first-time players (judges). Left at 5 s.
 - Level 3 exists (the guide says judges play to level 3). A full bot run of it takes ~75 s of play.
 - Judges play from a link, so the game needs a **web export**. Web builds run on WebGL 2 (Godot's
   Compatibility renderer); this project is set to Forward+, so test a web export early and check
@@ -187,6 +194,21 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `pip_o2_low`, `pip_no_landing`, `pip_cell_kept`, `pip_cell_lost`, `pip_strain`, `pip_shared`;
   said via `_pip_say()`, `{cells}`-style values, empty = silent) and "Popup texts" (`popup_...`).
   Don't hard-code new player-facing text in level.gd: add an export in one of those groups.
+  (Also `pip_stranded`, `pip_level_up`, `popup_stranded`, `popup_level_up`, `popup_boots`.)
+- **Stranded after a fail**: `_check_stranded()` runs a tile BFS from the player to the room's
+  START avoiding red tiles and grates; no path = an [R] key floats over him, the console says
+  "[R] back to start", PIP explains once. Cleared by R, by grabbing the wire, or when a path appears.
+- **RPG** (`game_state.gd` holds it: `xp`, `lv`, `perks`, `upgrades_waiting`, tuning constants
+  XP_ROOM 30 / XP_CLEAN 15 / XP_CELL 10 / XP_FINISH 50, levels need 100, 160, 220... XP).
+  level.gd `_award_xp()` in `_solve()` and `_finish_level()`; a level up only queues an upgrade,
+  `_offer_upgrades()` opens the LEVEL UP screen at a safe moment (end of `_solve`, before the
+  results). `hud.pick_upgrade(choices, lv)` pauses the tree and is awaited for the chosen id.
+  Upgrades (`Game.UPGRADES`): wire (+0.5 s, x2), cells (+1 s per battery, x2), servos (+10% walk,
+  x2, `player.speed_mult`), boots (first zap per room absorbed: `_shock()` hops you back to
+  `_last_safe`, you keep the wire), tank (+15 s O2, x2). Rules read them through `_wire_time()`,
+  `_cell_bonus()`, `Game.o2_bonus()` - never read `wire_time` / `cell_bonus` directly in rules.
+  Bot runs: Levels 1+2 reach LV 5 (4 upgrades), Level 3 alone ~250 XP. Bots must press E when
+  `hud.is_picking()`.
   `RoguePip` is `@tool`: in the editor it previews the pylon, each socket (number + shutdown
   time) and the flight path, using `level.editor_core_spots()` (a quiet `_build_rooms(true)`).
 - **TestStart** (`Scripts/test_start.gd`, one per level scene, `active` off by default): drag it,

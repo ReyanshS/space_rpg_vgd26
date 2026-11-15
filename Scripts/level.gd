@@ -75,6 +75,13 @@
 #   - In Level 3, PIP's body docks on the cores (rogue_pip.gd). That script
 #     isn't part of the rules: it LISTENS to the level's signals, and it can
 #     call cut_wire(), set_alert(), hold() and let_go().
+#
+# THE RPG SIDE (XP, levels, suit upgrades - the numbers are in game_state.gd)
+#   - Powering a room gives XP (more if you didn't fail there, and for every
+#     battery kept); so does reaching the exit (_award_xp).
+#   - Level up = after the room's power-up, the game pauses and you pick one
+#     upgrade (_offer_upgrades -> hud.pick_upgrade). Upgrades change the rules
+#     through _wire_time(), _cell_bonus(), _shock() and the player's speed_mult.
 # ---------------------------------------------------------------------------
 @tool
 class_name WireLevel
@@ -212,6 +219,10 @@ const MUSIC_DB := -17.0
 @export var pip_strain := "The wire can't go through that. Wrap it round a node to change its angle."
 ## The first time you grab a wire that can use a node from an earlier stage (PIP points at it).
 @export var pip_shared := "That node from the last machine is still live. Wrap this wire round it."
+## After a fail, when there's no way back to the START without crossing red tiles or grates.
+@export var pip_stranded := "No safe way back from there. Press R and I'll bring you to the start."
+## After you pick your very first suit upgrade.
+@export var pip_level_up := "Nice. The suit learns as you go. Every level up, you get another upgrade."
 
 # The short messages that pop up at the top of the screen.
 @export_group("Popup texts")
@@ -227,6 +238,10 @@ const MUSIC_DB := -17.0
 @export var popup_wire_gone := "WIRE'S GONE. WALK BACK OR PRESS R"
 @export var popup_hint := "FOLLOW THE ARROWS"
 @export var popup_outer_door := "OUTER DOOR OPEN"
+@export var popup_stranded := "NO WAY BACK? PRESS R"
+## {lv} = your new level.
+@export var popup_level_up := "LEVEL UP! LV {lv}"
+@export var popup_boots := "RUBBER BOOTS SAVED YOU"
 
 
 # An inner class: a little bundle of data describing one room.
@@ -320,6 +335,12 @@ var _preview_node: Node2D                 # draws those dotted fling previews
 var _reel_tween: Tween                    # the reel-back pull, while it's happening
 var _still_time := 0.0                    # how long you've stood still holding the wire
 var _last_safe := Vector2.INF             # the last spot you stood on safely (for after a zap)
+var _stranded := false                    # after a fail: no safe path back to the START
+var _stranded_check := 0.0
+
+# --- RPG
+var _xp_gained := 0                       # XP earned in this level (for the results screen)
+var _boots_used := {}                     # Room -> true: RUBBER BOOTS already saved you there
 
 # --- the core (Level 3)
 var _alert := false            # red alert: the ship's tinted red, the boss music plays
@@ -409,6 +430,7 @@ func _ready() -> void:
 	hud.set_level_info("LEVEL %d: %s" % [level_number, level_name])
 	hud.set_cells(0, _cells.size())
 	hud.set_power(0, _rooms_with_goal)
+	_apply_upgrades()                      # suit upgrades from earlier levels (and LV in the console)
 	_update_hint_label.call_deferred()     # after the floor guides know their rooms
 	_apply_test_start()
 	if camera:
@@ -1524,7 +1546,7 @@ func _physics_process(delta: float) -> void:
 			_try_hint()
 	# a blinking grate can light up under you while you stand still
 	if player.state != Astronaut.State.LOCKED and _is_live_tile(cell_of(player.position)):
-		_fail("shock")
+		_shock()
 		return
 	if _tick_o2(delta):
 		return
@@ -1542,6 +1564,12 @@ func _physics_process(delta: float) -> void:
 		hud.set_reel_prompt(false)
 		if player.state == Astronaut.State.FREE and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact"):
 			_try_grab()
+		# stranded? keep checking: if you find a safe way back, the [R] goes away
+		if _stranded:
+			_stranded_check -= delta
+			if _stranded_check <= 0.0:
+				_stranded_check = 0.5
+				_check_stranded(_current_room)
 	_update_prompts()
 
 
@@ -1555,7 +1583,7 @@ func _tick_timer(delta: float) -> void:
 	var paused := _timer_paused()
 	if not paused:
 		_time_left -= delta
-	var frac := clampf(_time_left / wire_time, 0.0, 1.0)
+	var frac := clampf(_time_left / _wire_time(), 0.0, 1.0)
 	_wire.set_urgency(1.0 - frac)
 	hud.set_timer(true, frac, maxf(_time_left, 0.0), paused)
 	if _time_left < 1.5 and not paused:
@@ -1628,7 +1656,7 @@ func player_moved() -> void:
 		_last_safe = player.position      # remembered, so a zap sends you back the way you came
 	var c := cell_of(player.position)
 	if _is_live_tile(c):
-		_fail("shock")
+		_shock()
 		return
 	_check_cells()
 	if player.state == Astronaut.State.FREE:
@@ -1915,14 +1943,14 @@ func _check_cells() -> void:
 			continue
 		if wired and _room_of.get(c) == _wire_room:
 			# The battery's charge goes into the wire: more time, right now.
-			cell.collect("+%ds" % int(cell_bonus))
-			_time_left = minf(_time_left + cell_bonus, wire_time + cell_bonus)
+			cell.collect("+%ds" % int(_cell_bonus()))
+			_time_left = minf(_time_left + _cell_bonus(), _wire_time() + _cell_bonus())
 			hud.pulse_timer()
 			_cells_pending.append(c)
 			_play("pickup")
 			hud.set_cells(_cells_banked + _cells_pending.size(), _cells.size(), true)
 			if Game.first_time("cell_charged"):
-				hud.show_toast(popup_cell_bonus.format({"bonus": int(cell_bonus)}), 2.5)
+				hud.show_toast(popup_cell_bonus.format({"bonus": int(_cell_bonus())}), 2.5)
 			cell_collected.emit(_wire_room.index)
 		elif not wired and not _cell_tip_shown:
 			_cell_tip_shown = true
@@ -1940,7 +1968,7 @@ func _touch_pad(c: Vector2i, kind: String) -> void:
 	match kind:
 		"node":
 			player.land()                  # a fling stops on a node
-			_time_left = wire_time
+			_time_left = _wire_time()
 			_set_paused_node(c)
 			_play("node")
 			hud.pulse_timer()
@@ -2142,6 +2170,7 @@ func _try_grab() -> void:
 	var sc := center_of(r.start)
 	if player.position.distance_to(sc) > START_RADIUS:
 		return
+	_clear_stranded()
 	_wire_room = r
 	_wire_pads = _stage_pads(r)
 	_bend_side.clear()
@@ -2154,7 +2183,7 @@ func _try_grab() -> void:
 	_wire.begin(sc)
 	_wire.set_live_end(player.hand_position())
 	player.grab_wire()
-	_time_left = wire_time        # the timer starts right away on the START pad
+	_time_left = _wire_time()     # the timer starts right away on the START pad
 	_tick_accum = 0.0
 	_play("grab")
 	_set_hum(true)
@@ -2259,6 +2288,8 @@ func _solve(r: Room) -> void:
 	player.set_lamp(false)          # ...so he doesn't need his helmet lamp any more
 	hud.set_power(_rooms_powered, _rooms_with_goal)
 	_update_hint_label()
+	# XP: for the room, for the batteries you kept, and a bonus if you never failed here
+	_award_xp(Game.XP_ROOM + kept * Game.XP_CELL + (Game.XP_CLEAN if r.fails == 0 else 0))
 	room_solved.emit(r.index)       # the tutorial, story and floor guides listen for this
 	if kept > 0 and Game.first_time("cell_kept"):
 		_pip_say(pip_cell_kept)
@@ -2268,8 +2299,83 @@ func _solve(r: Room) -> void:
 	_open_exit_doors(r)
 	if _rooms_powered >= _rooms_with_goal:
 		await _all_powered()        # the lights-on cutscene: wait here until it's over
+	await _offer_upgrades()         # levelled up? pick a suit upgrade now
 	_busy = false
 	_release_player()
+
+
+# ===================================================================== RPG: XP, level ups, upgrades
+# Doing well earns XP (Game.add_xp). Enough XP = LEVEL UP: the game pauses and
+# you pick one suit upgrade (hud.pick_upgrade). Upgrades change the rules a
+# little, so every rule they touch asks one of these small functions instead of
+# reading wire_time or cell_bonus directly.
+
+## Seconds on the wire timer: this level's wire_time + the LONGER WIRE upgrade.
+func _wire_time() -> float:
+	return wire_time + Game.wire_bonus()
+
+
+## Seconds a battery adds: cell_bonus + the SUPER CELLS upgrade.
+func _cell_bonus() -> float:
+	return cell_bonus + Game.cell_bonus_extra()
+
+
+## You stepped on something live (a red tile or a lit grate). With the RUBBER
+## BOOTS upgrade the first zap in each room doesn't count: a spark, and you hop
+## back to the last spot you stood on safely. You even keep the wire.
+func _shock() -> void:
+	var r := _current_room
+	var can_hop := player.state in [Astronaut.State.FREE, Astronaut.State.WIRED, Astronaut.State.FLUNG]
+	if Game.perk("boots") > 0 and r != null and not _boots_used.has(r) and can_hop and _last_safe.is_finite():
+		_boots_used[r] = true
+		player.land()                   # a fling stops right here
+		player.position = _last_safe
+		_play("shock")
+		_shake_cam(0.2, 2.0)
+		hud.flash(Color(0.75, 0.95, 1.0), 0.3)
+		hud.show_toast(popup_boots, 2.0)
+		return
+	_fail("shock")
+
+
+## Give XP: it floats up over the astronaut, and the console's XP bar fills.
+## A level up is only REMEMBERED here (Game.upgrades_waiting); you pick the
+## upgrade when it's safe (_offer_upgrades), not in the middle of a puzzle.
+func _award_xp(amount: int) -> void:
+	if amount <= 0:
+		return
+	_xp_gained += amount
+	var ups := Game.add_xp(amount)
+	hud.float_text("+%d XP" % amount)
+	hud.set_xp(Game.lv, Game.level_progress())
+	if ups > 0:
+		_play("fanfare")
+		hud.show_toast(popup_level_up.format({"lv": Game.lv}), 2.5)
+
+
+## For every level up you haven't used yet: pause and pick an upgrade.
+func _offer_upgrades() -> void:
+	var picked := false
+	while Game.upgrades_waiting > 0 and is_inside_tree():
+		var choices := Game.upgrade_choices(3)
+		if choices.is_empty():
+			Game.upgrades_waiting = 0     # you've got every upgrade already
+			break
+		var id: String = await hud.pick_upgrade(choices, Game.lv)
+		Game.take_upgrade(id)
+		_apply_upgrades()
+		picked = true
+		_input_cooldown = 0.3           # the E that picked the card shouldn't grab a wire too
+	if picked and Game.first_time("level_up"):
+		_pip_say(pip_level_up)
+
+
+## Upgrades that change something straight away (the others are read when needed).
+func _apply_upgrades() -> void:
+	player.speed_mult = Game.walk_multiplier()
+	if _o2_on:
+		_o2_max = o2_seconds + Game.o2_bonus()
+	hud.set_xp(Game.lv, Game.level_progress())
 
 
 ## quiet = no sounds or camera shake (used when a playtest skips rooms).
@@ -2532,7 +2638,11 @@ func _fail(kind: String) -> void:
 		await _stay_after_fail()
 		if _o2_on:
 			_refill_o2()            # the suit switches to its reserve tank
-		if had_wire and Game.first_time("fail_walk_back"):
+		if _check_stranded(r):
+			hud.show_toast(popup_stranded, 3.5)
+			if Game.first_time("stranded"):
+				_pip_say(pip_stranded)
+		elif had_wire and Game.first_time("fail_walk_back"):
 			hud.show_toast(popup_wire_gone, 3.0)
 	_busy = false
 	# The first time a charged cell drains, PIP explains why.
@@ -2610,6 +2720,45 @@ func _nearest_safe_spot(pos: Vector2) -> Vector2:
 	return center_of(_spawn)
 
 
+## After a fail: can you still WALK back to room r's START without stepping on a
+## red tile or a blinking grate? If not (say you got zapped on a node with grates
+## all round it), you're stranded: an [R] key floats over you until you press it.
+## Returns true if you're stranded.
+func _check_stranded(r: Room) -> bool:
+	_stranded = r != null and not r.solved and r.start.x >= 0 \
+		and not _can_walk_to(cell_of(player.position), r.start)
+	hud.set_restart_prompt(_stranded)
+	return _stranded
+
+
+## Breadth-first search over the floor, tile by tile, avoiding anything that
+## zaps you. True if it gets from `from` to `to`.
+func _can_walk_to(from: Vector2i, to: Vector2i) -> bool:
+	var seen := {from: true}
+	var queue: Array[Vector2i] = [from]
+	var head := 0
+	while head < queue.size() and head < 4000:
+		var c := queue[head]
+		head += 1
+		if c == to:
+			return true
+		for d in DIRS4:
+			var n := c + d
+			if seen.has(n) or is_solid_for_walk(n):
+				continue
+			if kind_at(n) == "discharge" or kind_at(n) == "blinker":
+				continue
+			seen[n] = true
+			queue.append(n)
+	return false
+
+
+func _clear_stranded() -> void:
+	if _stranded:
+		_stranded = false
+		hud.set_restart_prompt(false)
+
+
 func _safe_to_stand(pos: Vector2) -> bool:
 	var k := kind_at(cell_of(pos))
 	return k != "discharge" and k != "blinker" and not box_blocked(pos, Astronaut.FEET_HALF)
@@ -2662,6 +2811,7 @@ func _respawn() -> void:
 	var r := _wire_room if _wire_room != null else _current_room
 	_wire_room = null
 	_anchor_cells.clear()
+	_clear_stranded()
 	var target := _spawn
 	if r != null and r.start.x >= 0:
 		target = r.start
@@ -2763,9 +2913,14 @@ func _finish_level() -> void:
 		stars += 1                                  # every power cell
 	if _retries <= retry_goal:
 		stars += 1                                  # few retries
+	_award_xp(Game.XP_FINISH)                       # XP for reaching the exit
 	var stats := {"time": _play_time, "cells": _cells_banked, "cells_total": _cells.size(),
-		"retries": _retries, "retry_goal": retry_goal, "stars": stars, "hints": _hints_used}
+		"retries": _retries, "retry_goal": retry_goal, "stars": stars, "hints": _hints_used,
+		"xp": _xp_gained}
 	Game.record_level(level_number, stats)
+	await _offer_upgrades()                         # a level up at the exit? pick it first
+	if not is_inside_tree():
+		return
 	hud.show_summary(level_number, complete_message, stats, Game.has_level(level_number + 1))
 	_play("complete")
 	level_completed.emit()

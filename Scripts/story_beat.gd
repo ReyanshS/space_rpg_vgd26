@@ -56,6 +56,28 @@ enum Trigger {
 		queue_redraw()
 
 
+const CONSOLE_FONT := "res://Assets/fonts/m6x11.ttf"
+const CONSOLE_WIDTH := 254.0      # pixels of text per row in PIP's console (hud.tscn)
+static var _font: Font
+
+
+## Editor only: how many rows `line` takes in PIP's console at font size `size`
+## (wrapping word by word, like the console does).
+func _rows(line: String, size: int) -> int:
+	if _font == null:
+		_font = load(CONSOLE_FONT)
+	var rows := 1
+	var row := speaker + "> "
+	for word in line.split(" ", false):
+		var trial := row + word
+		if _font.get_string_size(trial, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > CONSOLE_WIDTH:
+			rows += 1
+			row = word + " "
+		else:
+			row = trial + " "
+	return rows
+
+
 ## Where the blue arrow points: the first Node2D child if there is one, else here.
 func arrow_position() -> Vector2:
 	for child in get_children():
@@ -84,9 +106,22 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	draw_string(font, Vector2(9, -2), head, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col)
 	draw_string(font, Vector2(9, 10), "%s: %s" % [speaker, first.left(34)], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col.lightened(0.4))
+	var y := 21.0
 	if lines.size() > 1:
-		draw_string(font, Vector2(9, 21), "+%d more line%s" % [lines.size() - 1, "s" if lines.size() > 2 else ""],
+		draw_string(font, Vector2(9, y), "+%d more line%s" % [lines.size() - 1, "s" if lines.size() > 2 else ""],
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col.darkened(0.2))
+		y += 11.0
+	# Will every line fit in PIP's console? (Same sizes as hud.gd: 16, or 12 if needed.)
+	var worst := 0
+	for i in lines.size():
+		if _rows(lines[i], 12) > 2:
+			worst = 2
+			draw_string(font, Vector2(9, y), "line %d TOO LONG: shorten it" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.3, 0.25))
+			y += 11.0
+		elif _rows(lines[i], 16) > 2 and worst < 1:
+			worst = 1
+	if worst == 1:
+		draw_string(font, Vector2(9, y), "long line: shows in smaller text", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.7, 0.3))
 	if point_here:
 		var target := to_local(arrow_position())
 		var d := target.length()

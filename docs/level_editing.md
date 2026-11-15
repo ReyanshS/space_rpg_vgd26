@@ -64,8 +64,10 @@ editor each one shows as a speech bubble with its trigger and first line.
 | SHIP_LIGHTS_UP | during the lights-on cutscene (any room) |
 
 - **Speaker:** `PIP` (green), `P!P` (the malfunctioning PIP: red, angry face), or any name.
-- **Lines:** one entry = one speech bubble. Keep each under about 72 letters, or it
-  won't fit the console. `{cells}`, `{o2_bonus}` and `{o2_per_cell}` become real numbers.
+- **Lines:** one entry = one speech bubble. The console fits two rows. A line that's a
+  bit too long shows in smaller text (the editor says "shows in smaller text" in
+  orange). Much too long and it gets split, which people miss: the editor says
+  **TOO LONG** in red, so shorten it. `{cells}`, `{o2_bonus}` and `{o2_per_cell}` become real numbers.
 - **Pause Game:** freeze the player until they press E through the lines. (Never
   happens while they're holding the wire.)
 - **Point Here:** PIP's blue arrow points at the marker while the lines play. To point
@@ -115,6 +117,15 @@ its number, his shutdown time and a dotted flight path. On the **RoguePip** node
   Check the solver's "s in all" for that stage and give players extra on top.
 - **Lines**: what he says when the surge hits, right after turning, when he escapes
   each socket, after the reboot, and when he cuts your wire.
+
+## 6b. The RPG side: XP, level ups, suit upgrades
+
+The numbers live in `Scripts/game_state.gd` (top of the file):
+- **XP_ROOM, XP_CLEAN, XP_CELL, XP_FINISH**: XP for powering a room, for doing it
+  without failing first, for each battery kept, for reaching the exit.
+- **XP_FIRST_LEVEL, XP_MORE_PER_LEVEL**: how much XP each level up needs.
+- **UPGRADES**: the cards on the LEVEL UP screen (name, text, how many times you can take it).
+  To add a new upgrade you also need code that uses it (see `wire_bonus()` and friends).
 
 ## 7. Test it straight away: TestStart + F6
 
