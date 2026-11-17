@@ -9,7 +9,7 @@
 [ext_resource type="Script" uid="uid://cml13d8bk10wd" path="res://Scripts/tutorial_step.gd" id="8_step"]
 [ext_resource type="Script" uid="uid://c376rpkh5mn8t" path="res://Scripts/story.gd" id="9_story"]
 [ext_resource type="Script" uid="uid://dy31ilbjnrg0t" path="res://Scripts/story_beat.gd" id="10_beat"]
-[ext_resource type="Script" path="res://Scripts/test_start.gd" id="20_test"]
+[ext_resource type="Script" uid="uid://banuvpb1mmt75" path="res://Scripts/test_start.gd" id="20_test"]
 
 [node name="Level1" type="Node2D" unique_id=709955476 node_paths=PackedStringArray("layout")]
 script = ExtResource("1_level")
@@ -80,15 +80,11 @@ advance_when = 4
 points = PackedVector2Array(464, 304, 624, 304, 624, 144, 784, 144, 784, 304)
 hint_only = true
 
-[node name="HintRoom4" parent="Hints" unique_id=1531242692 instance=ExtResource("6_guide")]
-points = PackedVector2Array(784, 496, 592, 624, 592, 784, 976, 784, 976, 656, 752, 656, 752, 880)
-hint_only = true
-
-[node name="HintGeneratorB" parent="Hints" instance=ExtResource("6_guide")]
+[node name="HintGeneratorB" parent="Hints" unique_id=1734495614 instance=ExtResource("6_guide")]
 points = PackedVector2Array(976, 976, 624, 1008, 880, 1168)
 hint_only = true
 
-[node name="HintGeneratorC" parent="Hints" instance=ExtResource("6_guide")]
+[node name="HintGeneratorC" parent="Hints" unique_id=1370928877 instance=ExtResource("6_guide")]
 points = PackedVector2Array(1008, 1328, 720, 1328, 464, 1328)
 hint_only = true
 
@@ -146,19 +142,19 @@ script = ExtResource("10_beat")
 lines = PackedStringArray("Careful. Those red grates are live. Step on one and you get zapped.", "The wire won\'t cross them either, so plan your way round first.")
 pause_game = true
 
-[node name="GeneratorIntro" type="Marker2D" parent="Story"]
+[node name="GeneratorIntro" type="Marker2D" parent="Story" unique_id=877755260]
 position = Vector2(528, 1072)
 script = ExtResource("10_beat")
 lines = PackedStringArray("This is the generator room. It\'s three machines in one.", "Every time you power one, the cargo lifts drop and the room changes.", "So have a look around before you grab the next wire.")
 pause_game = true
 
-[node name="GeneratorB" type="Marker2D" parent="Story"]
+[node name="GeneratorB" type="Marker2D" parent="Story" unique_id=900240112]
 position = Vector2(976, 1040)
 script = ExtResource("10_beat")
 lines = PackedStringArray("No straight line from here to that blue pad. Not with all that cargo.", "But the cargo lift dropped, so this side can reach the first machine now.")
 pause_game = true
 
-[node name="GeneratorC" type="Marker2D" parent="Story"]
+[node name="GeneratorC" type="Marker2D" parent="Story" unique_id=1076282822]
 position = Vector2(1040, 1296)
 script = ExtResource("10_beat")
 lines = PackedStringArray("These grates blink on and off. Lit ones zap your boots. The wire\'s fine.", "The light moves like a wave. Walk in the dark gap right behind it.", "The node in the middle stops the clock, so wait there if you need to.")
@@ -176,7 +172,7 @@ script = ExtResource("10_beat")
 trigger = 7
 lines = PackedStringArray("The lift to the main deck is in the bottom corner. Let\'s go.")
 
-[node name="TestStart" type="Marker2D" parent="."]
+[node name="TestStart" type="Marker2D" parent="." unique_id=1515230407]
 position = Vector2(272, 688)
 script = ExtResource("20_test")
 
