@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://Scripts/skill_def.gd" id="1_skill"]
+
+[resource]
+script = ExtResource("1_skill")
+id = "air_recycler"
+display_name = "AIR RECYCLER"
+short_name = "RECYCLER"
+description = "Reuses the air you breathe. 10 more seconds on spacewalks."
+branch = 2
+cost = 1
+parent_id = "small_tank"
+effect = "o2"
+amount = 10.0

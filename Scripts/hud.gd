@@ -11,7 +11,8 @@
 # Also: the wire TIMER (a small LED bar floating above the astronaut's head, so
 # you don't have to look away), the tutorial ARROW, short "toast" messages at
 # the top (room names, ZAP...), the white flash / black fade, the RESULTS screen
-# with stars, the PAUSE menu, and the black film bar of the cutscenes.
+# with stars, the PAUSE menu, the SKILL TREE screen (skill_tree.gd: T on the
+# pause menu or the results screen), and the black film bar of the cutscenes.
 #
 # It's a CanvasLayer, which means it stays still on screen while the camera
 # moves. Its nodes live in hud.tscn - open that scene to change colours and
@@ -27,8 +28,6 @@ extends CanvasLayer
 
 ## Emitted when a speech that freezes the player starts (true) / ends (false).
 signal dialogue_blocking(on: bool)
-## Emitted when the player picks a card on the LEVEL UP screen (the upgrade's id).
-signal upgrade_chosen(id: String)
 
 ## Height of the console at the bottom. level.gd keeps the room above it.
 const CONSOLE_H := 48
@@ -64,9 +63,7 @@ const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
 @onready var pause_panel: Control = $Pause
 @onready var pause_level: Label = $Pause/VBox/Level
 @onready var bar_top: ColorRect = $BarTop
-@onready var level_up: Control = $LevelUp
-@onready var level_up_title: Label = $LevelUp/VBox/Title
-@onready var cards: Array[Control] = [$LevelUp/VBox/Cards/Card0, $LevelUp/VBox/Cards/Card1, $LevelUp/VBox/Cards/Card2]
+@onready var skill_tree: SkillTreeScreen = $SkillTree
 ## The E key that bobs just under PIP's little screen when you have to press E
 ## to go on (never on top of the text). It's its own node in hud.tscn: move it
 ## there to put it somewhere else.
@@ -118,15 +115,10 @@ var _line_rogue := false          # the line on screen is said by the malfunctio
 # results screen
 var _stars_earned := 0
 var _stars_shown := 0
+var _points_earned := 0             # skill points this level gave (0 on a replay)
 
-# RPG: level, XP, and the LEVEL UP screen
-var _lv := 1
-var _xp_frac := 0.0
-var _floats: Array = []             # [text, age]: "+45 XP" rising over the astronaut
-var _picking := false               # the LEVEL UP screen is open
-var _pick_ids: Array = []           # the upgrade ids on the cards
-var _pick_index := 0                # which card is selected
-var _pick_ready_at := 0.0           # keys only count after this time (no accidental picks)
+# the skill tree screen
+var _tree_from_pause := false       # opened from the pause menu (go back to it on close)
 
 var _sfx := {}
 
@@ -148,7 +140,7 @@ func _ready() -> void:
 	fade_rect.color.a = 0.0
 	bar_top.visible = false
 	bar_top.position.y = -bar_top.size.y        # the film bar waits just above the screen
-	level_up.visible = false
+	skill_tree.closed.connect(_on_skill_tree_closed)
 	_show_idle()
 	_update_keys()
 	for n in ["blip", "star"]:
@@ -178,28 +170,67 @@ func _process(delta: float) -> void:
 	next_key.visible = _waiting_key
 	if _waiting_key:
 		next_key.queue_redraw()        # it bobs
-	for f in _floats:
-		f[1] += delta
-	_floats = _floats.filter(func(f: Array) -> bool: return f[1] < 1.4)
-	if _picking:
-		_pick_input()
-	if Input.is_action_just_pressed("pause") and allow_pause:
+	# (not while the skill tree is open, or on the frame its Esc closed it)
+	var tree_busy := skill_tree.visible or skill_tree.closed_frame == Engine.get_process_frames()
+	if Input.is_action_just_pressed("pause") and allow_pause and not tree_busy:
 		_set_paused(not get_tree().paused)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Q on the pause menu = back to the title screen
-	if pause_panel.visible and event is InputEventKey and event.pressed and not event.echo:
-		if (event as InputEventKey).physical_keycode == KEY_Q:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	var key := (event as InputEventKey).physical_keycode
+	# on the pause menu: Q = back to the title screen, T = skill tree
+	if pause_panel.visible:
+		if key == KEY_Q:
 			_set_paused(false)
 			Game.go_to_title()
+		elif key == KEY_T:
+			open_skill_tree()
+	# on the results screen: T = skill tree (spend the points you just got)
+	elif complete_panel.visible and key == KEY_T:
+		open_skill_tree()
 
 
 func _set_paused(on: bool) -> void:
 	get_tree().paused = on
 	pause_panel.visible = on
 	if on:
-		$Pause/VBox/Suit.text = "LV %d: %s" % [Game.lv, Game.perks_text()]
+		_update_pause_skills()
+
+
+## The line on the pause menu about your skills.
+func _update_pause_skills() -> void:
+	var pts := SkillManager.points
+	var text := "SKILLS %d/%d" % [SkillManager.unlocked_count(), SkillManager.all_skills().size()]
+	if pts > 0:
+		text += "   |   %d POINT%s TO SPEND" % [pts, "" if pts == 1 else "S"]
+	$Pause/VBox/Suit.text = text
+
+
+# ------------------------------------------------------------------ skill tree
+
+## Opens the skill tree screen and pauses the game until it closes.
+func open_skill_tree() -> void:
+	if skill_tree.visible:
+		return
+	_tree_from_pause = pause_panel.visible
+	pause_panel.visible = false
+	get_tree().paused = true
+	skill_tree.open()
+
+
+func is_skill_tree_open() -> bool:
+	return skill_tree.visible
+
+
+func _on_skill_tree_closed() -> void:
+	if _tree_from_pause:
+		pause_panel.visible = true        # back to the pause menu, still paused
+		_update_pause_skills()
+	else:
+		get_tree().paused = false         # back to the results screen
+		_update_points_line()
 
 
 ## The pause menu shows which level you're on.
@@ -250,15 +281,6 @@ func _draw_marker() -> void:
 		_draw_key(_player_on_screen() + Vector2(16, -58 + roundf(sin(_t * 5.0))), "E")
 	if _restart_prompt and not _cinematic:
 		_draw_key(_player_on_screen() + Vector2(0, -48 + roundf(sin(_t * 5.0))), "R")
-	# "+45 XP" floating up over the astronaut and fading out
-	var font := marker.get_theme_default_font()
-	for f in _floats:
-		var age: float = f[1]
-		var w := font.get_string_size(f[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-		var at := (_player_on_screen() + Vector2(-w * 0.5, -44.0 - age * 22.0)).round()
-		var a := clampf(1.6 - age * 1.2, 0.0, 1.0)
-		marker.draw_string_outline(font, at, f[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, 2, Color(0.1, 0.05, 0.0, a))
-		marker.draw_string(font, at, f[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(AMBER, a))
 
 
 func _draw_arrow(world: Vector2, col: Color, dark: Color) -> void:
@@ -673,10 +695,10 @@ func _draw_status() -> void:
 		PowerCell.draw_battery(status_box, o, AMBER.lerp(Color.WHITE, _cell_bump), Color(0.4, 0.25, 0.02))
 		var ink2 := PHOSPHOR if _cells < _cells_total else AMBER
 		status_box.draw_string(font, Vector2(88, 14), "%d/%d" % [_cells, _cells_total], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink2)
-	# your RPG level, with a thin XP bar under it
-	status_box.draw_string(font, Vector2(126, 13), "LV%d" % _lv, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, AMBER)
-	status_box.draw_rect(Rect2(126, 15, 34, 2), LED_OFF)
-	status_box.draw_rect(Rect2(126, 15, roundf(34.0 * _xp_frac), 2), PHOSPHOR)
+	# skill points waiting to be spent (amber when you have some)
+	var pts := SkillManager.points
+	status_box.draw_string(font, Vector2(126, 13), "SP%d" % pts, HORIZONTAL_ALIGNMENT_LEFT, -1, 16,
+		AMBER if pts > 0 else Color(0.42, 0.62, 0.45))
 	if _o2_on and not _reel_prompt and not _restart_prompt and not _waiting_key:
 		var col := Color(0.5, 0.85, 1.0)
 		if _o2_frac < 0.3:
@@ -687,84 +709,6 @@ func _draw_status() -> void:
 		var fill := Rect2(bar.position, Vector2(roundf(bar.size.x * _o2_frac), bar.size.y))
 		status_box.draw_rect(fill, col)
 		status_box.draw_rect(Rect2(fill.position, Vector2(fill.size.x, 1)), col.lightened(0.45))
-
-
-# ------------------------------------------------------------------ RPG: XP and LEVEL UP
-
-## Your level and how full the XP bar is (0..1). Shown in the console.
-func set_xp(lv: int, frac: float) -> void:
-	_lv = lv
-	_xp_frac = clampf(frac, 0.0, 1.0)
-
-
-## Text that floats up over the astronaut and fades (e.g. "+45 XP").
-func float_text(text: String) -> void:
-	_floats.append([text, 0.0])
-
-
-func is_picking() -> bool:
-	return _picking
-
-
-## The LEVEL UP screen: the game pauses and shows one card per upgrade id in
-## `choices`. Left / right picks a card, E takes it. This is a coroutine: the
-## level writes   var id = await hud.pick_upgrade(...)   and gets the answer
-## once the player has chosen. (The HUD keeps running while the game is
-## paused - its Process Mode is "Always" - so it can still read the keys.)
-func pick_upgrade(choices: Array, new_level: int) -> String:
-	_picking = true
-	_pick_ids = choices
-	_pick_index = 0
-	allow_pause = false
-	get_tree().paused = true
-	level_up_title.text = "LEVEL UP!  LV %d" % new_level
-	for i in cards.size():
-		var card := cards[i]
-		card.visible = i < choices.size()
-		if not card.visible:
-			continue
-		var id: String = choices[i]
-		var u: Dictionary = Game.UPGRADES[id]
-		card.get_node("VBox/Name").text = u["name"]
-		card.get_node("VBox/Text").text = u["text"]
-		card.get_node("VBox/Count").text = "have %d of %d" % [Game.perk(id), int(u["max"])]
-	_show_pick()
-	level_up.visible = true
-	level_up.pivot_offset = level_up.size * 0.5
-	level_up.scale = Vector2(0.7, 0.7)
-	create_tween().tween_property(level_up, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_sfx["star"].pitch_scale = 1.3
-	_sfx["star"].play()
-	_pick_ready_at = _t + 0.4
-	var chosen: String = await upgrade_chosen
-	level_up.visible = false
-	get_tree().paused = false
-	allow_pause = true
-	_picking = false
-	return chosen
-
-
-## Keys on the LEVEL UP screen (called every frame while it's open).
-func _pick_input() -> void:
-	if _t < _pick_ready_at or _pick_ids.is_empty():
-		return
-	var n := _pick_ids.size()
-	if Input.is_action_just_pressed("ui_left"):
-		_pick_index = (_pick_index + n - 1) % n
-		_show_pick()
-	elif Input.is_action_just_pressed("ui_right"):
-		_pick_index = (_pick_index + 1) % n
-		_show_pick()
-	elif Input.is_action_just_pressed("interact"):
-		upgrade_chosen.emit(_pick_ids[_pick_index])
-
-
-## The selected card is bright and lifted a little; the others are dimmed.
-func _show_pick() -> void:
-	for i in cards.size():
-		var on := i == _pick_index
-		cards[i].modulate = Color.WHITE if on else Color(0.5, 0.52, 0.58)
-	_sfx["blip"].play()
 
 
 # ------------------------------------------------------------------ screen effects
@@ -804,10 +748,11 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	$Complete/VBox/Stats.text = "TIME %d:%02d  |  CELLS %d/%d  |  RETRIES %d" % [
 		secs / 60, secs % 60, stats.get("cells", 0), stats.get("cells_total", 0), stats.get("retries", 0)]
 	# cells you keep also make your suit's air last longer on spacewalks
-	var bonus := int(stats.get("cells", 0)) * int(Game.O2_PER_CELL)
+	var bonus := int(stats.get("cells", 0)) * int(Game.o2_per_cell())
 	$Complete/VBox/Bonus.visible = bonus > 0 and has_next     # no spacewalks after the last level
-	$Complete/VBox/Xp.text = "LV %d   |   +%d XP this level" % [Game.lv, int(stats.get("xp", 0))]
-	$Complete/VBox/Bonus.text = "Suit upgrade: +%d s of oxygen" % bonus
+	$Complete/VBox/Bonus.text = "Kept batteries: +%d s of oxygen" % bonus
+	_points_earned = int(stats.get("points", 0))
+	_update_points_line()
 	$Complete/VBox/StarHelp.text = "Stars for finishing, every cell, and %d retries or fewer" % stats.get("retry_goal", 0)
 	$Complete/VBox/Again.text = ("[E] next level" if has_next else "[E] back to title") + "    [R] play again"
 	_stars_earned = int(stats.get("stars", 1))
@@ -825,6 +770,18 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 		_sfx["star"].pitch_scale = 1.0 + i * 0.12
 		_sfx["star"].play()
 		await get_tree().create_timer(0.35).timeout
+
+
+## The results line about skill points, e.g. "+2 SKILL POINTS   [T] skill tree".
+func _update_points_line() -> void:
+	var label: Label = $Complete/VBox/Points
+	var pts := SkillManager.points
+	if _points_earned > 0:
+		label.text = "+%d SKILL POINT%s   [T] skill tree" % [_points_earned, "" if _points_earned == 1 else "S"]
+	elif pts > 0:
+		label.text = "%d skill point%s to spend   [T] skill tree" % [pts, "" if pts == 1 else "s"]
+	else:
+		label.text = "[T] skill tree"
 
 
 func _draw_stars() -> void:

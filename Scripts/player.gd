@@ -42,7 +42,7 @@ const FEET_HALF := Vector2(6, 4)
 @export var drift_speed := 150.0
 
 var level: WireLevel = null   # set by the level when the game starts
-## Walking speed is multiplied by this (the LEG SERVOS suit upgrade raises it).
+## Walking speed is multiplied by this (the LEG SERVOS skills raise it).
 var speed_mult := 1.0
 var state: State = State.FREE
 var facing := Vector2i(0, 1)  # which way he looks: (0,1) = down, towards the camera

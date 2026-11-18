@@ -118,14 +118,24 @@ its number, his shutdown time and a dotted flight path. On the **RoguePip** node
 - **Lines**: what he says when the surge hits, right after turning, when he escapes
   each socket, after the reboot, and when he cuts your wire.
 
-## 6b. The RPG side: XP, level ups, suit upgrades
+## 6b. The RPG side: skill points and the skill tree
 
-The numbers live in `Scripts/game_state.gd` (top of the file):
-- **XP_ROOM, XP_CLEAN, XP_CELL, XP_FINISH**: XP for powering a room, for doing it
-  without failing first, for each battery kept, for reaching the exit.
-- **XP_FIRST_LEVEL, XP_MORE_PER_LEVEL**: how much XP each level up needs.
-- **UPGRADES**: the cards on the LEVEL UP screen (name, text, how many times you can take it).
-  To add a new upgrade you also need code that uses it (see `wire_bonus()` and friends).
+- **Points per level**: select the level's root node, Inspector > Level > **Skill Points**.
+  You only get them the first time you finish that level.
+- **Skills** are files in `Data/skills/` (one `.tres` each). Double-click one to edit it in
+  the Inspector:
+  - **Cost**: points to unlock it. **Amount**: how strong it is.
+  - **Parent Id**: the `id` of the skill you need first (empty = top of its branch).
+  - **Branch**: which column (Wire, Suit, Life Support).
+  - **Short Name**: the word under its box on the tree. **Description**: shown when selected.
+  - **Effect**: what it changes (`wire_time`, `cell_bonus`, `walk_speed`, `boots`, `o2`,
+    `o2_per_cell`). Skills with the same effect add up.
+- **New skill**: right-click a skill file > **Duplicate**, then give it a new **Id** and a
+  Parent Id. The tree places it by itself. A brand new kind of effect needs code
+  (search for `SkillManager.bonus`).
+- Never make a puzzle that NEEDS a skill: run the solver, which uses no skills.
+- The save file is `user://save.cfg`. To start clean while testing, press **N** on the title
+  screen (or delete it: Project > Open User Data Folder).
 
 ## 7. Test it straight away: TestStart + F6
 

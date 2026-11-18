@@ -46,9 +46,9 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - Rating form: Creativity x2, Technical skill x2, Storyline/flow between levels x1, Overall appeal x2
   (game design 70); video, portfolio, directions/controls, storyboard, AI reflection (50).
 - 2026-27 theme: *"Create a deep space-themed RPG where the primary method of progression is
-  puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), XP + character
-  levels (LV) with a pick-one-of-three suit upgrade on every level up, collectibles (power cells:
-  XP, +5 s oxygen each on spacewalks), results/stars per level. See "RPG" below.
+  puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), a skill tree
+  (3 branches, points for finishing levels), collectibles (power cells: +5 s oxygen each on
+  spacewalks), results/stars per level, a save file with Continue. See "RPG" below.
 - Wire timer check (Nov 2026, solver): the tightest stretch of each room needs at most 3.4 s of
   the 5 s with a perfect route (Generator B, Level 2's bridge); most need 1.5-3 s. Feels easy to
   someone who knows the routes, about right for first-time players (judges). Left at 5 s.
@@ -164,7 +164,8 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - `Scripts/player.gd` (`Astronaut`): state machine FREE / WIRED / CHOOSING / FLUNG / LOCKED / DRIFT.
   Only movement + animation; asks the level for rules (`player_moved()`, `wire_reaches()`,
   `drift_landing()`...).
-- `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`), results, `o2_bonus()`,
+- `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`), results, the save file
+  (`save_game()` / `load_game()`, `user://save.cfg`, `has_save()`, `continue_level()`), `o2_bonus()`,
   `go_to_level()`, `first_time(tip)` (PIP explains things once), `story_values()` for `{cells}` /
   `{o2_bonus}` / `{o2_per_cell}` in story text.
 - `Scripts/puzzle_tile.gd`: runtime visuals for pads/doors/gangways/airlock/barriers (glow, sparks,
@@ -176,7 +177,8 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   (`say(lines, speaker, blocking, point_at)`, typewriter; when quiet it shows the tutorial
   objective dimmed), ship power LEDs, cell counter, O2 bar (outside) or key reminders. The wire
   timer is a 5-LED bar floating above the astronaut's head. Also: tutorial/PIP arrows, toasts
-  (top), fades, results with stars + suit upgrade, pause menu, cutscene film bar (top).
+  (top), fades, results with stars + skill points, pause menu, the skill tree screen (an
+  instance of `Scenes/skill_tree.tscn`, `hud.open_skill_tree()`), cutscene film bar (top).
 - **UI look** (the team asked for "less AI"): ship hardware outside, old green terminal inside.
   Panels are 9-slice `StyleBoxTexture`s of `Assets/ui/frame_screen.png` (riveted bezel + green
   scanline screen) and `frame_plate.png` (riveted plate), drawn by `tools/art_ui.py`, margin 6.
@@ -195,21 +197,27 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `pip_o2_low`, `pip_no_landing`, `pip_cell_kept`, `pip_cell_lost`, `pip_strain`, `pip_shared`;
   said via `_pip_say()`, `{cells}`-style values, empty = silent) and "Popup texts" (`popup_...`).
   Don't hard-code new player-facing text in level.gd: add an export in one of those groups.
-  (Also `pip_stranded`, `pip_level_up`, `popup_stranded`, `popup_level_up`, `popup_boots`.)
+  (Also `pip_stranded`, `popup_stranded`, `popup_boots`.)
 - **Stranded after a fail**: `_check_stranded()` runs a tile BFS from the player to the room's
   START avoiding red tiles and grates; no path = an [R] key floats over him, the console says
   "[R] back to start", PIP explains once. Cleared by R, by grabbing the wire, or when a path appears.
-- **RPG** (`game_state.gd` holds it: `xp`, `lv`, `perks`, `upgrades_waiting`, tuning constants
-  XP_ROOM 30 / XP_CLEAN 15 / XP_CELL 10 / XP_FINISH 50, levels need 100, 160, 220... XP).
-  level.gd `_award_xp()` in `_solve()` and `_finish_level()`; a level up only queues an upgrade,
-  `_offer_upgrades()` opens the LEVEL UP screen at a safe moment (end of `_solve`, before the
-  results). `hud.pick_upgrade(choices, lv)` pauses the tree and is awaited for the chosen id.
-  Upgrades (`Game.UPGRADES`): wire (+0.5 s, x2), cells (+1 s per battery, x2), servos (+10% walk,
-  x2, `player.speed_mult`), boots (first zap per room absorbed: `_shock()` hops you back to
-  `_last_safe`, you keep the wire), tank (+15 s O2, x2). Rules read them through `_wire_time()`,
-  `_cell_bonus()`, `Game.o2_bonus()` - never read `wire_time` / `cell_bonus` directly in rules.
-  Bot runs: Levels 1+2 reach LV 5 (4 upgrades), Level 3 alone ~250 XP. Bots must press E when
-  `hud.is_picking()`.
+- **RPG = skill tree** (replaced the old XP / LV / pick-an-upgrade system, Nov 2026).
+  Autoload **SkillManager** (`Scripts/skill_manager.gd`, registered BEFORE Game) holds `points`
+  and the unlocked skills; `has_skill(id)`, `can_unlock(id)`, `unlock(id)`, `bonus(effect)`,
+  signals `points_changed`, `skill_unlocked`, `skills_changed`. Skills are DATA: one `SkillDef`
+  (`Scripts/skill_def.gd`) `.tres` per skill in `Data/skills/`, loaded with
+  `ResourceLoader.list_directory` (works in exports). 3 branches (Wire, Suit, Life Support),
+  5 skills each, cost 1-2, each needs its `parent_id`. Effects: `wire_time`, `cell_bonus`,
+  `walk_speed`, `boots` (zaps per room absorbed), `o2`, `o2_per_cell`.
+  Points: level.gd export `skill_points` (L1 2, L2 3, L3 3), given in `_finish_level()` only the
+  first time (`Game.has_finished()`), so replays can't farm them. The tree opens with T on the
+  pause menu or the results screen; it pauses the game and draws itself (`skill_tree.gd`,
+  layout computed from the parent links). Unlocks apply at once (level listens to
+  `skills_changed` -> `_apply_skills()`). Rules read skills through `_wire_time()`,
+  `_cell_bonus()`, `_shock()`, `Game.o2_bonus()`: never read `wire_time` / `cell_bonus`
+  directly in rules. **No puzzle may require a skill** (the solver uses none).
+  Saving: finishing a level and every unlock call `Game.save_game()`; the title screen shows
+  "E: CONTINUE (LEVEL n)" + "N: new game" when a save exists. Bots: `Game.new_game()` first.
   `RoguePip` is `@tool`: in the editor it previews the pylon, each socket (number + shutdown
   time) and the flight path, using `level.editor_core_spots()` (a quiet `_build_rooms(true)`).
 - **TestStart** (`Scripts/test_start.gd`, one per level scene, `active` off by default): drag it,
@@ -277,5 +285,8 @@ and made the boss sound effects (`tools/sfx_pip.py`).
 boss = "Space staccato", ending = "Title theme no dramatic". Claude only wired them in
 (`Game.MUSIC` = per-track volume, `Game.load_music()`, `level.set_music_override()`). Record
 who made them for the copyright checklist.
+The skill tree system (SkillManager, the skill files and their numbers, the skill tree screen,
+the save file and Continue) was written by Claude in Nov 2026 to replace the XP upgrades; the
+team chose the branches, the points per level and where it opens.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

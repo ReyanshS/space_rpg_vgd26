@@ -72,7 +72,7 @@ the game. Every change gets explained, with "check yourself" tasks.
 | Fully lit rooms | Dark ship, red emergency lights; power restores the lights | Matches "a ship with no electricity" |
 | New v2 astronaut sprite | **Original sprite restored**; v2 kept as a swappable option | Team preferred the original |
 | Level 1 ended with "press R to play again" | Results screen with stars, then **on to Level 2** | Judges must get from Level 1 into Level 2; stars make finishing feel rewarding |
-| No story or RPG elements | PIP (ship AI) dialogue, power cells that upgrade your suit's oxygen | The theme requires RPG elements; story ties the levels together |
+| No story or RPG elements | PIP (ship AI) dialogue, power cells that upgrade your suit's oxygen, a **skill tree** paid for with points from finishing levels | The theme requires RPG elements; story ties the levels together |
 | Spacewalk = "fix something outside" | Zero-G **drift** across gaps + oxygen meter, rewiring three relays | A new mechanic that still uses the wire rules, so it's a puzzle, not a reflex test |
 | Stuck players had no help | **H** shows the route in the harder rooms; PIP offers it after 2 fails | Judges must be able to finish; nobody should quit on one room |
 

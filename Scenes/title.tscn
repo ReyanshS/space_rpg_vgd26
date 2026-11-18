@@ -77,6 +77,16 @@ theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
 text = "> PRESS E TO START_"
 horizontal_alignment = 1
 
+[node name="NewGame" type="Label" parent="UI"]
+visible = false
+offset_left = 176.0
+offset_top = 199.0
+offset_right = 474.0
+offset_bottom = 217.0
+theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
+text = "N: new game"
+horizontal_alignment = 1
+
 [node name="Controls" type="Label" parent="UI" unique_id=178598356]
 offset_top = 222.0
 offset_right = 480.0

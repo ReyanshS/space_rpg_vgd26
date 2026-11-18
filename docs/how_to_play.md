@@ -31,6 +31,8 @@ they leave behind. At the end of each level you get up to three stars.
 | Go back to the START pad | R |
 | Show a hint (harder puzzles) | H |
 | Pause menu (controls, quit) | Esc |
+| Skill tree | T (on the pause menu or the results screen) |
+| New game (title screen, when you have a save) | N |
 
 ## Rules
 - **Grab the wire** on the yellow START pad. A **5-second timer** starts.
@@ -68,13 +70,18 @@ they leave behind. At the end of each level you get up to three stars.
   reboot him. While you hold the wire near him, the **red lights over his head** fill up. When
   they're full he cuts your wire, so plan the loop before you grab it.
 
-## Levelling up (the RPG part)
-- You earn **XP** for powering rooms, for doing it without failing first, for every battery
-  you keep, and for finishing a level. Your level (**LV**) and XP bar are in the console.
-- Every **level up**, the game pauses and you pick **one suit upgrade** out of three
-  (A / D to choose, E to take it). They stay with you for the whole game:
-  longer wire timer, stronger batteries, faster legs, rubber boots that shrug off one zap
-  per room, or a bigger air tank for spacewalks.
+## The skill tree (the RPG part)
+- Finishing a level for the first time gives you **skill points**: 2 for Level 1, 3 for the
+  harder levels. Points you haven't spent show in the console as **SP**.
+- Spend them on the **skill tree**: press **T** on the results screen, or **Esc** then **T**
+  during a level. Arrows pick a skill, **E** unlocks it (or click a skill, then click it again).
+- Three branches: **Wire** (longer timer, stronger batteries), **Suit** (faster legs, boots
+  that shrug off zaps) and **Life Support** (more air on spacewalks).
+- A skill costs 1 or 2 points and needs the skill above it first. Grey = locked,
+  amber = you can buy it, green = yours. Skills work straight away and last all game.
+- Every puzzle can be solved with no skills at all. They just make it easier.
+- The game saves when you finish a level or unlock a skill. The title screen then offers
+  **Continue** (E) or a **new game** (N, which deletes the save).
 
 ## If you get stuck
 - Zapped somewhere with no safe way back to the START? An **[R]** appears over you:

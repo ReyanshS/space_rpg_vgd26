@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://Scripts/skill_def.gd" id="1_skill"]
+
+[resource]
+script = ExtResource("1_skill")
+id = "longer_wire_2"
+display_name = "LONGER WIRE II"
+short_name = "WIRE II"
+description = "Another half second on the wire timer."
+branch = 0
+cost = 1
+parent_id = "longer_wire_1"
+effect = "wire_time"
+amount = 0.5

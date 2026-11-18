@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://Scripts/skill_def.gd" id="1_skill"]
+
+[resource]
+script = ExtResource("1_skill")
+id = "insulated_soles"
+display_name = "INSULATED SOLES"
+short_name = "SOLES"
+description = "Your boots shrug off a second zap in each room too."
+branch = 1
+cost = 2
+parent_id = "rubber_boots"
+effect = "boots"
+amount = 1.0

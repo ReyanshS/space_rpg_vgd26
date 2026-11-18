@@ -76,12 +76,15 @@
 #     isn't part of the rules: it LISTENS to the level's signals, and it can
 #     call cut_wire(), set_alert(), hold() and let_go().
 #
-# THE RPG SIDE (XP, levels, suit upgrades - the numbers are in game_state.gd)
-#   - Powering a room gives XP (more if you didn't fail there, and for every
-#     battery kept); so does reaching the exit (_award_xp).
-#   - Level up = after the room's power-up, the game pauses and you pick one
-#     upgrade (_offer_upgrades -> hud.pick_upgrade). Upgrades change the rules
-#     through _wire_time(), _cell_bonus(), _shock() and the player's speed_mult.
+# THE RPG SIDE (skill points and the skill tree - see skill_manager.gd)
+#   - Finishing a level for the FIRST time gives `skill_points` (an export, so
+#     harder levels can give more). Replays give nothing (_finish_level).
+#   - You spend them on the skill tree (Esc then T, or T on the results screen).
+#     Skills change the rules through _wire_time(), _cell_bonus(), _shock() and
+#     the player's speed_mult, and apply the moment you unlock them
+#     (_apply_skills listens to SkillManager.skills_changed).
+#   - No puzzle ever NEEDS a skill: skills only make rules easier, and the
+#     solver checks every room with no skills at all.
 # ---------------------------------------------------------------------------
 @tool
 class_name WireLevel
@@ -151,6 +154,8 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var level_name := "ENGINEERING DECK"
 ## Shown on the results screen.
 @export var complete_message := "Power's back on in this part of the ship."
+## Skill points for finishing this level the first time. Give harder levels more.
+@export var skill_points := 2
 
 @export_group("Rules")
 ## Seconds you get from the START pad, and again at every NODE.
@@ -220,8 +225,6 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var pip_shared := "That node from the last machine is still live. Wrap this wire round it."
 ## After a fail, when there's no way back to the START without crossing red tiles or grates.
 @export var pip_stranded := "No safe way back from there. Press R and I'll bring you to the start."
-## After you pick your very first suit upgrade.
-@export var pip_level_up := "Nice. The suit learns as you go. Every level up, you get another upgrade."
 
 # The short messages that pop up at the top of the screen.
 @export_group("Popup texts")
@@ -238,9 +241,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var popup_hint := "FOLLOW THE ARROWS"
 @export var popup_outer_door := "OUTER DOOR OPEN"
 @export var popup_stranded := "NO WAY BACK? PRESS R"
-## {lv} = your new level.
-@export var popup_level_up := "LEVEL UP! LV {lv}"
-@export var popup_boots := "RUBBER BOOTS SAVED YOU"
+@export var popup_boots := "YOUR BOOTS SAVED YOU"
 
 
 # An inner class: a little bundle of data describing one room.
@@ -338,8 +339,7 @@ var _stranded := false                    # after a fail: no safe path back to t
 var _stranded_check := 0.0
 
 # --- RPG
-var _xp_gained := 0                       # XP earned in this level (for the results screen)
-var _boots_used := {}                     # Room -> true: RUBBER BOOTS already saved you there
+var _boots_used := {}                     # Room -> how many zaps your boots already shrugged off there
 
 # --- the core (Level 3)
 var _alert := false            # red alert: the ship's tinted red, the boss music plays
@@ -430,7 +430,8 @@ func _ready() -> void:
 	hud.set_level_info("LEVEL %d: %s" % [level_number, level_name])
 	hud.set_cells(0, _cells.size())
 	hud.set_power(0, _rooms_with_goal)
-	_apply_upgrades()                      # suit upgrades from earlier levels (and LV in the console)
+	_apply_skills()                        # skills you unlocked earlier...
+	SkillManager.skills_changed.connect(_apply_skills)   # ...and ones you unlock mid level
 	_update_hint_label.call_deferred()     # after the floor guides know their rooms
 	_apply_test_start()
 	if camera:
@@ -2298,8 +2299,6 @@ func _solve(r: Room) -> void:
 	player.set_lamp(false)          # ...so he doesn't need his helmet lamp any more
 	hud.set_power(_rooms_powered, _rooms_with_goal)
 	_update_hint_label()
-	# XP: for the room, for the batteries you kept, and a bonus if you never failed here
-	_award_xp(Game.XP_ROOM + kept * Game.XP_CELL + (Game.XP_CLEAN if r.fails == 0 else 0))
 	room_solved.emit(r.index)       # the tutorial, story and floor guides listen for this
 	if kept > 0 and Game.first_time("cell_kept"):
 		_pip_say(pip_cell_kept)
@@ -2309,35 +2308,35 @@ func _solve(r: Room) -> void:
 	_open_exit_doors(r)
 	if _rooms_powered >= _rooms_with_goal:
 		await _all_powered()        # the lights-on cutscene: wait here until it's over
-	await _offer_upgrades()         # levelled up? pick a suit upgrade now
 	_busy = false
 	_release_player()
 
 
-# ===================================================================== RPG: XP, level ups, upgrades
-# Doing well earns XP (Game.add_xp). Enough XP = LEVEL UP: the game pauses and
-# you pick one suit upgrade (hud.pick_upgrade). Upgrades change the rules a
-# little, so every rule they touch asks one of these small functions instead of
-# reading wire_time or cell_bonus directly.
+# ===================================================================== RPG: skills
+# Skills (SkillManager) change the rules a little, so every rule they touch
+# asks one of these small functions instead of reading wire_time or
+# cell_bonus directly.
 
-## Seconds on the wire timer: this level's wire_time + the LONGER WIRE upgrade.
+## Seconds on the wire timer: this level's wire_time + the Wire skills.
 func _wire_time() -> float:
-	return wire_time + Game.wire_bonus()
+	return wire_time + SkillManager.bonus("wire_time")
 
 
-## Seconds a battery adds: cell_bonus + the SUPER CELLS upgrade.
+## Seconds a battery adds: cell_bonus + the SUPER CELLS skills.
 func _cell_bonus() -> float:
-	return cell_bonus + Game.cell_bonus_extra()
+	return cell_bonus + SkillManager.bonus("cell_bonus")
 
 
 ## You stepped on something live (a red tile or a lit grate). With the RUBBER
-## BOOTS upgrade the first zap in each room doesn't count: a spark, and you hop
-## back to the last spot you stood on safely. You even keep the wire.
+## BOOTS skill the first zap in each room doesn't count (INSULATED SOLES: the
+## first two): a spark, and you hop back to the last spot you stood on safely.
+## You even keep the wire.
 func _shock() -> void:
 	var r := _current_room
 	var can_hop := player.state in [Astronaut.State.FREE, Astronaut.State.WIRED, Astronaut.State.FLUNG]
-	if Game.perk("boots") > 0 and r != null and not _boots_used.has(r) and can_hop and _last_safe.is_finite():
-		_boots_used[r] = true
+	var saves := int(SkillManager.bonus("boots"))
+	if r != null and int(_boots_used.get(r, 0)) < saves and can_hop and _last_safe.is_finite():
+		_boots_used[r] = int(_boots_used.get(r, 0)) + 1
 		player.land()                   # a fling stops right here
 		player.position = _last_safe
 		_play("shock")
@@ -2348,44 +2347,12 @@ func _shock() -> void:
 	_fail("shock")
 
 
-## Give XP: it floats up over the astronaut, and the console's XP bar fills.
-## A level up is only REMEMBERED here (Game.upgrades_waiting); you pick the
-## upgrade when it's safe (_offer_upgrades), not in the middle of a puzzle.
-func _award_xp(amount: int) -> void:
-	if amount <= 0:
-		return
-	_xp_gained += amount
-	var ups := Game.add_xp(amount)
-	hud.float_text("+%d XP" % amount)
-	hud.set_xp(Game.lv, Game.level_progress())
-	if ups > 0:
-		_play("fanfare")
-		hud.show_toast(popup_level_up.format({"lv": Game.lv}), 2.5)
-
-
-## For every level up you haven't used yet: pause and pick an upgrade.
-func _offer_upgrades() -> void:
-	var picked := false
-	while Game.upgrades_waiting > 0 and is_inside_tree():
-		var choices := Game.upgrade_choices(3)
-		if choices.is_empty():
-			Game.upgrades_waiting = 0     # you've got every upgrade already
-			break
-		var id: String = await hud.pick_upgrade(choices, Game.lv)
-		Game.take_upgrade(id)
-		_apply_upgrades()
-		picked = true
-		_input_cooldown = 0.3           # the E that picked the card shouldn't grab a wire too
-	if picked and Game.first_time("level_up"):
-		_pip_say(pip_level_up)
-
-
-## Upgrades that change something straight away (the others are read when needed).
-func _apply_upgrades() -> void:
-	player.speed_mult = Game.walk_multiplier()
+## Skills that change something straight away (the others are read when needed).
+## Runs at the start, and every time SkillManager says something changed.
+func _apply_skills() -> void:
+	player.speed_mult = 1.0 + SkillManager.bonus("walk_speed")
 	if _o2_on:
 		_o2_max = o2_seconds + Game.o2_bonus()
-	hud.set_xp(Game.lv, Game.level_progress())
 
 
 ## quiet = no sounds or camera shake (used when a playtest skips rooms).
@@ -2925,14 +2892,16 @@ func _finish_level() -> void:
 		stars += 1                                  # every power cell
 	if _retries <= retry_goal:
 		stars += 1                                  # few retries
-	_award_xp(Game.XP_FINISH)                       # XP for reaching the exit
+	# Skill points, but only the first time you finish this level (no farming
+	# them with "play again"). Ask BEFORE record_level, which marks it finished.
+	var points := 0 if Game.has_finished(level_number) else skill_points
+	SkillManager.add_points(points)
+	if points > 0:
+		_play("fanfare")
 	var stats := {"time": _play_time, "cells": _cells_banked, "cells_total": _cells.size(),
 		"retries": _retries, "retry_goal": retry_goal, "stars": stars, "hints": _hints_used,
-		"xp": _xp_gained}
-	Game.record_level(level_number, stats)
-	await _offer_upgrades()                         # a level up at the exit? pick it first
-	if not is_inside_tree():
-		return
+		"points": points}
+	Game.record_level(level_number, stats)          # (this also saves the game)
 	hud.show_summary(level_number, complete_message, stats, Game.has_level(level_number + 1))
 	_play("complete")
 	level_completed.emit()

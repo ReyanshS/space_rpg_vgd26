@@ -9,11 +9,10 @@
 #
 # Any script can use it by its name, e.g.  Game.o2_bonus()  or  Game.go_to_level(2)
 #
-# It also holds the RPG side of the game: your XP, your level (LV) and the suit
-# upgrades you picked. The level gives XP (level.gd _award_xp), and when you
-# level up it opens the LEVEL UP screen (hud.gd pick_upgrade). Upgrades change
-# the rules through the small helpers here: wire_bonus(), cell_bonus_extra(),
-# walk_multiplier(), o2_bonus() and perk("boots").
+# The RPG side (skill points and the skill tree) lives in its own autoload,
+# SkillManager (skill_manager.gd). This script SAVES it, together with which
+# levels you've finished, to one save file (save_game / load_game), so the
+# title screen can offer "Continue".
 # ---------------------------------------------------------------------------
 extends Node
 
@@ -39,34 +38,12 @@ const MUSIC := {
 }
 
 ## Extra seconds of oxygen on a spacewalk for every power cell you charged so far.
-## This is the RPG "upgrade": exploring earlier levels makes later ones easier.
+## A small RPG reward: exploring earlier levels makes later ones easier.
 const O2_PER_CELL := 5.0
 
-# ---- RPG: experience (XP), levels and suit upgrades --------------------------
-# You earn XP for what you do well. Enough XP = LEVEL UP: you pick one upgrade
-# for your suit, and it stays with you for the rest of the game. Change the
-# numbers here to make levelling faster or slower.
-const XP_ROOM := 30         ## for powering a room
-const XP_CLEAN := 15        ## extra, if you powered it without failing there first
-const XP_CELL := 10         ## for each battery you keep
-const XP_FINISH := 50       ## for reaching the exit of a level
-const XP_FIRST_LEVEL := 100 ## XP needed to go from LV 1 to LV 2...
-const XP_MORE_PER_LEVEL := 60  ## ...and each level after that needs this much more
-
-## The upgrades you can pick when you level up. "max" = how many times you can take it.
-## The level reads these through the helper functions below (wire_bonus() etc.).
-const UPGRADES := {
-	"wire": {"name": "LONGER WIRE", "text": "+0.5 s on the wire timer", "max": 2},
-	"cells": {"name": "SUPER CELLS", "text": "Batteries add 1 s more", "max": 2},
-	"servos": {"name": "LEG SERVOS", "text": "Walk 10% faster", "max": 2},
-	"boots": {"name": "RUBBER BOOTS", "text": "Shrug off the first zap in each room", "max": 1},
-	"tank": {"name": "BIG TANK", "text": "+15 s of air on spacewalks", "max": 2},
-}
-
-var xp := 0                 # all the XP you've earned this game
-var lv := 1                 # your level (shown as LV in the console)
-var upgrades_waiting := 0   # level ups you haven't picked an upgrade for yet
-var perks := {}             # upgrade id -> how many times you took it
+## The save file. "user://" is a folder Godot keeps for this game on the
+## player's computer (in a web build: inside the browser's storage).
+const SAVE_PATH := "user://save.cfg"
 
 # One entry per level number, e.g. results[1] = {"time": 140.2, "cells": 7, ...}
 var results := {}
@@ -78,94 +55,28 @@ var playing_through := false
 var _tips_seen := {}
 
 
-## Forget everything (the title screen calls this when you start a new game).
+## Forget everything and delete the save (the title screen's "new game").
 func new_game() -> void:
 	results.clear()
-	xp = 0
-	lv = 1
-	upgrades_waiting = 0
-	perks.clear()
+	SkillManager.reset()
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
 
 
-# ------------------------------------------------------------------ XP and levels
-
-## XP needed to get from level `level` to the next one: 100, 160, 220, 280...
-func xp_for_next(level: int) -> int:
-	return XP_FIRST_LEVEL + XP_MORE_PER_LEVEL * (level - 1)
+func _ready() -> void:
+	# Buying a skill saves straight away, so quitting mid level doesn't lose it.
+	SkillManager.skill_unlocked.connect(func(_id: String) -> void: save_game())
 
 
-## Add XP. Returns how many times you levelled up (usually 0 or 1).
-## Each level up also leaves an upgrade waiting to be picked.
-func add_xp(amount: int) -> int:
-	xp += amount
-	var ups := 0
-	while xp >= xp_total_for(lv + 1):
-		lv += 1
-		ups += 1
-		upgrades_waiting += 1
-	return ups
-
-
-## Total XP you need to REACH level `level` (LV 2 = 100, LV 3 = 260, ...).
-func xp_total_for(level: int) -> int:
-	var total := 0
-	for l in range(1, level):
-		total += xp_for_next(l)
-	return total
-
-
-## How far you are towards the next level: 0 = just levelled up, 1 = about to.
-func level_progress() -> float:
-	var start := xp_total_for(lv)
-	return clampf(float(xp - start) / float(xp_for_next(lv)), 0.0, 1.0)
-
-
-## Up to `count` different upgrades you could still take, in a random order.
-func upgrade_choices(count := 3) -> Array:
-	var open: Array = []
-	for id in UPGRADES:
-		if perk(id) < int(UPGRADES[id]["max"]):
-			open.append(id)
-	open.shuffle()
-	return open.slice(0, count)
-
-
-func take_upgrade(id: String) -> void:
-	perks[id] = perk(id) + 1
-	upgrades_waiting = maxi(0, upgrades_waiting - 1)
-
-
-## How many times you took upgrade `id` (0 = not at all).
-func perk(id: String) -> int:
-	return int(perks.get(id, 0))
-
-
-## "LONGER WIRE x2, RUBBER BOOTS" - for the pause menu.
-func perks_text() -> String:
-	var parts: PackedStringArray = []
-	for id in UPGRADES:
-		var n := perk(id)
-		if n > 0:
-			parts.append(UPGRADES[id]["name"] + (" x%d" % n if n > 1 else ""))
-	return ", ".join(parts) if not parts.is_empty() else "no upgrades yet"
-
-
-# What each upgrade does - the level asks these:
-func wire_bonus() -> float:        ## extra seconds on the wire timer
-	return 0.5 * perk("wire")
-
-
-func cell_bonus_extra() -> float:  ## extra seconds a battery adds
-	return 1.0 * perk("cells")
-
-
-func walk_multiplier() -> float:   ## 1.0 = normal walking speed
-	return 1.0 + 0.1 * perk("servos")
-
-
-## The level calls this when you finish it.
+## The level calls this when you finish it. It also saves the game.
 func record_level(number: int, stats: Dictionary) -> void:
 	results[number] = stats
+	save_game()
+
+
+## True if you've finished level `number` before (in this save).
+func has_finished(number: int) -> bool:
+	return results.has(number)
 
 
 ## Power cells charged in every level finished so far.
@@ -176,9 +87,14 @@ func cells_collected() -> int:
 	return n
 
 
-## Extra oxygen on spacewalks: from batteries you kept, and the BIG TANK upgrade.
+## Seconds of oxygen each kept battery gives (CELL CHARGER skill adds to it).
+func o2_per_cell() -> float:
+	return O2_PER_CELL + SkillManager.bonus("o2_per_cell")
+
+
+## Extra oxygen on spacewalks: from batteries you kept, and the Life Support skills.
 func o2_bonus() -> float:
-	return cells_collected() * O2_PER_CELL + 15.0 * perk("tank")
+	return cells_collected() * o2_per_cell() + SkillManager.bonus("o2")
 
 
 ## True the FIRST time it's asked about `tip`, false every time after that.
@@ -207,6 +123,7 @@ func has_level(number: int) -> bool:
 
 
 func go_to_level(number: int) -> void:
+	get_tree().paused = false       # pausing survives a scene change, so make sure it's off
 	if has_level(number):
 		playing_through = true
 		get_tree().change_scene_to_file(LEVELS[number - 1])
@@ -221,4 +138,46 @@ func go_to_title() -> void:
 
 ## Values that story text can use: write {cells}, {o2_bonus} or {o2_per_cell} inside a line.
 func story_values() -> Dictionary:
-	return {"cells": cells_collected(), "o2_bonus": int(o2_bonus()), "o2_per_cell": int(O2_PER_CELL)}
+	return {"cells": cells_collected(), "o2_bonus": int(o2_bonus()), "o2_per_cell": int(o2_per_cell())}
+
+
+# ------------------------------------------------------------------ the save file
+# A ConfigFile is a simple text file with [sections] and key = value lines,
+# like project.godot. Godot can store dictionaries and arrays in it directly.
+
+func save_game() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("progress", "results", results)
+	var skills := SkillManager.to_save()
+	cfg.set_value("skills", "points", skills["points"])
+	cfg.set_value("skills", "unlocked", skills["unlocked"])
+	var err := cfg.save(SAVE_PATH)
+	if err != OK:
+		push_warning("Couldn't save the game (error %d)" % err)
+
+
+## Loads the save file if there is one. Returns false if there isn't.
+func load_game() -> bool:
+	var cfg := ConfigFile.new()
+	if cfg.load(SAVE_PATH) != OK:
+		return false
+	results = cfg.get_value("progress", "results", {})
+	SkillManager.from_save({
+		"points": cfg.get_value("skills", "points", 0),
+		"unlocked": cfg.get_value("skills", "unlocked", []),
+	})
+	return true
+
+
+## There's a game to continue: you finished at least one level.
+func has_save() -> bool:
+	return FileAccess.file_exists(SAVE_PATH) and not results.is_empty()
+
+
+## The level "Continue" goes to: the one after the last you finished
+## (or the last level again, if you've finished them all).
+func continue_level() -> int:
+	var last := 0
+	for n in results:
+		last = maxi(last, int(n))
+	return clampi(last + 1, 1, LEVELS.size())
