@@ -119,22 +119,6 @@ notes=[523.25,659.25,783.99,1046.5]
 x=np.concatenate([tone(f,0.11)*env(int(SR*0.11),0.004,0.03) for f in notes]+
                  [sum(tone(f,1.2,0.2) for f in (523.25,659.25,783.99,1046.5))*np.exp(-t(1.2)*2.2)])
 save('fanfare.wav',x,0.55)
-# music loops: soft chords. Every frequency fits a whole number of cycles in the loop,
-# so the end joins the start without a click.
-def pad_loop(chords,seconds,shimmer):
-    L=seconds; tt=t(L); out=np.zeros(len(tt)); per=L/len(chords)
-    for i,ch in enumerate(chords):
-        w=np.clip(1-np.abs((tt-(i+0.5)*per)/(per*0.75)),0,1)**1.5   # crossfading swell
-        w+=np.clip(1-np.abs((tt-(i+0.5)*per+L)/(per*0.75)),0,1)**1.5
-        w+=np.clip(1-np.abs((tt-(i+0.5)*per-L)/(per*0.75)),0,1)**1.5
-        for f in ch:
-            f=round(f*L)/L
-            out+=w*(np.sin(2*np.pi*f*tt)+0.3*np.sin(2*np.pi*2*f*tt)+0.12*np.sin(2*np.pi*3*f*tt+1))
-    bass=round(55*L)/L; out+=0.6*np.sin(2*np.pi*bass*tt)*(0.7+0.3*np.sin(2*np.pi*tt/L*2))
-    if shimmer:
-        for f in (1760,2093,2637):
-            f=round(f*L)/L; out+=0.05*np.sin(2*np.pi*f*tt)*(0.5+0.5*np.sin(2*np.pi*tt/L*3+f))
-    return out
-save('music_ship.wav',pad_loop([(220,261.6,329.6),(174.6,220,261.6),(196,246.9,293.7),(164.8,207.7,246.9)],16,False),0.35)
-save('music_space.wav',pad_loop([(220,261.6,329.6,392),(174.6,220,261.6,329.6),(261.6,329.6,392,493.9),(196,246.9,293.7,370)],20,True),0.35)
+# (The music used to be made here too. It's now the team's own tracks:
+#  Assets/audio/music_*.ogg, listed in Game.MUSIC in game_state.gd.)
 print('ok')

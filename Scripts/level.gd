@@ -135,7 +135,6 @@ const SRC_PUZZLE := 3
 const SRC_HULL := 4
 const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "door", "complete", "tick",
 	"pickup", "hiss", "puff", "clank", "alarm", "fanfare", "pulse"]
-const MUSIC_DB := -17.0
 
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
 @export var layout: TileMapLayer
@@ -372,6 +371,7 @@ var _sfx := {}
 var _music := {}               # "ship" / "space" -> AudioStreamPlayer
 var _music_tweens := {}
 var _music_now := ""
+var _music_override := ""      # set_music_override(): music chosen by a cutscene, not by the room
 var _tile_root: Node2D
 var _conduit_root: Node2D
 var _wire_root: Node2D
@@ -1344,7 +1344,9 @@ func _update_environment(snap: bool) -> void:
 		_dark.color = col
 	else:
 		_tween_env(col, 1.2)
-	if _alert:
+	if _music_override != "":
+		_set_music(_music_override)
+	elif _alert:
 		_set_music("core")
 	else:
 		_set_music("space" if _current_room.outside else "ship")
@@ -1461,19 +1463,15 @@ func _setup_audio() -> void:
 	_sfx["tick"].volume_db = -6.0
 	_sfx["alarm"].volume_db = -6.0
 	_sfx["hum"].finished.connect(_on_hum_finished)   # loop the hum while carrying
-	# Background music: soft loops for inside the ship and for space, and a
-	# tense one for red alerts (the PIP boss in Level 3).
-	for n in ["ship", "space", "core"]:
+	# Background music (the team's tracks, listed in Game.MUSIC): inside the
+	# ship, out on the hull, the rogue PIP fight, and the ending. One player
+	# each, all silent at first; _set_music() fades between them.
+	for n in Game.MUSIC:
+		if n == "title":
+			continue                     # that one's for the title screen
 		var p := AudioStreamPlayer.new()
 		p.name = "Music_" + n
-		var path := "res://Assets/audio/music_%s.wav" % n
-		if ResourceLoader.exists(path):
-			var s = load(path)
-			if s is AudioStreamWAV:
-				s.loop_mode = AudioStreamWAV.LOOP_FORWARD      # play it round and round
-				s.loop_begin = 0
-				s.loop_end = int(s.get_length() * s.mix_rate)
-			p.stream = s
+		p.stream = Game.load_music(n)
 		p.volume_db = -80.0
 		add_child(p)
 		_music[n] = p
@@ -1500,7 +1498,19 @@ func _on_hum_finished() -> void:
 		_sfx["hum"].play()
 
 
+## Something else decides the music for now: rogue_pip.gd plays "ending" once
+## PIP is back, or "none" for silence while he reboots. "" = back to normal
+## (the room decides: ship / space / core).
+func set_music_override(which: String) -> void:
+	_music_override = which
+	if which == "":
+		_update_environment(false)
+	else:
+		_set_music(which)
+
+
 ## Cross-fade: the new music fades in while the old one fades out.
+## ("none", or any name that isn't a track, fades everything out.)
 func _set_music(which: String) -> void:
 	if which == _music_now:
 		return
@@ -1516,7 +1526,7 @@ func _set_music(which: String) -> void:
 		if n == which:
 			if not p.playing:
 				p.play()
-			tw.tween_property(p, "volume_db", MUSIC_DB, 2.0)
+			tw.tween_property(p, "volume_db", float(Game.MUSIC[n]), 2.0)
 		else:
 			tw.tween_property(p, "volume_db", -80.0, 2.0)
 			tw.tween_callback(p.stop)
@@ -2903,6 +2913,8 @@ func _air_particles(r: Room, outer: Array[Vector2i]) -> CPUParticles2D:
 func _finish_level() -> void:
 	_complete = true
 	_input_cooldown = 1.5           # let the results screen appear before keys work
+	if not Game.has_level(level_number + 1):
+		set_music_override("ending")   # the very last results screen: the ending theme
 	player.lock(false)
 	hud.set_timer(false, 0.0, 0.0)
 	_o2_on = false

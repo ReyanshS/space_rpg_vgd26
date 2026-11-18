@@ -112,7 +112,8 @@ the game. Every change gets explained, with "check yourself" tasks.
   nebula and a parallax starfield.
 - Live wire with current pulses and sparks; it flickers hot when time runs low.
 - Lighting: dark ship, emergency lights, helmet lamp, ceiling lights on power-up; sunlit hull outside.
-- 20 sound effects + 2 ambient music loops (ship / space), all generated in code.
+- Sound effects generated in code; music is the team's own five tracks (title, ship, spacewalk,
+  boss, ending), volumes in `Game.MUSIC`.
 - HUD: timer bar, room-name toasts, flash and shake on shock, fades, power meter, cell counter,
   oxygen gauge, PIP's speech box with an animated face (it picks the top or bottom of the screen
   once and turns see-through when you walk behind it), results screen with stars, film bars for
@@ -229,8 +230,10 @@ Tool: Claude (Anthropic), in the Claude app; later Claude Code.
 - **Art**: the team's sprite sheets cleaned up and cut to 32x32 by Claude's scripts; the v2
   astronaut (not in use), the hull plates, gangway, airlock pad, planet and nebula were drawn in
   code by Claude (`tools/astro2.py`, `tools/art_space.py`).
-- **Sound and music**: all effects and both music loops synthesized in code by Claude (sine waves,
-  noise, envelopes), with no outside sources. Script: `tools/sfx.py`.
+- **Sound effects**: synthesized in code by Claude (sine waves, noise, envelopes), with no outside
+  sources. Scripts: `tools/sfx.py`, `tools/sfx_pip.py`.
+- **Music**: the team's own tracks (replaced Claude's synthesized loops in Nov 2026). Claude only
+  hooked them into the game.
 - **Level design**: Level 1's layouts follow the team's hand-drawn map; Claude adjusted Room 4 to
   remove shortcuts, placed the power cells, and verified every room with a solver. Level 2
   (bridge + spacewalk) was designed by Claude from Nilay's request ("go out the airlock and do a

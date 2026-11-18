@@ -122,7 +122,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   tick at the START's direction: the loop closes when your hands cross that line.
 - Story: Level 3's first room (CORE ACCESS) teaches the loop on a harmless "sync pylon". Powering
   it overloads PIP (`RoguePip.malfunction_room`): red alert (`set_alert`: `alert_light` tint,
-  every emergency light flashes, `music_core.wav`), he talks as "P!P", and hides in the core
+  every emergency light flashes, boss music `music_core.ogg`), he talks as "P!P", and hides in the core
   chamber: 3 stages joined by barriers, one core each (open ring / behind cargo + bend / between
   blinking grates). Each loop reboots him a bit; he flies to the next socket. The last one shuts
   him down, he reboots, then the normal lights-on cutscene plays.
@@ -261,7 +261,7 @@ Made with Claude (Anthropic) in the Claude app and Claude Code: the level/tutori
 HUD scripts (incl. the lights-on cutscene), Level 2's layout and puzzles (drafted as text, verified with the solver), the tile and
 astronaut sprite sheets (cleaned up from the team's AI-generated art; `astronaut_v2.png` was
 hand-composited in code), the hull/space/gangway/airlock art, planet and nebula (drawn pixel by
-pixel in `tools/art_space.py`), PIP's dialogue text, and all sounds and music in `Assets/audio`
+pixel in `tools/art_space.py`), PIP's dialogue text, and all SOUND EFFECTS in `Assets/audio`
 (synthesized in Python from sine waves, noise and volume envelopes — no outside sources), the
 barrier tile (`tools/art_barrier.py`) and the UI frames (`tools/art_ui.py`). Level 1's puzzles are
 the team's design, checked with a Python solver; Claude placed Level 1's power cells and, at the
@@ -271,6 +271,11 @@ painted-on checkerboard background and shrank it to game pixels - record where t
 Level 3: the IDEA (PIP malfunctions, you surround him with wire before he destroys it, which brings
 him back) is the team's (Discord, Nov 2026); Claude designed the loop rule, the layout and puzzles
 (solver-checked), wrote `rogue_pip.gd` and the dialogue, drew the core tile (`tools/art_core.py`)
-and made the boss sounds/music (`tools/sfx_pip.py`).
+and made the boss sound effects (`tools/sfx_pip.py`).
+**Music is the team's own** (Nov 2026: five tracks, `Assets/audio/music_*.ogg`): title =
+"Title theme dramatic", ship = "Space theme bells", space = "Space theme bells 2", rogue PIP
+boss = "Space staccato", ending = "Title theme no dramatic". Claude only wired them in
+(`Game.MUSIC` = per-track volume, `Game.load_music()`, `level.set_music_override()`). Record
+who made them for the copyright checklist.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

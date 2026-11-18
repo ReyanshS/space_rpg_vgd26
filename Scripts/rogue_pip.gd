@@ -306,6 +306,7 @@ func _caught() -> void:
 	_phase = -1
 	mood = Mood.OFF
 	_light.energy = 0.0
+	_level.set_music_override("none")   # the music fades out while he's switched off
 	_level.set_alert(false)
 	await _wait(1.2)
 	mood = Mood.BOOT
@@ -316,6 +317,7 @@ func _caught() -> void:
 	await tw.finished
 	mood = Mood.AWAKE
 	_level.hud.set_rogue(false)
+	_level.set_music_override("ending")   # he's back: the ending theme, to the last results
 	_sparks(12)
 	await _wait(0.4)
 	_level.hud.say(reboot_lines, "PIP", true)

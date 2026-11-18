@@ -25,6 +25,19 @@ const LEVELS: Array[String] = [
 ]
 const TITLE_SCENE := "res://Scenes/title.tscn"
 
+## The music: the team's own tracks, as Assets/audio/music_<name>.ogg.
+## The number is each track's volume in dB (0 = as loud as the file, -6 = about
+## half as loud). The files were mixed at different loudness, so each one gets
+## its own volume to make them sound about equally loud in the game. Change
+## them to taste: closer to 0 = louder.
+const MUSIC := {
+	"title": -18.0,   # "Title theme dramatic": the title screen
+	"ship": -29.0,    # "Space theme bells": inside the ship
+	"space": -27.0,   # "Space theme bells 2": out on the hull (spacewalks)
+	"core": -24.0,    # "Space staccato": the rogue PIP fight in Level 3
+	"ending": -28.0,  # "Title theme no dramatic": after PIP reboots, to the last results
+}
+
 ## Extra seconds of oxygen on a spacewalk for every power cell you charged so far.
 ## This is the RPG "upgrade": exploring earlier levels makes later ones easier.
 const O2_PER_CELL := 5.0
@@ -175,6 +188,18 @@ func first_time(tip: String) -> bool:
 		return false
 	_tips_seen[tip] = true
 	return true
+
+
+## Loads music track `track_name` (a key of MUSIC) and makes it loop forever.
+## Returns null if the file isn't there (the game just stays quiet).
+func load_music(track_name: String) -> AudioStream:
+	var path := "res://Assets/audio/music_%s.ogg" % track_name
+	if not ResourceLoader.exists(path):
+		return null
+	var s = load(path)
+	if s is AudioStreamOggVorbis:
+		s.loop = true        # when it reaches the end, start again from the top
+	return s
 
 
 func has_level(number: int) -> bool:

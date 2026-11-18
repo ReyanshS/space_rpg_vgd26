@@ -23,11 +23,10 @@ func _ready() -> void:
 	Game.new_game()                  # a fresh run: forget old results
 	fade.color.a = 1.0
 	create_tween().tween_property(fade, "color:a", 0.0, 0.8)
-	_music = _make_player("res://Assets/audio/music_space.wav", -14.0)
-	var s = _music.stream
-	if s is AudioStreamWAV:
-		s.loop_mode = AudioStreamWAV.LOOP_FORWARD
-		s.loop_end = int(s.get_length() * s.mix_rate)
+	_music = AudioStreamPlayer.new()             # the title theme (see Game.MUSIC)
+	_music.stream = Game.load_music("title")
+	_music.volume_db = Game.MUSIC["title"]
+	add_child(_music)
 	_music.play()
 	_grab = _make_player("res://Assets/audio/grab.wav", -4.0)
 

@@ -13,14 +13,14 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | `solver2.py` | Lists every route that solves each room in time, the tightest segment's spare time, and whether each power cell can be charged — use after editing a room | `python tools/solver2.py tools/out/level1.txt` |
 | `render.py` | One image of the whole level with the real tiles | `python tools/render.py tools/out/level1.txt tools/out/map_preview.png` |
 | `light_preview.py` | Mock-up of the dark-ship lighting, to try numbers before changing `level.gd` | `python tools/light_preview.py` |
-| `sfx.py` | Generates every sound and the two music loops in `Assets/audio` from sine waves + noise (overwrites them!) | `python tools/sfx.py` |
+| `sfx.py` | Generates every sound effect in `Assets/audio` from sine waves + noise (overwrites them!). The music is the team's own `music_*.ogg`, not made here | `python tools/sfx.py` |
 | `astro2.py` | Generates the v2 astronaut sheet `astronaut_v2.png` from text-drawn body parts | `python tools/astro2.py` |
 | `art_space.py` | Draws the Level 2 art: hull plates, gangway + airlock pad pictures, the 4 new palette icons, planet and nebula | `python tools/art_space.py` |
 | `maps/build_level2.py` | How Level 2's first map was pasted together from separately-solved pieces (reference only — edit Level 2 in Godot now) | `python tools/maps/build_level2.py` |
 | `art_barrier.py` | Draws the BARRIER tile (crate on a lift, hazard stripes) into `puzzle_tiles.png` frame 12 and its palette icon into `layout_tiles.png` frame 16 | `python tools/art_barrier.py` |
 | `art_ui.py` | Draws the UI frames `Assets/ui/frame_screen.png` (riveted bezel + green screen) and `frame_plate.png` (riveted plate) | `python tools/art_ui.py` |
 | `art_core.py` | Draws the CORE tile (Level 3's round socket) into `puzzle_tiles.png` frame 13 and its palette icon into `layout_tiles.png` frame 17 | `python tools/art_core.py` |
-| `sfx_pip.py` | Generates only the Level 3 boss sounds (`glitch`, `pulse`, `warn`, `boot`) and the boss loop `music_core.wav` - the other sounds stay as they are | `python tools/sfx_pip.py` |
+| `sfx_pip.py` | Generates only the Level 3 boss sounds (`glitch`, `pulse`, `warn`, `boot`) - the other sounds stay as they are | `python tools/sfx_pip.py` |
 | `maps/build_level3.py` | How Level 3's first map was drafted as text (reference only - edit Level 3 in Godot now) | `python tools/maps/build_level3.py` |
 | `logo_import.py` | Turns a big pixel-art logo picture with a fake (painted-on) checkerboard background into a crisp, transparent, game-sized `Assets/images/ui/logo.png` | `python tools/logo_import.py <picture> [pixel size]` |
 
