@@ -1,12 +1,12 @@
 # ---------------------------------------------------------------------------
-# tutorial.gd  -  runs the guided tutorial: shows ONE instruction at a time,
+# tutorial.gd: runs the guided tutorial. It shows one instruction at a time,
 # points an arrow at where you need to go, and moves on when you do it.
 #
-# HOW IT FITS TOGETHER
+# How it fits together
 #   - The steps are the TutorialStep children of this node, in tree order.
-#   - The level ANNOUNCES things with signals (wire_grabbed, pad_touched,
+#   - The level announces things with signals (wire_grabbed, pad_touched,
 #     room_solved, room_entered, room_restarted, drift_started). This script
-#     LISTENS to them. The level doesn't know the tutorial exists - that's the
+#     listens to them. The level doesn't know the tutorial exists. That's the
 #     point of signals: the level just says "this happened", and anyone
 #     interested can react.
 #   - Each step remembers which room it's in. A trigger only counts if it
@@ -60,7 +60,7 @@ func _go_to(i: int) -> void:
 	_show_current()
 
 
-## Shows the current step - but only once the player is in that step's room.
+## Shows the current step, but only once the player is in that step's room.
 func _show_current() -> void:
 	if _current >= _steps.size():
 		_level.hud.set_objective("", Vector2.ZERO, false)   # tutorial finished

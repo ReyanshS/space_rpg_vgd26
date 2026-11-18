@@ -1,19 +1,19 @@
 # ---------------------------------------------------------------------------
-# puzzle_tile.gd  -  one interactive floor tile: start, goal, node, bend,
-# red discharge, door, GANGWAY (a door out in space: a catwalk that extends
-# across the gap when the hull section is powered), AIRLOCK pad, BARRIER
+# puzzle_tile.gd: one interactive floor tile. Start, goal, node, bend,
+# red discharge, door, gangway (a door out in space: a catwalk that extends
+# across the gap when the hull section is powered), airlock pad, barrier
 # (a cargo stack on a lift that sinks into the floor when its stage is powered),
-# BLINKING GRATE (Kind.DISCHARGE_OFF: the level turns it on and off), or CORE
+# blinking grate (Kind.DISCHARGE_OFF: the level turns it on and off), or core
 # (Level 3: a round socket you wrap the wire round; a ring shows how far round
-# you've got - show_loop).
+# you've got, see show_loop).
 #
 # The level creates these in code (PuzzleTile.new() + setup()). Each one has:
 #   - a Sprite2D showing the right 32x32 picture (gets darker when the ship is dark)
-#   - a "glow" copy drawn with ADD blending (colours add up = brighter). It's on
-#     the GLOW light channel (LightFX.glow), so the darkness doesn't dim it and
+#   - a "glow" copy drawn with add blending (colours add up = brighter). It's on
+#     the glow light channel (LightFX.glow), so the darkness doesn't dim it and
 #     the pad looks like it shines. Sparks and arrows are on that channel too.
 #   - a small PointLight2D that lights up the floor around it.
-# The tile doesn't know any game rules - the level just calls hit(),
+# The tile doesn't know any game rules. The level just calls hit(),
 # set_powered(), open_door() etc. and the tile plays the matching animation.
 # ---------------------------------------------------------------------------
 class_name PuzzleTile
@@ -43,7 +43,7 @@ const GLOW := {
 const LOOP_COLOR := Color(1.0, 0.82, 0.25)    # the same yellow as the live wire
 const DOOR_LOCKED := Color(1.0, 0.3, 0.25)
 
-# "static" = shared by ALL tiles, so the picture is only loaded once.
+# "static" = shared by all tiles, so the picture is only loaded once.
 static var _sheet: Texture2D
 static var _add_mat: CanvasItemMaterial
 
@@ -231,7 +231,7 @@ func _draw_preview() -> void:
 
 ## CORE: the level calls this every frame while you carry the wire in its room.
 ## `from` = the angle the loop starts at, `turn` = how far round the wire has
-## gone (radians, + or - depending on which way you're going round).
+## gone (radians, positive or negative depending on which way you're going round).
 func show_loop(on: bool, from: float, turn: float) -> void:
 	_loop_on = on
 	_loop_from = from
@@ -259,7 +259,7 @@ func _draw_loop() -> void:
 		_loop_node.draw_arc(Vector2.ZERO, r, _loop_from, _loop_from + amount, steps, col, 3.0)
 
 
-## BLINKING GRATES: the level switches them on and off every frame.
+## Blinking grates: the level switches them on and off every frame.
 ## warning = it's about to light up (the glow flickers).
 func set_live(on: bool, warning := false) -> void:
 	_warning = warning and not on
@@ -346,7 +346,7 @@ func _finish_open() -> void:
 	burst(Color(0.4, 1.0, 0.55), 22)
 
 
-## BARRIER: a quick shudder, then the crate stack slides down into the floor.
+## Barrier: a quick shudder, then the crate stack slides down into the floor.
 ## (Shrinking the height while moving down by the same amount keeps the bottom
 ## edge still, so it looks like it drops through a slot in the floor.)
 func _sink(delay: float) -> void:

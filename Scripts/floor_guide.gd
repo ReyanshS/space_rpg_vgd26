@@ -1,19 +1,19 @@
 # ---------------------------------------------------------------------------
-# floor_guide.gd  -  yellow chevrons painted on the floor ("follow the yellow
-# line") that show the route in tutorial rooms - or, as a HINT, the route
+# floor_guide.gd: yellow chevrons painted on the floor ("follow the yellow
+# line") that show the route in tutorial rooms or, as a hint, the route
 # through a harder room once the player presses H.
 #
-# It IS a Line2D (extends Line2D), so in the editor you edit it like any line:
+# It is a Line2D (extends Line2D), so in the editor you edit it like any line:
 # select it, and click in the 2D view to add / drag points. The chevrons come
 # from a small repeating texture, and a tiny shader (guide_scroll.gdshader)
 # makes them slide along the line.
 #
-# THE SHIP IS DARK, so how does the guide stay bright?
-#   It goes on the GLOW light channel (LightFX.glow - read light_fx.gd for how
+# The ship is dark, so how does the guide stay bright?
+#   It goes on the glow light channel (LightFX.glow, see light_fx.gd for how
 #   light channels work). The darkness can't dim it, and because it stays on
-#   the floor (z_index -8), the astronaut walks ON TOP of it.
+#   the floor (z_index -8), the astronaut walks on top of it.
 #
-# When its room gets powered, it fades away - it finds out by LISTENING to the
+# When its room gets powered, it fades away. It finds out by listening to the
 # level's room_solved signal. Hint guides also listen to hint_shown.
 # ---------------------------------------------------------------------------
 class_name FloorGuide
@@ -34,7 +34,7 @@ func _ready() -> void:
 	if hint_only:
 		visible = false
 		add_to_group("hint_guide")      # the level looks for these to know which rooms have hints
-	# Our parent nodes run _ready AFTER us, so the level isn't set up yet.
+	# Our parent nodes run _ready after us, so the level isn't set up yet.
 	# call_deferred = "do this at the end of the frame", when everything is ready.
 	_connect_to_level.call_deferred()
 
@@ -54,7 +54,7 @@ func room_index() -> int:
 	return _room
 
 
-# Signal handler: the level calls this when ANY room is solved, with its number.
+# Signal handler: the level calls this when any room is solved, with its number.
 func _on_room_solved(index: int) -> void:
 	if index == _room and fade_when_room_solved:
 		create_tween().tween_property(self, "modulate:a", 0.0, 0.6)

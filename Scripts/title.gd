@@ -1,11 +1,11 @@
 # ---------------------------------------------------------------------------
-# title.gd  -  the title screen: the name of the game, the story in one line,
+# title.gd: the title screen. The name of the game, the story in one line,
 # the controls, and "press E to start".
 #
 # The background is the same Starfield the spacewalk uses (on a CanvasLayer
 # behind everything). With no camera in this scene, the stars drift on their own.
 # Pressing E fades to black and asks Game (the autoload) to load Level 1.
-# Edit the texts in title.tscn - select a Label and change its Text.
+# Edit the texts in title.tscn: select a Label and change its Text.
 # ---------------------------------------------------------------------------
 extends Node2D
 

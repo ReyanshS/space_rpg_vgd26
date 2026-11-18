@@ -29,6 +29,11 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   ALL-CAPS words inside PIP's lines. PIP is a slightly nervous maintenance bot with dry humour.
   Each line MUST fit the console: **two rows at 16 px** (about 70 characters; the speaker name
   counts too). One text size everywhere (the team tried 12 px for long lines and said no).
+- **Code comments** follow the same style: plain sentences, no dashes as punctuation (use a
+  comma, colon, full stop or brackets), no ALL-CAPS words for emphasis, script headers written as
+  `# name.gd: what it does`. Caps are fine for real names: enum values, constants, START/GOAL/NODE
+  pads, PIP, XP/LV, and on-screen texts in quotes. (The AI-use record at the bottom stays: TSA
+  requires it.)
   A longer line gets split into pages, which players miss, so the editor marks it red on
   the story beat ("TOO LONG"): shorten it. The "press E" key is its own HUD node (`NextKey`,
   under PIP's portrait), never part of the text.

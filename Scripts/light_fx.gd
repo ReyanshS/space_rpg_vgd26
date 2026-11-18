@@ -1,21 +1,21 @@
 # ---------------------------------------------------------------------------
-# light_fx.gd  -  one helper that makes soft round 2D lights.
+# light_fx.gd: one helper that makes soft round 2D lights.
 #
-# HOW 2D LIGHTING WORKS IN GODOT (the short version)
-#   - A CanvasModulate node tints EVERYTHING on its canvas. A dark blue
+# How 2D lighting works in Godot (the short version)
+#   - A CanvasModulate node tints everything on its canvas. A dark blue
 #     CanvasModulate = the ship with the power off.
 #   - A PointLight2D adds light back in a shape given by its texture. Ours is
 #     a white circle that fades to transparent at the edge, so the light is
 #     bright in the middle and soft at the edges.
 #   - Final colour of a pixel = its own colour x (darkness tint + all lights on it).
 #
-# LIGHT CHANNELS - how wires and pads "shine" in the dark
+# Light channels: how wires and pads "shine" in the dark
 #   Every CanvasItem (sprite, line, particles...) has a `light_mask`: which
-#   light CHANNELS it listens to. Every light has a `range_item_cull_mask`:
+#   light channels it listens to. Every light has a `range_item_cull_mask`:
 #   which channels it shines on. Normal things and normal lights use channel 1.
 #   Things that should glow by themselves (wires, pad halos, floor guides) call
-#   LightFX.glow(item): they switch to channel 2 ONLY. The level adds ONE big,
-#   flat "glow light" that shines on channel 2 only - so glowing things show
+#   LightFX.glow(item): they switch to channel 2 only. The level adds one big,
+#   flat "glow light" that shines on channel 2 only, so glowing things show
 #   their full colour, while the darkness and the room lights ignore them.
 #   They stay in the normal world, so the astronaut still walks on top of them.
 #
@@ -57,14 +57,14 @@ static func make(color: Color, radius: float, energy: float) -> PointLight2D:
 	return l
 
 
-## Make `item` glow: it listens ONLY to the glow channel, so the darkness can't dim it.
-## (light_mask is NOT passed on to children - each drawn node needs its own call.)
+## Make `item` glow: it listens only to the glow channel, so the darkness can't dim it.
+## (light_mask isn't passed on to children, so each drawn node needs its own call.)
 static func glow(item: CanvasItem) -> void:
 	item.light_mask = GLOW_CHANNEL
 
 
-## The one flat light (no fade - a plain white square) that covers `area`
-## and shines ONLY on glowing things. The level makes one of these.
+## The one flat light (no fade, just a plain white square) that covers `area`
+## and shines only on glowing things. The level makes one of these.
 ## darkness (~0.2) + energy (0.8) = about 1 = the thing's normal, full colour.
 static func make_glow_light(area: Rect2, energy := 0.8) -> PointLight2D:
 	if _flat_tex == null:

@@ -1,25 +1,25 @@
 # ---------------------------------------------------------------------------
-# hud.gd  -  everything drawn on top of the game.
+# hud.gd: everything drawn on top of the game.
 #
-# THE CONSOLE: a metal dashboard along the bottom of the screen (like the status
-# bar in old console games). The game is shown ABOVE it (level.gd moves the
+# The console: a metal dashboard along the bottom of the screen (like the status
+# bar in old console games). The game is shown above it (level.gd moves the
 # camera up by CONSOLE_H/2), so nothing in the console ever covers the room.
 #   left:   PIP's little CRT face and his SPEECH. When he's quiet, the current
 #           tutorial instruction (the "objective") is shown there instead.
-#   right:  the ship POWER meter (one LED per goal), the POWER CELL counter, and
-#           the OXYGEN meter on spacewalks (or key reminders inside the ship).
-# Also: the wire TIMER (a small LED bar floating above the astronaut's head, so
-# you don't have to look away), the tutorial ARROW, short "toast" messages at
-# the top (room names, ZAP...), the white flash / black fade, the RESULTS screen
-# with stars, the PAUSE menu, and the black film bar of the cutscenes.
+#   right:  the ship power meter (one LED per goal), the power cell counter, and
+#           the oxygen meter on spacewalks (or key reminders inside the ship).
+# Also: the wire timer (a small LED bar floating above the astronaut's head, so
+# you don't have to look away), the tutorial arrow, short "toast" messages at
+# the top (room names, "ZAP"...), the white flash / black fade, the results screen
+# with stars, the pause menu, and the black film bar of the cutscenes.
 #
 # It's a CanvasLayer, which means it stays still on screen while the camera
-# moves. Its nodes live in hud.tscn - open that scene to change colours and
+# moves. Its nodes live in hud.tscn, so open that scene to change colours and
 # sizes without code. All text uses the project theme (Assets/ui/theme.tres ->
 # the m6x11 pixel font at size 16).
 #
-# PAUSING: hud.tscn sets this node's Process Mode to "Always", so the HUD keeps
-# running when the game is paused (get_tree().paused = true) - that's how the
+# Pausing: hud.tscn sets this node's Process Mode to "Always", so the HUD keeps
+# running when the game is paused (get_tree().paused = true). That's how the
 # pause menu can still react to keys while everything else is frozen.
 # ---------------------------------------------------------------------------
 class_name GameHUD
@@ -27,14 +27,14 @@ extends CanvasLayer
 
 ## Emitted when a speech that freezes the player starts (true) / ends (false).
 signal dialogue_blocking(on: bool)
-## Emitted when the player picks a card on the LEVEL UP screen (the upgrade's id).
+## Emitted when the player picks a card on the level up screen (the upgrade's id).
 signal upgrade_chosen(id: String)
 
 ## Height of the console at the bottom. level.gd keeps the room above it.
 const CONSOLE_H := 48
 const TYPE_SPEED := 48.0          # letters per second in the speech box
-# The look: SHIP HARDWARE outside (riveted metal frames, Assets/ui/frame_*.png,
-# drawn by tools/art_ui.py) and an old GREEN COMPUTER SCREEN inside.
+# The look: ship hardware outside (riveted metal frames, Assets/ui/frame_*.png,
+# drawn by tools/art_ui.py) and an old green computer screen inside.
 const NAME_COLOR := "#ffc24d"     # amber: names, keys, headings
 const TEXT_COLOR := "#a8f0a0"     # phosphor green: what PIP says
 const DIM_COLOR := "#6f9c74"      # dim green: the standing objective
@@ -75,7 +75,7 @@ const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
 ## The level sets this to false on the results screen.
 var allow_pause := true
 ## The level sets this: asked right before a speech freezes the player
-## ("is that OK right now?" - not while he's carrying the wire).
+## ("is that OK right now?", and it isn't while he's carrying the wire).
 var can_block: Callable
 
 var _frac := 1.0
@@ -119,11 +119,11 @@ var _line_rogue := false          # the line on screen is said by the malfunctio
 var _stars_earned := 0
 var _stars_shown := 0
 
-# RPG: level, XP, and the LEVEL UP screen
+# RPG: level, XP, and the level up screen
 var _lv := 1
 var _xp_frac := 0.0
 var _floats: Array = []             # [text, age]: "+45 XP" rising over the astronaut
-var _picking := false               # the LEVEL UP screen is open
+var _picking := false               # the level up screen is open
 var _pick_ids: Array = []           # the upgrade ids on the cards
 var _pick_index := 0                # which card is selected
 var _pick_ready_at := 0.0           # keys only count after this time (no accidental picks)
@@ -207,7 +207,7 @@ func set_level_info(text: String) -> void:
 	pause_level.text = text
 
 
-## Where the player is on the SCREEN (the HUD doesn't move with the camera).
+## Where the player is on the screen (the HUD doesn't move with the camera).
 func _player_on_screen() -> Vector2:
 	var p := get_tree().get_first_node_in_group("player") as Node2D
 	if p == null:
@@ -332,7 +332,7 @@ func say(lines: PackedStringArray, speaker := "PIP", blocking := false, point_at
 	if lines.is_empty():
 		return
 	if blocking:
-		# Something the player MUST read (e.g. a new room's warning) jumps the queue:
+		# Something the player has to read (e.g. a new room's warning) jumps the queue:
 		# casual chatter waiting in line is dropped, and the line on screen ends now.
 		_queue = _queue.filter(func(item: Array) -> bool: return item[2])
 		if _talking and not _blocking:
@@ -401,10 +401,10 @@ func _run_dialogue() -> void:
 	_show_idle()                      # back to showing the objective
 
 
-## The console has room for TWO rows of text, and every line should fit in them,
+## The console has room for two rows of text, and every line should fit in them,
 ## so the whole line is on screen at once. (The E key sits under PIP's screen,
 ## not in the text, so it never adds a row.) If a line is still too long,
-## it's split into "pages" here so nothing runs off the screen - but split lines
+## it's split into "pages" here so nothing runs off the screen. But split lines
 ## get missed, so the editor marks those lines in red: shorten them.
 func _pages(speaker: String, line: String) -> PackedStringArray:
 	var font := dialogue_text.get_theme_font("normal_font")
@@ -483,7 +483,7 @@ func _show_line(speaker: String, line: String, blocking: bool) -> void:
 	else:
 		# reading time grows with the length of the line (and stops while paused).
 		# In a cutscene the pictures move on by themselves, so lines go a bit
-		# quicker - and E skips to the next one.
+		# quicker, and E skips to the next one.
 		var wait := 1.6 + line.length() * 0.04
 		if _cinematic:
 			wait = 1.0 + line.length() * 0.03
@@ -543,7 +543,7 @@ func _draw_portrait() -> void:
 
 ## Shows a short message at the top for `seconds`, then fades it out.
 ## The "token" trick: every new toast gets a new number. When an old toast's
-## wait finishes, it checks the number - if a newer toast arrived meanwhile,
+## wait finishes, it checks the number. If a newer toast arrived meanwhile,
 ## it leaves that one alone instead of hiding it.
 func show_toast(text: String, seconds := 2.0) -> void:
 	_toast_token += 1
@@ -657,8 +657,8 @@ func _update_keys() -> void:
 	keys_label.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key
 
 
-## The right side of the console: SHIP POWER LEDs and the cell counter on top,
-## the OXYGEN meter underneath while you're outside.
+## The right side of the console: ship power LEDs and the cell counter on top,
+## the oxygen meter underneath while you're outside.
 func _draw_status() -> void:
 	var font := status_box.get_theme_default_font()
 	if _power_total > 0:
@@ -689,7 +689,7 @@ func _draw_status() -> void:
 		status_box.draw_rect(Rect2(fill.position, Vector2(fill.size.x, 1)), col.lightened(0.45))
 
 
-# ------------------------------------------------------------------ RPG: XP and LEVEL UP
+# ------------------------------------------------------------------ RPG: XP and level ups
 
 ## Your level and how full the XP bar is (0..1). Shown in the console.
 func set_xp(lv: int, frac: float) -> void:
@@ -706,11 +706,11 @@ func is_picking() -> bool:
 	return _picking
 
 
-## The LEVEL UP screen: the game pauses and shows one card per upgrade id in
+## The level up screen: the game pauses and shows one card per upgrade id in
 ## `choices`. Left / right picks a card, E takes it. This is a coroutine: the
 ## level writes   var id = await hud.pick_upgrade(...)   and gets the answer
 ## once the player has chosen. (The HUD keeps running while the game is
-## paused - its Process Mode is "Always" - so it can still read the keys.)
+## paused (its Process Mode is "Always"), so it can still read the keys.)
 func pick_upgrade(choices: Array, new_level: int) -> String:
 	_picking = true
 	_pick_ids = choices
@@ -744,7 +744,7 @@ func pick_upgrade(choices: Array, new_level: int) -> String:
 	return chosen
 
 
-## Keys on the LEVEL UP screen (called every frame while it's open).
+## Keys on the level up screen (called every frame while it's open).
 func _pick_input() -> void:
 	if _t < _pick_ready_at or _pick_ids.is_empty():
 		return

@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
-# story_beat.gd  -  ONE thing PIP (the ship's AI) says, and WHEN.
+# story_beat.gd: one thing PIP (the ship's AI) says, and when.
 #
 # Like a TutorialStep, a beat is a marker you place in the level (a Marker2D).
-# Its position says which ROOM it belongs to (and, for REACH_HERE, the spot you
+# Its position says which room it belongs to (and, for REACH_HERE, the spot you
 # have to walk to). story.gd (on the parent "Story" node) plays each beat once,
 # when its trigger happens in its room.
 #
@@ -25,8 +25,8 @@ enum Trigger {
 	AIRLOCK,            ## the airlock in this room starts cycling
 	ALL_POWERED,        ## after the lights-on cutscene, when you can move again (room doesn't matter)
 	FIRST_DRIFT,        ## you first drift across open space in this room
-	TOUCH_EMPTY_CELL,   ## you touch a power cell WITHOUT the wire (room doesn't matter)
-	SHIP_LIGHTS_UP,     ## every room has power: plays DURING the lights-on cutscene (room doesn't matter)
+	TOUCH_EMPTY_CELL,   ## you touch a power cell without the wire (room doesn't matter)
+	SHIP_LIGHTS_UP,     ## every room has power: plays during the lights-on cutscene (room doesn't matter)
 }
 
 @export var trigger: Trigger = Trigger.ENTER_ROOM:
@@ -41,12 +41,12 @@ enum Trigger {
 		lines = value
 		queue_redraw()
 ## Freeze the player until every line is read (press E to go on). Only works when
-## the player isn't carrying the wire - otherwise the lines just play normally.
+## the player isn't carrying the wire. Otherwise the lines just play normally.
 @export var pause_game := false:
 	set(value):
 		pause_game = value
 		queue_redraw()
-## While these lines play, PIP's blue arrow points at this marker - or, if you
+## While these lines play, PIP's blue arrow points at this marker. Or, if you
 ## give the marker a child Marker2D, at that child instead. (Add one with
 ## right-click > Add Child Node > Marker2D and drag it onto what PIP is talking
 ## about. The beat itself still has to sit in the right ROOM.)

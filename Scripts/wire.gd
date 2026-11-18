@@ -1,13 +1,13 @@
 # ---------------------------------------------------------------------------
-# wire.gd  -  draws a cable: either the live wire you carry (CABLE) or the
-# floor cable that runs from a goal to its door (CONDUIT).
+# wire.gd: draws a cable. Either the live wire you carry (Style.CABLE) or the
+# floor cable that runs from a goal to its door (Style.CONDUIT).
 #
 # A wire is a list of points ("anchors": the pads it is wrapped around) plus,
 # while you carry it, a "live end" that follows your hands. It is drawn with
 # two Line2D nodes: a thick dark one underneath (the outline) and a thinner
-# coloured one on top (the core). The core uses a small SHADER
+# coloured one on top (the core). The core uses a small shader
 # (Shaders/wire_current.gdshader) that makes bright pulses run along it.
-# Every line and spark is on the GLOW light channel (LightFX.glow), so wires
+# Every line and spark is on the glow light channel (LightFX.glow), so wires
 # stay bright even though the ship is dark.
 # ---------------------------------------------------------------------------
 class_name Wire
@@ -55,7 +55,7 @@ func _init(p_style: Style = Style.CABLE) -> void:
 	_mat.shader = load(SHADER_PATH)
 	_core.material = _mat
 	# The shader needs UV coordinates that grow along the line; Line2D only
-	# makes those when it has a texture in TILE mode, so we give it a tiny white one.
+	# makes those when it has a texture in tile mode, so we give it a tiny white one.
 	_core.texture = white_texture()
 	_core.texture_mode = Line2D.LINE_TEXTURE_TILE
 	_core.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED

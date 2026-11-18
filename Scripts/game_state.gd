@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
-# game_state.gd  -  remembers things BETWEEN levels. It's an AUTOLOAD named "Game".
+# game_state.gd: remembers things between levels. It's an autoload named "Game".
 #
 # When you change scene (level 1 -> level 2), Godot throws the old scene away,
-# with every variable in it. So anything that has to survive - power cells
-# collected, retries, time - lives here instead. Godot creates this node ONCE
+# with every variable in it. So anything that has to survive (power cells
+# collected, retries, time) lives here instead. Godot creates this node once
 # when the game starts and keeps it alive until you quit: that's an autoload
 # (also called a "singleton"). It's listed in Project Settings > Globals > Autoload.
 #
@@ -11,7 +11,7 @@
 #
 # It also holds the RPG side of the game: your XP, your level (LV) and the suit
 # upgrades you picked. The level gives XP (level.gd _award_xp), and when you
-# level up it opens the LEVEL UP screen (hud.gd pick_upgrade). Upgrades change
+# level up it opens the level up screen (hud.gd pick_upgrade). Upgrades change
 # the rules through the small helpers here: wire_bonus(), cell_bonus_extra(),
 # walk_multiplier(), o2_bonus() and perk("boots").
 # ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ const MUSIC := {
 const O2_PER_CELL := 5.0
 
 # ---- RPG: experience (XP), levels and suit upgrades --------------------------
-# You earn XP for what you do well. Enough XP = LEVEL UP: you pick one upgrade
+# You earn XP for what you do well. Enough XP means a level up: you pick one upgrade
 # for your suit, and it stays with you for the rest of the game. Change the
 # numbers here to make levelling faster or slower.
 const XP_ROOM := 30         ## for powering a room
@@ -72,7 +72,7 @@ var perks := {}             # upgrade id -> how many times you took it
 
 # One entry per level number, e.g. results[1] = {"time": 140.2, "cells": 7, ...}
 var results := {}
-## True once a level was loaded BY THE GAME (title -> level, or "next level").
+## True once a level was loaded by the game (title -> level, or "next level").
 ## Stays false when you run one level scene straight from the editor with F6:
 ## that's the only time a level's TestStart marker is used.
 var playing_through := false
@@ -108,7 +108,7 @@ func add_xp(amount: int) -> int:
 	return ups
 
 
-## Total XP you need to REACH level `level` (LV 2 = 100, LV 3 = 260, ...).
+## Total XP you need to reach level `level` (LV 2 = 100, LV 3 = 260, ...).
 func xp_total_for(level: int) -> int:
 	var total := 0
 	for l in range(1, level):
@@ -142,7 +142,7 @@ func perk(id: String) -> int:
 	return int(perks.get(id, 0))
 
 
-## "LONGER WIRE x2, RUBBER BOOTS" - for the pause menu.
+## The upgrade list for the pause menu, like "LONGER WIRE x2, RUBBER BOOTS".
 func perks_text() -> String:
 	var parts: PackedStringArray = []
 	for id in UPGRADES:
@@ -152,7 +152,7 @@ func perks_text() -> String:
 	return ", ".join(parts) if not parts.is_empty() else "no upgrades yet"
 
 
-# What each upgrade does - the level asks these:
+# What each upgrade does. The level asks these:
 func wire_bonus() -> float:        ## extra seconds on the wire timer
 	return 0.5 * perk("wire")
 
@@ -178,12 +178,12 @@ func cells_collected() -> int:
 	return n
 
 
-## Extra oxygen on spacewalks: from batteries you kept, and the BIG TANK upgrade.
+## Extra oxygen on spacewalks: from batteries you kept, and the big tank upgrade.
 func o2_bonus() -> float:
 	return cells_collected() * O2_PER_CELL + 15.0 * perk("tank")
 
 
-## True the FIRST time it's asked about `tip`, false every time after that.
+## True the first time it's asked about `tip`, false every time after that.
 ## e.g.  if Game.first_time("cell_kept"): hud.say(...)   -> PIP explains it once.
 func first_time(tip: String) -> bool:
 	if _tips_seen.has(tip):
@@ -192,7 +192,7 @@ func first_time(tip: String) -> bool:
 	return true
 
 
-## Loads music track `track_name` (a key of MUSIC) and makes it loop forever.
+## Loads music track `track_name` (a key of `MUSIC`) and makes it loop forever.
 ## Returns null if the file isn't there (the game just stays quiet).
 func load_music(track_name: String) -> AudioStream:
 	var path := "res://Assets/audio/music_%s.ogg" % track_name

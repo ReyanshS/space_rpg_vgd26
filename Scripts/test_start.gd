@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# test_start.gd  -  a marker that says "start the playtest HERE".
+# test_start.gd: a marker that says "start the playtest here".
 #
 # Every level scene has a TestStart node. To try out the room you're working on:
 #   1. Select TestStart in the scene tree and drag it into that room.
@@ -8,7 +8,7 @@
 #      before it already has power: doors open, cargo sunk, and in Level 3
 #      PIP has already turned (and flown to the right socket).
 #
-# It ONLY works when you run that one level scene from the Godot editor (F6).
+# It only works when you run that one level scene from the Godot editor (F6).
 # Playing the whole game (F5, title -> Level 1 -> ...) or an exported / web build
 # ignores it completely, so you can't ship a game that starts in the wrong room.
 # level.gd does the work (_apply_test_start); this script just holds the settings
