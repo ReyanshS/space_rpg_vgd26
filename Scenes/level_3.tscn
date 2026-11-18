@@ -16,6 +16,7 @@
 script = ExtResource("1_level")
 layout = NodePath("Layout")
 level_number = 3
+skill_points = 3
 level_name = "THE CORE"
 complete_message = "PIP's back in control. Next stop: home."
 room_titles = PackedStringArray("CORE ACCESS", "PIP'S CORE", "PIP'S CORE", "PIP'S CORE")

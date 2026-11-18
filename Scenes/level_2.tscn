@@ -15,6 +15,7 @@
 script = ExtResource("1_level")
 layout = NodePath("Layout")
 level_number = 2
+skill_points = 3
 level_name = "MAIN DECK"
 complete_message = "The main coupling is fixed. The ship's alive again."
 room_titles = PackedStringArray("THE BRIDGE", "AIRLOCK", "OUTER HULL", "SOLAR ARRAY", "MAIN COUPLING")

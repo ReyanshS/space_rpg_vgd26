@@ -17,6 +17,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+SkillManager="*res://Scripts/skill_manager.gd"
 Game="*res://Scripts/game_state.gd"
 
 [display]
