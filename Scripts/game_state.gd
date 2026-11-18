@@ -32,10 +32,12 @@ const TITLE_SCENE := "res://Scenes/title.tscn"
 ## them to taste: closer to 0 = louder.
 const MUSIC := {
 	"title": -18.0,   # "Title theme dramatic": the title screen
-	"ship": -29.0,    # "Space theme bells": inside the ship
-	"space": -27.0,   # "Space theme bells 2": out on the hull (spacewalks)
-	"core": -24.0,    # "Space staccato": the rogue PIP fight in Level 3
-	"ending": -28.0,  # "Title theme no dramatic": after PIP reboots, to the last results
+	# The level tracks are set a little louder than the title, because in a level
+	# they play under the sound effects (and the wire's hum while you carry it).
+	"ship": -21.0,    # "Space theme bells": inside the ship
+	"space": -19.0,   # "Space theme bells 2": out on the hull (spacewalks)
+	"core": -16.0,    # "Space staccato": the rogue PIP fight in Level 3
+	"ending": -20.0,  # "Title theme no dramatic": after PIP reboots, to the last results
 }
 
 ## Extra seconds of oxygen on a spacewalk for every power cell you charged so far.
