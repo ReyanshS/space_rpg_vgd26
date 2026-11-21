@@ -146,7 +146,7 @@ lines = PackedStringArray("Solar array\'s feeding power again. One more.")
 [node name="CouplingIntro" type="Marker2D" parent="Story" unique_id=1524913608]
 position = Vector2(1952, 352)
 script = ExtResource("10_beat")
-lines = PackedStringArray("There\'s the main coupling, behind all that debris.", "Those hull sparks zap you just like the red grates. Think before you fling.")
+lines = PackedStringArray("There\'s the main coupling, behind all that debris.", "Those hull sparks zap you like the red grates. Wrap the pole first.")
 pause_game = true
 
 [node name="ShipLightsUp" type="Marker2D" parent="Story" unique_id=1599607169]

@@ -10,7 +10,7 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | - | - | - |
 | `map_from_scene.py` | Reads the map you painted in a level scene and writes it as a text grid | `python tools/map_from_scene.py Scenes/level_2.tscn tools/out/level2.txt` (no arguments = Level 1) |
 | `map_to_scene.py` | The opposite: puts a text grid onto a scene's Layout layer (close the scene in Godot first) | `python tools/map_to_scene.py tools/maps/level2.txt Scenes/level_2.tscn` |
-| `solver2.py` | Lists every route that solves each room in time, the tightest segment's spare time, and whether each power cell can be charged — use after editing a room | `python tools/solver2.py tools/out/level1.txt` |
+| `solver2.py` | Lists every route that solves each room in time, its lowest timer, and whether each power cell can be charged — use after editing a room or its Rules numbers | `python tools/solver2.py tools/out/level1.txt` |
 | `render.py` | One image of the whole level with the real tiles | `python tools/render.py tools/out/level1.txt tools/out/map_preview.png` |
 | `light_preview.py` | Mock-up of the dark-ship lighting, to try numbers before changing `level.gd` | `python tools/light_preview.py` |
 | `sfx.py` | Generates every sound effect in `Assets/audio` from sine waves + noise (overwrites them!). The music is the team's own `music_*.ogg`, not made here | `python tools/sfx.py` |
@@ -26,7 +26,7 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 
 Run `map_from_scene.py` first whenever the map changed — the solver and previews read its output.
 
-**Map characters:** `#` wall, `.` floor, `S` start, `G` goal, `N` node, `B` bend, `X` red tile,
+**Map characters:** `#` wall, `.` floor, `S` start, `G` goal, `N` node, `B` pole, `X` red tile,
 `x` blinking grate, `C` crate (or floating debris), `D` door (gangway when no wall is beside it),
 `P` spawn, `E` exit, `*` power cell, `,` hull, `~` open space, `A` airlock pad, `=` barrier,
 `@` core (Level 3), space = nothing.
@@ -41,17 +41,23 @@ the solver skips pads that would take the loop backwards. Check one stage on its
 
 The solver checks the stages in walking order, the same way the game plays them: touching `=`
 tiles are one group, and when it checks a stage, every group next to an earlier stage counts as
-open floor (it has sunk by then), and the nodes and bends of earlier stages joined to it by
+open floor (it has sunk by then), and the nodes of earlier stages joined to it by
 barriers can be used too. So shortcuts through opened barriers show up. It does NOT model the
 timing of blinking grates (`x` counts as floor) - test those in the game - and it never counts the
 +2 s a power cell gives, so routes it finds work even without the cells. Pads count as touched
 from the feet or 10 px higher, like the game (`BODY_UP`).
 
-Solver output, e.g. `S(7,14) -> N(3,10) -> G(7,6)   (tightest segment: 3.38 s spare)` means: from the
-START at tile (7, 14), touch the node at (3, 10), then the goal at (7, 6); on the hardest stretch
-you have 3.38 s to spare. `B(19,9)[L]` = touch the bend and pick its first arrow; `fling` = the bend
-throws you onto the next pad; `fling->(x,y)` = the fling stops at that pixel. Drifting across open
-space is part of the walking between pads. Then one line per power cell: `collectible` or
+Easiest way: `python tools/solver2.py Scenes/level_1.tscn` reads the map AND the level's Rules
+(wire time, node time, max, per-room START times) straight from the scene.
+
+Solver output, e.g. `S(14,9) -> pole(19,9) -> N(19,4)@3.5s -> G(24,9)@7.0s   (lowest timer: 2.44 s)`
+means: from the START at tile (14, 9), walk so the wire wraps round the pole at (19, 9), touch the
+node at (19, 4) (3.5 s in), then the goal. The timer carries on from pad to pad (START time, each
+node adds Node Time, never above Max Wire Time); "lowest timer" is the least time you ever have
+left on that route, so it's how tight the room is. Poles (`B`) are modelled exactly like the game
+(`rewrap()` = level.gd `_update_wraps()`). Drifting across open space is part of the walking
+between pads. `--paths out.json --margin 3` writes the most forgiving route of each room (feet
+positions) so a bot can walk it in the game. Then one line per power cell: `collectible` or
 `NOT collectible on any route`. The solver's speeds/radii (top of `solver2.py`) must match
 `player.gd` and `level.gd`.
 

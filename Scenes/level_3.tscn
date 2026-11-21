@@ -126,7 +126,7 @@ lines = PackedStringArray("the grates flash on and off in a wave. cross while th
 position = Vector2(1088, 576)
 script = ExtResource("10_beat")
 trigger = 5
-lines = PackedStringArray("wait on a node till the grates go dark. nodes pause the wire timer.")
+lines = PackedStringArray("wait on a node till the grates go dark. it holds the clock a moment.")
 
 [node name="ShipLightsUp" type="Marker2D" parent="Story"]
 position = Vector2(1120, 576)

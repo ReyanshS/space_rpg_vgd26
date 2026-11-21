@@ -38,13 +38,16 @@ const BRANCH_NAMES: Array[String] = ["WIRE", "SUIT", "LIFE SUPPORT"]
 
 @export_group("Effect")
 ## What the skill changes. The level and Game read these by name:
-##   wire_time    seconds added to the wire timer
+##   wire_time    seconds added at the START (and to the most the timer holds)
+##   node_time    extra seconds each node adds
+##   max_time     extra seconds the timer can hold
+##   node_hold    extra seconds a node holds the clock while you stand on it
 ##   cell_bonus   extra seconds each battery adds to the wire
 ##   walk_speed   extra walking speed (0.1 = 10% faster)
 ##   boots        zaps per room your boots shrug off
 ##   o2           extra seconds of oxygen on spacewalks
 ##   o2_per_cell  extra seconds of oxygen for each battery you've kept
-@export_enum("wire_time", "cell_bonus", "walk_speed", "boots", "o2", "o2_per_cell") var effect := "wire_time"
+@export_enum("wire_time", "node_time", "max_time", "node_hold", "cell_bonus", "walk_speed", "boots", "o2", "o2_per_cell") var effect := "wire_time"
 ## How much. Skills with the same effect add up.
 @export var amount := 0.5
 

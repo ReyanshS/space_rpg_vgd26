@@ -35,20 +35,22 @@ they leave behind. At the end of each level you get up to three stars.
 | Menu buttons | click them, or pick one with the arrow keys and press E, Space or Enter |
 
 ## Rules
-- **Grab the wire** on the yellow START pad. A **4-second timer** starts.
+- **Grab the wire** on the yellow START pad. The **timer** starts (4 to 6 seconds, depending on
+  the room). The LEDs over your head show how much is left.
 - The wire is pulled **tight in a straight line** from the last pad you touched to your hands.
   It can't pass through walls, crates or red tiles, so you can't walk where it would have to.
-- **Orange NODE**: the wire wraps around it, the timer refills to 4 seconds and pauses while you
-  stand on it.
-- **Purple BEND**: stops you and shows two arrows, with dotted lines showing where each one will
-  throw you. Press one and you're flung around the corner; the wire bends with you.
-- **Reel back**: took a wrong turn? Press E while holding the wire and it pulls you back to the
-  last pad it's wrapped around, so you can try again. The timer keeps running while you fly.
+- **Orange NODE**: the wire wraps around it and you get a few **extra seconds** (never more than
+  the timer can hold). Standing on it holds the clock, but only for a moment.
+- **Purple POLE**: a post you walk round. Walk past it and the wire **wraps round it** like a rope
+  round a post, so the wire can go round corners. Walk back and it comes off again. Poles don't
+  give you time.
+- **Reel back**: took a wrong turn? Press E while holding the wire and it pulls you back along it
+  to the last pad it's wrapped around, so you can try again. The timer keeps running while you fly.
 - **Red tiles** are live: step on one and you're shocked, and the wire snaps.
 - If the timer runs out, the wire overloads and snaps.
 - **Blinking grates** switch on and off in a wave. When they're lit they shock you; when they're
   dark they're safe. The wire can cross them either way.
-- Nodes and bends you've already used in a room still work for the next puzzle in that room.
+- Nodes you've already used in a room still work for the next puzzle in that room.
 - When the wire snaps you stay where you are: walk back to the START pad and try again, or press
   **R** to jump straight back there.
 - **Power cells** (small glowing batteries): touch one *while carrying the wire* and it adds

@@ -4,12 +4,12 @@
 
 [resource]
 script = ExtResource("1_skill")
-id = "super_cells_2"
-display_name = "SUPER CELLS II"
-short_name = "CELLS II"
-description = "Each battery adds another second to the wire."
+id = "big_spool"
+display_name = "BIG SPOOL"
+short_name = "SPOOL"
+description = "The timer can hold a whole second more."
 branch = 0
 cost = 2
-parent_id = "super_cells_1"
-effect = "cell_bonus"
+parent_id = "node_boost"
+effect = "max_time"
 amount = 1.0

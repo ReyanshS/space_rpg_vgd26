@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_skill")
 id = "super_cells_1"
-display_name = "SUPER CELLS I"
-short_name = "CELLS I"
+display_name = "SUPER CELLS"
+short_name = "CELLS"
 description = "Each battery adds 1 more second to the wire."
 branch = 0
 cost = 1

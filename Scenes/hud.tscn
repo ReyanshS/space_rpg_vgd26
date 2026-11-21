@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" path="res://Assets/ui/frame_screen.png" id="2_screen"]
 [ext_resource type="Texture2D" path="res://Assets/ui/frame_plate.png" id="3_plate"]
 [ext_resource type="PackedScene" path="res://Scenes/skill_tree.tscn" id="4_tree"]
+[ext_resource type="Script" path="res://Scripts/key_hint.gd" id="5_key"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxFlat_toast"]
 content_margin_left = 9.0
@@ -113,14 +114,14 @@ offset_right = 474.0
 offset_bottom = 267.0
 mouse_filter = 2
 
-[node name="Keys" type="Label" parent="."]
+[node name="Keys" type="HBoxContainer" parent="."]
 offset_left = 312.0
-offset_top = 246.0
-offset_right = 474.0
-offset_bottom = 264.0
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 0.85)
-text = "[Esc] menu"
-horizontal_alignment = 2
+offset_top = 247.0
+offset_right = 472.0
+offset_bottom = 263.0
+mouse_filter = 2
+theme_override_constants/separation = 8
+alignment = 2
 
 [node name="Dialogue" type="PanelContainer" parent="."]
 offset_left = 4.0
@@ -213,10 +214,79 @@ custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="Stats" type="Label" parent="Complete/VBox"]
+[node name="Stats" type="HBoxContainer" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
-text = "TIME 0:00  |  CELLS 0/0  |  RETRIES 0"
+mouse_filter = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Time" type="PanelContainer" parent="Complete/VBox/Stats"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
+
+[node name="VBox" type="VBoxContainer" parent="Complete/VBox/Stats/Time"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Caption" type="Label" parent="Complete/VBox/Stats/Time/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.66, 0.74, 1)
+text = "TIME"
+horizontal_alignment = 1
+
+[node name="Value" type="Label" parent="Complete/VBox/Stats/Time/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
+text = "0:00"
+horizontal_alignment = 1
+
+[node name="Cells" type="PanelContainer" parent="Complete/VBox/Stats"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
+
+[node name="VBox" type="VBoxContainer" parent="Complete/VBox/Stats/Cells"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Caption" type="Label" parent="Complete/VBox/Stats/Cells/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.66, 0.74, 1)
+text = "CELLS"
+horizontal_alignment = 1
+
+[node name="Value" type="Label" parent="Complete/VBox/Stats/Cells/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
+text = "0/0"
+horizontal_alignment = 1
+
+[node name="Retries" type="PanelContainer" parent="Complete/VBox/Stats"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
+
+[node name="VBox" type="VBoxContainer" parent="Complete/VBox/Stats/Retries"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Caption" type="Label" parent="Complete/VBox/Stats/Retries/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.66, 0.74, 1)
+text = "RETRIES"
+horizontal_alignment = 1
+
+[node name="Value" type="Label" parent="Complete/VBox/Stats/Retries/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
+text = "0"
 horizontal_alignment = 1
 
 [node name="Points" type="Label" parent="Complete/VBox"]
@@ -298,14 +368,46 @@ text = "SKILL TREE"
 layout_mode = 2
 text = "QUIT"
 
-[node name="Controls" type="Label" parent="Pause/VBox"]
+[node name="Controls" type="VBoxContainer" parent="Pause/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
-text = "Move ............ WASD / arrows
-Grab the wire ... E / Space
-Reel back ....... E (holding wire)
-Back to START ... R
-Show a hint ..... H"
+size_flags_horizontal = 4
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="Move" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("WASD")
+text = "move (or the arrow keys)"
+
+[node name="Grab" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("E")
+text = "grab the wire, or reel it back"
+
+[node name="Back" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("R")
+text = "back to the START"
+
+[node name="Hint" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("H")
+text = "show a hint"
+
+[node name="Tree" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("T")
+text = "skill tree, any time"
 
 [node name="Suit" type="Label" parent="Pause/VBox"]
 layout_mode = 2

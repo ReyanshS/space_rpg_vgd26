@@ -70,7 +70,7 @@ advance_when = 1
 [node name="Step6Goal" type="Marker2D" parent="Tutorial" unique_id=874758325]
 position = Vector2(240, 208)
 script = ExtResource("8_step")
-text = "The node refilled your timer. Now get to the blue pad"
+text = "The node gave you more time. Now get to the blue pad"
 advance_when = 3
 
 [node name="Step7Onward" type="Marker2D" parent="Tutorial" unique_id=1175761091]
@@ -127,12 +127,12 @@ lines = PackedStringArray("Lights. I can see again. Well, my cameras can.")
 position = Vector2(176, 400)
 script = ExtResource("10_beat")
 trigger = 2
-lines = PackedStringArray("Standing on a node stops the clock. Remember that one.")
+lines = PackedStringArray("A node adds time, and holds the clock while you stand on it.")
 
 [node name="Room3Intro" type="Marker2D" parent="Story" unique_id=372436841]
 position = Vector2(656, 240)
 script = ExtResource("10_beat")
-lines = PackedStringArray("Purple pads are bends. Touch one with the wire and you\'ll stop dead.", "The dotted lines show where each arrow key will throw you. Pick one.", "Wrong way? Press E and the wire reels you back to the bend.")
+lines = PackedStringArray("Purple posts are poles. Walk round one and the wire wraps round it.", "That\'s how you get the wire round a corner. Poles don\'t add time.", "Wrapped the wrong way? Walk back and it comes off again.")
 pause_game = true
 
 [node name="Room3Done" type="Marker2D" parent="Story" unique_id=450323481]
@@ -162,7 +162,7 @@ pause_game = true
 [node name="GeneratorC" type="Marker2D" parent="Story" unique_id=1076282822]
 position = Vector2(1040, 1296)
 script = ExtResource("10_beat")
-lines = PackedStringArray("These grates blink on and off. Lit ones zap your boots. The wire\'s fine.", "The light moves like a wave. Walk in the dark gap right behind it.", "The node in the middle stops the clock, so wait there if you need to.")
+lines = PackedStringArray("These grates blink on and off. Lit ones zap your boots. The wire\'s fine.", "The light moves like a wave. Walk in the dark gap right behind it.", "The node in the middle holds the clock for a bit. Wait there for the gap.")
 pause_game = true
 
 [node name="ShipLightsUp" type="Marker2D" parent="Story" unique_id=2024546782]

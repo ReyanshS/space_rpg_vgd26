@@ -64,7 +64,8 @@ const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
 @onready var complete_panel: Control = $Complete
 @onready var marker: Control = $Marker
 @onready var status_box: Control = $Status
-@onready var keys_label: Label = $Keys
+## The key reminders on the right of the console, drawn as keycaps (KeyHint).
+@onready var keys_box: HBoxContainer = $Keys
 @onready var dialogue: PanelContainer = $Dialogue
 @onready var portrait: Control = $Dialogue/Row/Portrait
 @onready var dialogue_text: RichTextLabel = $Dialogue/Row/Text
@@ -132,6 +133,7 @@ var _points_earned := 0             # skill points this level gave (0 on a repla
 var _tree_from_pause := false       # opened from the pause menu (go back to it on close)
 var _paused_before := false         # was the game paused before the tree opened?
 
+var _keys_shown := []              # the key reminders on screen now (so we only rebuild them when they change)
 var _sfx := {}
 
 
@@ -705,17 +707,25 @@ func set_hint_available(on: bool) -> void:
 
 
 func _update_keys() -> void:
+	var want: Array
 	if _waiting_key:
-		keys_label.text = "[E] next"
+		want = [["E", "next"]]
 	elif _restart_prompt:
-		keys_label.text = "[R] back to start"
+		want = [["R", "back to start"]]
 	elif _reel_prompt:
-		keys_label.text = "[E] reel back"
+		want = [["E", "reel back"]]
 	elif _hint_on:
-		keys_label.text = "[H] hint  [Esc] menu"
+		want = [["H", "hint"], ["Esc", "menu"]]
 	else:
-		keys_label.text = "[R] restart  [Esc] menu"
-	keys_label.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key
+		want = [["R", "restart"], ["Esc", "menu"]]
+	keys_box.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key
+	if want == _keys_shown:
+		return
+	_keys_shown = want
+	for c in keys_box.get_children():
+		c.queue_free()
+	for k in want:
+		keys_box.add_child(KeyHint.make(PackedStringArray([k[0]]), k[1], Color(0.42, 0.62, 0.45)))
 
 
 ## The right side of the console: ship power LEDs and the cell counter on top,
@@ -780,8 +790,9 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	$Complete/VBox/Title.text = "LEVEL %d COMPLETE" % number
 	$Complete/VBox/Sub.text = message
 	var secs := int(stats.get("time", 0.0))
-	$Complete/VBox/Stats.text = "TIME %d:%02d  |  CELLS %d/%d  |  RETRIES %d" % [
-		secs / 60, secs % 60, stats.get("cells", 0), stats.get("cells_total", 0), stats.get("retries", 0)]
+	$Complete/VBox/Stats/Time/VBox/Value.text = "%d:%02d" % [secs / 60, secs % 60]
+	$Complete/VBox/Stats/Cells/VBox/Value.text = "%d/%d" % [stats.get("cells", 0), stats.get("cells_total", 0)]
+	$Complete/VBox/Stats/Retries/VBox/Value.text = str(stats.get("retries", 0))
 	# cells you keep also make your suit's air last longer on spacewalks
 	var bonus := int(stats.get("cells", 0)) * int(Game.o2_per_cell())
 	$Complete/VBox/Bonus.visible = bonus > 0 and has_next     # no spacewalks after the last level

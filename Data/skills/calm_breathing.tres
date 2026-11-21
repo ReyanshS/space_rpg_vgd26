@@ -4,12 +4,12 @@
 
 [resource]
 script = ExtResource("1_skill")
-id = "reserve_tank"
-display_name = "RESERVE TANK"
-short_name = "RESERVE"
-description = "A spare tank. 15 more seconds of air on spacewalks."
+id = "calm_breathing"
+display_name = "CALM BREATHING"
+short_name = "CALM"
+description = "You keep calm on a node. It holds the clock 1 second longer."
 branch = 2
 cost = 2
 parent_id = "cell_charger"
-effect = "o2"
-amount = 15.0
+effect = "node_hold"
+amount = 1.0

@@ -54,13 +54,14 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), a skill tree
   (3 branches, points for finishing levels), collectibles (power cells: +5 s oxygen each on
   spacewalks), results/stars per level, a save file with Continue. See "RPG" below.
-- Wire timer check (Nov 2026, solver): the tightest stretch of each room needs at most 3.4 s of
-  the 5 s with a perfect route (Generator B, Level 2's bridge); most need 1.5-3 s. Feels easy to
-  someone who knows the routes, about right for first-time players (judges). Left at 5 s then.
-  Nov 2026: the team asked for 3 s; the solver found 4 rooms impossible at 3 s (Level 1 rooms
-  4 and 6, Level 2 rooms 1 and 3), so `wire_time` is now **4 s**. Tightest at 4 s: Level 1
-  room 6 (0.58 s spare on a perfect route) and Level 2 room 1 (0.56 s). Re-run the solver
-  (its TIME must match `wire_time`) before lowering it again.
+- **Balance (Nov 2026, "too easy")**: timer rules per level (Inspector, Rules group):
+  L1 START 4.5 / node +3.5 / max 6 / hold 2 s, own START times 5.5, -, 6, 3.5, 3.2, -, 5;
+  L2 3.5 / +3 / 5 / 1 s, room 3 = 4.2, room 5 = 5, `o2_seconds` 50; L3 3.5 / +2.5 / 5.2 / 1 s,
+  PIP's `shutdown_seconds` 10 / 11.5 / 9.5 (about 1.5x the best route). Target "lowest timer"
+  on the most forgiving perfect route: tutorial rooms (L1 1-3) 2.3-3 s, rest of L1 1-1.8 s,
+  L2 0.7-1.3 s (hard but fair), L3 rooms are timed mostly by PIP's meter. A bot replayed the
+  solver's route in every room in the real game: all solvable, lowest timer within ~0.1 s of
+  the solver. Re-check after ANY change: `python tools/solver2.py Scenes/level_N.tscn`.
 - Level 3 exists (the guide says judges play to level 3). A full bot run of it takes ~75 s of play.
 - Judges play from a link, so the game needs a **web export**. Web builds run on WebGL 2 (Godot's
   Compatibility renderer); this project is set to Forward+, so test a web export early and check
@@ -71,23 +72,28 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 `Assets/ui/theme.tres` at size 16 — only use multiples of 16 or the pixel font blurs.
 
 ## Game rules (level.gd enforces them)
-- START pad: stand on it, press **E/Space** to grab the wire. The 4 s timer (`wire_time`) starts.
+- START pad: stand on it, press **E/Space** to grab the wire. The timer starts with `wire_time`
+  seconds (or that room's `room_wire_time`). Nothing ever pushes it above `max_wire_time`.
 - Free movement while carrying. The wire is a taut straight line from the LAST pad touched to the
   player's hands; it can't pass through walls, crates, doors or live red tiles, so steps that would
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
-- NODE (orange): wraps the wire, refills the timer, pauses it while you stand on it. Touch radius 22 px.
-- BEND (purple): stops you, shows two arrows AND a dotted preview of where each one throws you
-  (`predict_fling()`, same 2 px steps as the real fling), you press one and get flung 90 deg
-  (`bend_pauses_timer`). The fling stops at a wall, a node, or a hull edge.
-- REEL BACK: **E while walking with the wire** pulls you back along it to the last pad it's
-  wrapped round (`_reel_back()`); onto a bend = choose again, onto a node = timer paused. Costs
+- NODE (orange): wraps the wire and ADDS `node_time` (no full refill), capped at `max_wire_time`.
+  Standing on it holds the clock, but only for `node_hold` s. Touch radius 22 px.
+- POLE (purple post, map char `B`, tile kind `pole`; was the "bend" until Nov 2026): solid for
+  feet, not for the wire. The wire wraps round its centre when it sweeps across it and unwraps when
+  you sweep back (`_update_wraps()` / `_swept_over()`: the swung triangle anchor->old hands->new
+  hands must contain the pole, with real width). Gives no time. Anchors list = pads AND poles
+  (`_anchor_cells` + `_anchor_signs`), so `_winding()` counts poles too. The solver uses the exact
+  same rule (`rewrap()` / `swept_over()`); keep them identical.
+- REEL BACK: **E while walking with the wire** pulls you back along it (past each pole) to the last
+  pad it's wrapped round (`_reel_back()`), unwrapping the poles; onto a node = it holds again. Costs
   the flying time. After 0.7 s standing still away from that pad, an [E] key shows above you.
 - Pads/cells count as touched from the feet OR from BODY_UP (10 px) higher (`_touching()`),
-  because the sprite is taller than a tile. Radii: start 20, node 22, goal 22, bend 20, cell 14.
+  because the sprite is taller than a tile. Radii: start 20, node 22, goal 22, cell 14.
 - GOAL (blue): powers the stage — lights on, conduit fills, its doors open and every BARRIER
   GROUP touching the stage sinks into the floor (a wave, nearest the goal first).
 - Stages in the same area (joined by barriers) SHARE pads: a later stage's wire can wrap round
-  the nodes and bends of stages already powered there (`_stage_pads()`).
+  the nodes of stages already powered there (`_stage_pads()`). Poles work anywhere (they're posts).
 - BLINKING GRATE (`blinker`, map char `x`): lit for `grate_live` of every `grate_cycle` seconds,
   each column `grate_wave` s behind the one to its left (a wave); flickers just before lighting.
   Lit = zaps your feet (also if you stand still); the wire is never blocked by it.
@@ -140,7 +146,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - Story: Level 3's first room (CORE ACCESS) teaches the loop on a harmless "sync pylon". Powering
   it overloads PIP (`RoguePip.malfunction_room`): red alert (`set_alert`: `alert_light` tint,
   every emergency light flashes, boss music `music_core.ogg`), he talks as "P!P", and hides in the core
-  chamber: 3 stages joined by barriers, one core each (open ring / behind cargo + bend / between
+  chamber: 3 stages joined by barriers, one core each (open ring / behind cargo + pole / between
   blinking grates). Each loop reboots him a bit; he flies to the next socket. The last one shuts
   him down, he reboots, then the normal lights-on cutscene plays.
 - `Scripts/rogue_pip.gd` (`RoguePip`, node in level_3.tscn) is NOT a rule: it listens to
@@ -158,7 +164,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 ## Architecture (data -> logic -> visuals)
 - **The map is painted**, not coded: the `Layout` TileMapLayer uses
   `Assets/images/tiles/layout_tileset.tres`; each tile has Custom Data `kind` (floor, wall, start,
-  goal, node, bend, discharge, blinker, crate, door, spawn, exit, cell, hull, space, airlock,
+  goal, node, pole, discharge, blinker, crate, door, spawn, exit, cell, hull, space, airlock,
   barrier, core). Rooms (= puzzle STAGES) are found by flood fill (walls/doors/barriers separate them;
   space and void separate hull sections) and numbered in walking order from the spawn. Each needs
   exactly one START (airlocks none). Doors open when the room before them is solved; touching
@@ -178,7 +184,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `pad_touched(kind, index)`, `level_completed`, `cell_collected`, `empty_cell_touched`,
   `hint_shown`, `drift_started`, `airlock_cycling`, `ship_lighting_up` (cutscene starts),
   `all_rooms_powered` (cutscene over).
-- `Scripts/player.gd` (`Astronaut`): state machine FREE / WIRED / CHOOSING / FLUNG / LOCKED / DRIFT.
+- `Scripts/player.gd` (`Astronaut`): state machine FREE / WIRED / LOCKED / DRIFT (no fling any more).
   Only movement + animation; asks the level for rules (`player_moved()`, `wire_reaches()`,
   `drift_landing()`...).
 - `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`), results, the save file
@@ -224,8 +230,11 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   signals `points_changed`, `skill_unlocked`, `skills_changed`. Skills are DATA: one `SkillDef`
   (`Scripts/skill_def.gd`) `.tres` per skill in `Data/skills/`, loaded with
   `ResourceLoader.list_directory` (works in exports). 3 branches (Wire, Suit, Life Support),
-  5 skills each, cost 1-2, each needs its `parent_id`. Effects: `wire_time`, `cell_bonus`,
-  `walk_speed`, `boots` (zaps per room absorbed), `o2`, `o2_per_cell`.
+  5 skills each, cost 1-2, each needs its `parent_id`. Effects: `wire_time` (START, and lifts
+  the cap too), `node_time`, `max_time`, `node_hold`, `cell_bonus`, `walk_speed` (+8% each),
+  `boots` (zaps per room absorbed), `o2`, `o2_per_cell`. Tree: Wire (LONGER WIRE I, NODE BOOST,
+  BIG SPOOL, SUPER CELLS, LONGER WIRE II), Suit (servos x3, RUBBER BOOTS, INSULATED SOLES),
+  Life Support (tanks, CELL CHARGER, CALM BREATHING = nodes hold 1 s longer).
   Points: level.gd export `skill_points` (L1 2, L2 3, L3 3), given in `_finish_level()` only the
   first time (`Game.has_finished()`), so replays can't farm them. The tree opens at any time
   (T, the SKILLS corner button, or the SKILL TREE buttons); it pauses the game and draws itself (`skill_tree.gd`,
@@ -245,7 +254,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   Bots that load a level with `change_scene_to_file` count as "on its own": keep markers inactive.
 - **Tutorial**: `Scripts/tutorial.gd` on the `Tutorial` node runs its `TutorialStep` children
   (`Scripts/tutorial_step.gd`, Marker2D) in tree order. Each step has `text`, `advance_when`
-  (GRAB_WIRE, TOUCH_NODE, TOUCH_BEND, SOLVE_ROOM, ENTER_NEXT_ROOM, REACH_HERE, DRIFT) and its
+  (GRAB_WIRE, TOUCH_NODE, WRAP_POLE, SOLVE_ROOM, ENTER_NEXT_ROOM, REACH_HERE, DRIFT) and its
   position = where the arrow points. A step only shows once the player is in its room. Rewinds to
   the room's first step on restart. `Scripts/floor_guide.gd` = scrolling yellow floor chevrons
   (`hint_only` = hidden until H).
@@ -276,15 +285,21 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   (Nov 2026: quitting during PIP's malfunction crashed on `create_timer`; a bot that quits at
   54 moments per level now runs clean.)
 - Running a test script with `--script` loads before autoloads are registered: don't use the
-  project's class names as types in such scripts (access them dynamically).
+  project's class names (Astronaut, SkillManager...) in such scripts at all, not even
+  `Astronaut.State.LOCKED` (use the number: FREE 0, WIRED 1, LOCKED 2, DRIFT 3).
+- **UI text** in the menus uses real Buttons and `KeyHint` (`Scripts/key_hint.gd`: drawn keycaps +
+  a label, sizes itself) instead of "[E] text" strings: console key reminders, pause controls,
+  title controls. Results use three stat tiles (Time / Cells / Retries).
 - Unused, safe to delete: `Scripts/hint_sign.gd`, `Scenes/hint_sign.tscn` (if present).
   `Scenes/main.tscn`, `Scripts/main.gd` and `electric_box.*` are the old prototype.
 
 ## Python tools
 `tools/` (ignored by Godot via `.gdignore`) has the level solver, map/lighting previews, the map
 writer and the art/sound generators. See `tools/README.md`. After editing a room, run
-`python tools/map_from_scene.py <scene> <out.txt>` then `python tools/solver2.py <out.txt>` to check
-it (routes, tightest segment, and whether every power cell can be charged in time).
+`python tools/solver2.py Scenes/level_N.tscn`: it reads the map AND the level's Rules numbers
+and lists routes with their "lowest timer" (the least time left on the way; carried over from
+pad to pad) and whether every power cell can be charged in time. `--paths f.json --margin 3`
+exports routes a bot can replay in the game.
 
 ## AI-generated content (for TSA documentation)
 Made with Claude (Anthropic) in the Claude app and Claude Code: the level/tutorial/lighting/story/
@@ -307,6 +322,10 @@ and made the boss sound effects (`tools/sfx_pip.py`).
 boss = "Space staccato", ending = "Title theme no dramatic". Claude only wired them in
 (`Game.MUSIC` = per-track volume, `Game.load_music()`, `level.set_music_override()`). Record
 who made them for the copyright checklist.
+Nov 2026 (Claude, at the team's request): bends turned into poles (the wrap rule, the post art
+in puzzle_tile.gd), the new timer rules and all the balance numbers, the reworked Level 1 room 4
+and Level 2 room 5 (solver-checked, then replayed by a bot), the KeyHint keycaps and results tiles,
+and fixes for errors when quitting mid-level.
 The skill tree system (SkillManager, the skill files and their numbers, the skill tree screen,
 the save file and Continue) was written by Claude in Nov 2026 to replace the XP upgrades; the
 team chose the branches, the points per level and where it opens. Claude also made the menu

@@ -1960,7 +1960,7 @@ func _reel_back() -> void:
 	var c: Vector2i = _anchor_cells[-1]
 	if kind_at(c) == "node":
 		_set_paused_node(c)                           # back on a node: it holds the timer again
-		_node_hold_left = node_hold
+		_node_hold_left = _node_hold()
 	_play("clank")
 
 
@@ -2002,7 +2002,7 @@ func _touch_pad(c: Vector2i, kind: String) -> void:
 		"node":
 			_time_left = minf(_time_left + _node_time(), _max_time())
 			_set_paused_node(c)
-			_node_hold_left = node_hold    # it holds the timer for a moment
+			_node_hold_left = _node_hold()    # it holds the timer for a moment
 			_play("node")
 			hud.pulse_timer()
 		"goal":
@@ -2324,9 +2324,15 @@ func _node_time() -> float:
 	return node_time + SkillManager.bonus("node_time")
 
 
-## The most the timer can ever hold: max_wire_time + skills.
+## The most the timer can ever hold: max_wire_time + skills. (LONGER WIRE
+## raises it too, so a longer START is never cut off by the cap.)
 func _max_time() -> float:
-	return max_wire_time + SkillManager.bonus("max_time")
+	return max_wire_time + SkillManager.bonus("max_time") + SkillManager.bonus("wire_time")
+
+
+## How long a NODE holds the clock while you stand on it: node_hold + skills.
+func _node_hold() -> float:
+	return node_hold + SkillManager.bonus("node_hold")
 
 
 ## Seconds a battery adds: cell_bonus + the SUPER CELLS skills.

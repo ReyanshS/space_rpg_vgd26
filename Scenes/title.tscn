@@ -5,6 +5,7 @@
 [ext_resource type="SpriteFrames" uid="uid://de1pypgu4xh2n" path="res://Assets/images/astronaut/astronaut_frames.tres" id="3_frames"]
 [ext_resource type="Texture2D" path="res://Assets/ui/frame_screen.png" id="4_screen"]
 [ext_resource type="Texture2D" path="res://Assets/images/ui/logo.png" id="5_logo"]
+[ext_resource type="Script" path="res://Scripts/key_hint.gd" id="9_key"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBox_screen"]
 texture = ExtResource("4_screen")
@@ -85,14 +86,73 @@ visible = false
 layout_mode = 2
 text = "NEW GAME"
 
-[node name="Controls" type="Label" parent="UI" unique_id=178598356]
-offset_top = 222.0
+[node name="Controls" type="VBoxContainer" parent="UI"]
+offset_top = 218.0
 offset_right = 480.0
-offset_bottom = 262.0
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
-text = "Move: WASD / arrow keys    Grab the wire: E / Space
-Back to start: R    Hint: H    Skills: T    Menu: Esc"
-horizontal_alignment = 1
+offset_bottom = 264.0
+mouse_filter = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="Row1" type="HBoxContainer" parent="UI/Controls"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="Move" type="Control" parent="UI/Controls/Row1"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("WASD")
+text = "move"
+text_color = Color(0.42, 0.62, 0.45, 1)
+
+[node name="Grab" type="Control" parent="UI/Controls/Row1"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("E")
+text = "grab the wire"
+text_color = Color(0.42, 0.62, 0.45, 1)
+
+[node name="Back" type="Control" parent="UI/Controls/Row1"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("R")
+text = "back to start"
+text_color = Color(0.42, 0.62, 0.45, 1)
+
+[node name="Row2" type="HBoxContainer" parent="UI/Controls"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="Hint" type="Control" parent="UI/Controls/Row2"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("H")
+text = "hint"
+text_color = Color(0.42, 0.62, 0.45, 1)
+
+[node name="Skills" type="Control" parent="UI/Controls/Row2"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("T")
+text = "skills"
+text_color = Color(0.42, 0.62, 0.45, 1)
+
+[node name="Menu" type="Control" parent="UI/Controls/Row2"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("Esc")
+text = "menu"
+text_color = Color(0.42, 0.62, 0.45, 1)
 
 [node name="Fade" type="ColorRect" parent="UI" unique_id=1872592639]
 anchors_preset = 15

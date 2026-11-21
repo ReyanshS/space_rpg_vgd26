@@ -22,8 +22,8 @@ paint. Untick **Show Layout In Editor** on the level node to see it without the 
 | floor / wall | `.` / `#` | walls (and doors, barriers) split the map into rooms |
 | start | `S` | yellow pad: press E here to grab the wire. **One per room.** |
 | goal | `G` | blue pad: touch it with the wire to power the room |
-| node | `N` | orange: wraps the wire, refills and pauses the timer |
-| bend | `B` | purple: flings you 90 degrees |
+| node | `N` | orange: wraps the wire, adds Node Time, holds the clock for Node Hold seconds |
+| pole | `B` | purple post: solid; the wire wraps round it when you walk past it |
 | discharge | `X` | red: zaps you, and the wire can't cross it |
 | blinker | `x` | blinking grate: zaps only while lit |
 | crate | `C` | blocks you and the wire |
@@ -82,9 +82,18 @@ and open the Inspector groups:
 - **PIP's rule lines**: change the text. Leave one empty and PIP stays quiet there.
 - **Popup texts**: the short messages at the top ("POWER ON", "ZAP!"...).
 
-The same level node also has **Level** (name, results message), **Rules** (wire
-time, battery bonus), **Lighting**, **Blinking grates**, **Spacewalk** (oxygen) and
-**Room names**.
+The same level node also has **Level** (name, results message), **Rules**,
+**Lighting**, **Blinking grates**, **Spacewalk** (oxygen) and **Room names**.
+
+**Rules** is where the difficulty lives:
+- **Wire Time**: seconds from the START. **Room Wire Time**: one number per room (in
+  walking order, like Room Names) to give a room its own START time; 0 = use Wire Time.
+- **Node Time**: seconds a node adds. **Max Wire Time**: the timer never goes above this.
+- **Node Hold**: how long standing on a node holds the clock.
+- **Cell Bonus**: seconds a battery adds.
+After changing any of them (or the map), check every room still works:
+`python tools/solver2.py Scenes/level_2.tscn`. Look at "most forgiving route: lowest
+timer": the least time a perfect player has left. About 1 s is hard, 2 s+ is easy.
 
 ## 4. The tutorial
 
