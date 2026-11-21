@@ -1,17 +1,17 @@
-[gd_resource type="Theme" format=3]
+[gd_resource type="Theme" format=3 uid="uid://boyg2mjcueqlp"]
 
 [ext_resource type="FontFile" uid="uid://c7uh4uioa3hf1" path="res://Assets/fonts/m6x11.ttf" id="1_m6x11"]
-[ext_resource type="Texture2D" path="res://Assets/ui/button_normal.png" id="2_btn"]
-[ext_resource type="Texture2D" path="res://Assets/ui/button_hover.png" id="3_btn_lit"]
-[ext_resource type="Texture2D" path="res://Assets/ui/button_pressed.png" id="4_btn_down"]
-[ext_resource type="Texture2D" path="res://Assets/ui/button_disabled.png" id="5_btn_off"]
+[ext_resource type="Texture2D" uid="uid://c0n2ve0slonoi" path="res://Assets/ui/button_normal.png" id="2_btn"]
+[ext_resource type="Texture2D" uid="uid://p6cutcryv3y2" path="res://Assets/ui/button_hover.png" id="3_btn_lit"]
+[ext_resource type="Texture2D" uid="uid://cnt0u8l7duyq" path="res://Assets/ui/button_pressed.png" id="4_btn_down"]
+[ext_resource type="Texture2D" uid="uid://bfwyp2mii166x" path="res://Assets/ui/button_disabled.png" id="5_btn_off"]
 
-[sub_resource type="StyleBoxTexture" id="Button_normal"]
+[sub_resource type="StyleBoxTexture" id="Button_off"]
 content_margin_left = 8.0
 content_margin_top = 2.0
 content_margin_right = 8.0
 content_margin_bottom = 5.0
-texture = ExtResource("2_btn")
+texture = ExtResource("5_btn_off")
 texture_margin_left = 4.0
 texture_margin_top = 3.0
 texture_margin_right = 4.0
@@ -45,12 +45,12 @@ texture_margin_bottom = 5.0
 axis_stretch_horizontal = 1
 axis_stretch_vertical = 1
 
-[sub_resource type="StyleBoxTexture" id="Button_off"]
+[sub_resource type="StyleBoxTexture" id="Button_normal"]
 content_margin_left = 8.0
 content_margin_top = 2.0
 content_margin_right = 8.0
 content_margin_bottom = 5.0
-texture = ExtResource("5_btn_off")
+texture = ExtResource("2_btn")
 texture_margin_left = 4.0
 texture_margin_top = 3.0
 texture_margin_right = 4.0
