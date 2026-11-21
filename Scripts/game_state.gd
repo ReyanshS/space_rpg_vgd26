@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
-# game_state.gd  -  remembers things BETWEEN levels. It's an AUTOLOAD named "Game".
+# game_state.gd: remembers things between levels. It's an autoload named "Game".
 #
 # When you change scene (level 1 -> level 2), Godot throws the old scene away,
-# with every variable in it. So anything that has to survive - power cells
-# collected, retries, time - lives here instead. Godot creates this node ONCE
+# with every variable in it. So anything that has to survive (power cells
+# collected, retries, time) lives here instead. Godot creates this node once
 # when the game starts and keeps it alive until you quit: that's an autoload
 # (also called a "singleton"). It's listed in Project Settings > Globals > Autoload.
 #
@@ -31,10 +31,12 @@ const TITLE_SCENE := "res://Scenes/title.tscn"
 ## them to taste: closer to 0 = louder.
 const MUSIC := {
 	"title": -18.0,   # "Title theme dramatic": the title screen
-	"ship": -29.0,    # "Space theme bells": inside the ship
-	"space": -27.0,   # "Space theme bells 2": out on the hull (spacewalks)
-	"core": -24.0,    # "Space staccato": the rogue PIP fight in Level 3
-	"ending": -28.0,  # "Title theme no dramatic": after PIP reboots, to the last results
+	# The level tracks are set a little louder than the title, because in a level
+	# they play under the sound effects (and the wire's hum while you carry it).
+	"ship": -21.0,    # "Space theme bells": inside the ship
+	"space": -19.0,   # "Space theme bells 2": out on the hull (spacewalks)
+	"core": -16.0,    # "Space staccato": the rogue PIP fight in Level 3
+	"ending": -20.0,  # "Title theme no dramatic": after PIP reboots, to the last results
 }
 
 ## Extra seconds of oxygen on a spacewalk for every power cell you charged so far.
@@ -47,7 +49,7 @@ const SAVE_PATH := "user://save.cfg"
 
 # One entry per level number, e.g. results[1] = {"time": 140.2, "cells": 7, ...}
 var results := {}
-## True once a level was loaded BY THE GAME (title -> level, or "next level").
+## True once a level was loaded by the game (title -> level, or "next level").
 ## Stays false when you run one level scene straight from the editor with F6:
 ## that's the only time a level's TestStart marker is used.
 var playing_through := false
@@ -97,7 +99,7 @@ func o2_bonus() -> float:
 	return cells_collected() * o2_per_cell() + SkillManager.bonus("o2")
 
 
-## True the FIRST time it's asked about `tip`, false every time after that.
+## True the first time it's asked about `tip`, false every time after that.
 ## e.g.  if Game.first_time("cell_kept"): hud.say(...)   -> PIP explains it once.
 func first_time(tip: String) -> bool:
 	if _tips_seen.has(tip):
@@ -106,7 +108,7 @@ func first_time(tip: String) -> bool:
 	return true
 
 
-## Loads music track `track_name` (a key of MUSIC) and makes it loop forever.
+## Loads music track `track_name` (a key of `MUSIC`) and makes it loop forever.
 ## Returns null if the file isn't there (the game just stays quiet).
 func load_music(track_name: String) -> AudioStream:
 	var path := "res://Assets/audio/music_%s.ogg" % track_name

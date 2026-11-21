@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
-# level.gd  -  reads the map you PAINT, makes it look nice, and runs the RULES.
+# level.gd: reads the map you paint, makes it look nice, and runs the rules.
 #
-# BIG PICTURE
+# The big picture
 #   1. You paint the level on the "Layout" TileMapLayer with simple tiles
 #      (floor, wall, start, goal, node, bend, red, crate, door, spawn, exit,
 #      cell, hull, space, airlock, barrier).
@@ -14,9 +14,9 @@
 #      In the editor this re-runs every time you paint, so you see the result live.
 #   4. _build_rooms() finds the rooms (floor areas separated by walls, doors
 #      and barriers). Each room is one puzzle STAGE. Doors lead to the next
-#      room. BARRIERS (cargo on a lift) split one room into several stages:
-#      touching barrier tiles are a GROUP that sinks into the floor as soon as a
-#      stage next to it is powered. Stages joined by barriers form one AREA:
+#      room. Barriers (cargo on a lift) split one room into several stages:
+#      touching barrier tiles are a group that sinks into the floor as soon as a
+#      stage next to it is powered. Stages joined by barriers form one area:
 #      the camera roams across it, and a later stage can wrap its wire round the
 #      NODES and BENDS of the stages you already powered there. So powering
 #      something really changes the room for the next puzzle.
@@ -24,56 +24,56 @@
 #      checks the rules: red tiles, power cells, new room, touching pads...
 #   6. Lighting: the ship starts dark (CanvasModulate). Glowing things (wires,
 #      pad halos, floor guides) use light channel 2, lit by one flat "glow
-#      light" - see light_fx.gd. Each room has a red emergency light, and
+#      light" (see light_fx.gd). Each room has a red emergency light, and
 #      ceiling lights that switch on when you power it.
-#      When EVERY room has power, a short CUTSCENE (_power_tour) takes the
+#      When every room has power, a short cutscene (_power_tour) takes the
 #      camera back through all the rooms, lighting each one up at full power.
-#   7. The level ANNOUNCES what happens with signals (wire_grabbed, pad_touched,
+#   7. The level announces what happens with signals (wire_grabbed, pad_touched,
 #      room_solved, ...). The tutorial, the story (PIP's lines) and the floor
-#      guides listen to those - the level doesn't need to know they exist.
+#      guides listen to those. The level doesn't need to know they exist.
 #
-# THE WIRE RULES
+# The wire rules
 #   - Press E on the START pad to grab the wire. The timer starts right away.
 #   - You walk freely, but the wire is a tight straight line from the last pad
 #     you touched to your hands. It can't pass through walls, crates or red
-#     tiles - if a step would make it, you just can't take that step.
+#     tiles. If a step would make it, you just can't take that step.
 #   - NODE: wraps the wire, refills the timer and pauses it until you step off.
 #   - BEND: stops you and shows two arrows; press one and it flings you 90 deg.
 #   - GOAL: powers the stage and opens its doors / moves its barriers.
 #   - Timer hits 0, or you step on a red tile (with or without the wire)
-#     -> the wire snaps and the stage resets, but you STAY where you are
+#     -> the wire snaps and the stage resets, but you stay where you are
 #     (pushed off the red tile). Walk back to the START, or press R to jump
 #     there. The wire itself can't be stretched over red tiles.
-#   - BLINKING GRATES switch on and off in a wave (grate_cycle, grate_live,
+#   - Blinking grates switch on and off in a wave (grate_cycle, grate_live,
 #     grate_wave). Lit = they zap your feet. The wire is fine over them.
 #
-# POWER CELLS (the reward for a clever route)
-#   - "cell" tiles become PowerCells. Touch one WHILE CARRYING THE WIRE to charge
+# Power cells (the reward for a clever route)
+#   - "cell" tiles become PowerCells. Touch one while carrying the wire to charge
 #     it. You keep it once the room is powered; if you fail, it comes back.
 #   - At the exit you get up to 3 stars: finish, every cell, few retries.
 #     Game (game_state.gd, an autoload) remembers the results, and every cell
 #     gives you extra oxygen on later spacewalks.
 #
-# SPACEWALK (Level 2)
+# Spacewalk (Level 2)
 #   - "hull" = floor outside the ship, "space" = open space (stars show through).
-#     A room with hull or space in it is an OUTSIDE room: sunlit, no ceiling
-#     lights, its own music, and an OXYGEN meter that drains while you're there.
+#     A room with hull or space in it is an outside room: sunlit, no ceiling
+#     lights, its own music, and an oxygen meter that drains while you're there.
 #   - Your feet can't go onto space. Walk into a hull edge and, if there's a
 #     plate straight ahead to land on, you DRIFT across (player.gd, State.DRIFT).
-#     The wire CAN stretch across open space.
-#   - A door with no wall beside it is a GANGWAY: a catwalk over space that slides
+#     The wire can stretch across open space.
+#   - A door with no wall beside it is a gangway: a catwalk over space that slides
 #     out when the room before it is powered.
 #   - "airlock" pad: stand on it and the airlock cycles: the door behind you
 #     shuts, the air hisses out, the outer door opens and the oxygen meter starts.
 #
-# THE CORE (Level 3)
+# The core (Level 3)
 #   - A "core" tile is a round machine socket. A room with a core has no goal
-#     pad: you power it by wrapping the wire ALL the way round the core.
+#     pad: you power it by wrapping the wire all the way round the core.
 #   - How we know: add up the angle each straight piece of wire sweeps round
 #     the core, as seen from the core (_winding). A full turn = TAU radians
 #     (360 degrees). A ring on the socket shows how far round you are.
 #   - In Level 3, PIP's body docks on the cores (rogue_pip.gd). That script
-#     isn't part of the rules: it LISTENS to the level's signals, and it can
+#     isn't part of the rules: it listens to the level's signals, and it can
 #     call cut_wire(), set_alert(), hold() and let_go().
 #
 # THE RPG SIDE (skill points and the skill tree - see skill_manager.gd)
@@ -110,9 +110,9 @@ const TILE := 32
 const DIRS4: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 
 # How close (in pixels, from a pad's centre) counts as touching it. A tile is 32 px.
-# We measure from his feet AND from a point BODY_UP pixels higher: the sprite is
-# taller than a tile, so when he LOOKS like he's on a pad his feet can be just below it.
-# tools/solver2.py uses the same numbers - change them there too.
+# We measure from his feet and from a point BODY_UP pixels higher: the sprite is
+# taller than a tile, so when he looks like he's on a pad his feet can be just below it.
+# tools/solver2.py uses the same numbers, so change them there too.
 const START_RADIUS := 20.0
 const NODE_RADIUS := 22.0
 const GOAL_RADIUS := 22.0
@@ -162,20 +162,20 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var wire_time := 5.0
 ## Should the timer stop while you pick a direction on a BEND?
 @export var bend_pauses_timer := true
-## Seconds a POWER CELL adds to the wire's timer when you grab it with the wire.
+## Seconds a power cell adds to the wire's timer when you grab it with the wire.
 @export var cell_bonus := 2.0
 
 @export_group("Lighting")
 ## How dark the ship is before a room gets power (1,1,1 = no darkness at all).
 @export var darkness := Color(0.2, 0.21, 0.3)
-## How bright it is OUTSIDE the ship, where the sun lights the hull.
+## How bright it is outside the ship, where the sun lights the hull.
 @export var space_light := Color(0.5, 0.54, 0.7)
 ## Brightness of a room's lights once it's powered.
 @export var room_light_energy := 0.75
-## How bright the inside of the ship gets once EVERY room has power
+## How bright the inside of the ship gets once every room has power
 ## (after the lights-on cutscene). Should be lighter than `darkness`.
 @export var full_power_light := Color(0.42, 0.43, 0.52)
-## The red tint inside the ship during an ALERT (Level 3: PIP is trying to shut
+## The red tint inside the ship during an alert (Level 3: PIP is trying to shut
 ## everything down). Something else turns the alert on and off with set_alert().
 @export var alert_light := Color(0.4, 0.15, 0.17)
 
@@ -204,8 +204,8 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 	"ROOM 4",
 ]
 
-# Things PIP says because of the RULES, not the story. Each plays once at most.
-# (Story lines are StoryBeat nodes under the "Story" node - see story_beat.gd.)
+# Things PIP says because of the rules, not the story. Each plays once at most.
+# (Story lines are StoryBeat nodes under the "Story" node, see story_beat.gd.)
 # You can write {cells}, {o2_bonus} or {o2_per_cell} and the real number goes in.
 # Keep each one short enough for two lines in the console (about 72 letters).
 @export_group("PIP's rule lines")
@@ -378,7 +378,7 @@ var _wire_root: Node2D
 
 # --- lighting
 var _dark: CanvasModulate     # tints the whole level dark (or sunlit outside)
-var _glow_light: PointLight2D  # one flat light that ONLY lights glowing things (channel 2)
+var _glow_light: PointLight2D  # one flat light that only lights glowing things (channel 2)
 var _room_lights := {}         # Room -> Array of PointLight2D (off until powered)
 var _emergency: Array = []     # [light, room] pairs: red lights that pulse until powered
 var _light_t := 0.0
@@ -488,8 +488,8 @@ func _add_key_action(action: String, keys: Array) -> void:
 
 # ===================================================================== playtesting (TestStart)
 
-## A TestStart marker (test_start.gd) that's switched on - or null.
-## Only counts when you run THIS level scene from the editor (F6): exported
+## A TestStart marker (test_start.gd) that's switched on, or null.
+## Only counts when you run this level scene from the editor (F6): exported
 ## games don't have the "editor" feature, and Game.playing_through is true
 ## whenever the game itself loaded the level (F5 from the title).
 func _active_test_start() -> TestStart:
@@ -502,7 +502,7 @@ func _active_test_start() -> TestStart:
 
 
 ## Start the playtest at the TestStart marker. Every room before it is powered
-## QUIETLY (no cutscenes, no PIP lines): lights on, doors open, cargo sunk.
+## quietly (no cutscenes, no PIP lines): lights on, doors open, cargo sunk.
 ## The story, tutorial and rogue PIP read `test_room` and catch up themselves.
 func _apply_test_start() -> void:
 	var ts := _active_test_start()
@@ -571,8 +571,8 @@ func _read_layout() -> void:
 		var kind := String(data.get_custom_data("kind"))
 		if kind != "":
 			_kinds[c] = kind
-	# A power cell with open space on both sides (left AND right, or above AND
-	# below) floats in space: that tile IS open space (you drift past it), it
+	# A power cell with open space on both sides (left and right, or above and
+	# below) floats in space: that tile is open space (you drift past it), it
 	# just has a cell on it. Otherwise the cell sits on the floor / hull.
 	for c in _kinds.keys():
 		if _kinds[c] != "cell":
@@ -591,7 +591,7 @@ func kind_at(c: Vector2i) -> String:
 	return _kinds.get(c, "")
 
 
-## Open space (or nothing) - used to spot power cells floating in space.
+## Open space (or nothing). Used to spot power cells floating in space.
 func _open(c: Vector2i) -> bool:
 	return kind_at(c) in ["space", "", "cell"]
 
@@ -615,8 +615,8 @@ func _is_room_cell(kind: String) -> bool:
 	return _walkable(kind) and kind != "door" and kind != "barrier"
 
 
-## Can't WALK through: nothing, walls, crates, cores, closed doors and barriers
-## that haven't moved yet - and open space, unless space_blocks is false (used
+## Can't walk through: nothing, walls, crates, cores, closed doors and barriers
+## that haven't moved yet. Open space too, unless space_blocks is false (used
 ## for drifting: you float over space).
 func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
 	var kind := kind_at(c)
@@ -629,8 +629,8 @@ func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
 	return false
 
 
-## The WIRE can't pass over: nothing, walls, crates, cores, doors, the exit, live
-## red tiles, and barriers until they've sunk away. (It CAN stretch across open space.)
+## The wire can't pass over: nothing, walls, crates, cores, doors, the exit, live
+## red tiles, and barriers until they've sunk away. (It can stretch across open space.)
 func is_solid_for_wire(c: Vector2i) -> bool:
 	var kind := kind_at(c)
 	if kind == "barrier":
@@ -671,7 +671,7 @@ func _line_clear(a: Vector2, b: Vector2) -> bool:
 
 
 ## Asked by the player before every step: would the tight wire still reach `pos`?
-## The tile you'd be standing on is ignored if it's a red tile - so you CAN walk
+## The tile you'd be standing on is ignored if it's a red tile, so you can walk
 ## onto red tiles while carrying the wire (and get shocked), instead of being stopped.
 func wire_reaches(pos: Vector2) -> bool:
 	var own := cell_of(pos)
@@ -712,7 +712,7 @@ func _is_void(c: Vector2i) -> bool:
 	return k == "" or k == "space"
 
 
-## A door with no wall beside it is out in space: a GANGWAY (catwalk).
+## A door with no wall beside it is out in space: a gangway (catwalk).
 func _is_gangway(c: Vector2i) -> bool:
 	if kind_at(c) != "door":
 		return false
@@ -1058,8 +1058,8 @@ func _build_rooms(quiet := false) -> void:
 		_check_rooms()
 
 
-## BARRIER GROUPS. Barrier tiles that touch each other form one group: a whole
-## wall of cargo that moves together. A group sinks as soon as ANY stage next to
+## Barrier groups. Barrier tiles that touch each other form one group: a whole
+## wall of cargo that moves together. A group sinks as soon as any stage next to
 ## it gets power. (So a barrier can also sit in the middle of a stage, not only
 ## between two.) The stages next to a group become neighbours.
 func _build_barrier_groups() -> void:
@@ -1096,8 +1096,8 @@ func _barrier_groups_of(r: Room) -> Array:
 	return _barrier_groups.filter(func(g: Dictionary) -> bool: return g["rooms"].has(r))
 
 
-## AREAS. A room is one puzzle STAGE. Stages joined by a BARRIER (or, outside,
-## by a catwalk) are really one big space, so they form an AREA: the camera can
+## Areas. A room is one puzzle stage. Stages joined by a barrier (or, outside,
+## by a catwalk) are really one big space, so they form an area: the camera can
 ## roam across the whole area, the room-name popup only shows when you walk into
 ## a new area, and a stage can use the NODES and BENDS of stages you already
 ## powered in its area. Only real doors (with walls beside them) start a new area.
@@ -1145,7 +1145,7 @@ func _check_rooms() -> void:
 			push_warning("Room %d has no door or barrier leading onward." % n)
 
 
-## DOORS that lead from room r to a LATER room (the ones r's goal opens).
+## Doors that lead from room r to a later room (the ones r's goal opens).
 ## (Barriers work in groups instead: see _barrier_groups_of.)
 func _exit_doors(r: Room) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
@@ -1757,7 +1757,7 @@ func core_spots() -> Array:
 	return out
 
 
-## The same, but for previews IN THE EDITOR (rogue_pip.gd): works the rooms out
+## The same, but for previews in the editor (rogue_pip.gd): works the rooms out
 ## from the map as it's painted right now. "quiet" = no warnings in the Output
 ## panel about rooms you're still busy painting.
 func editor_core_spots() -> Array:
@@ -1778,7 +1778,7 @@ func cut_wire() -> void:
 		_fail("cut")
 
 
-## RED ALERT on/off: the ship goes red, the emergency lights flash in every
+## Red alert on/off: the ship goes red, the emergency lights flash in every
 ## room and the boss music plays (off: back to normal).
 func set_alert(on: bool) -> void:
 	_alert = on
@@ -1799,7 +1799,7 @@ func shake(duration: float, strength: float) -> void:
 	_shake_cam(duration, strength)
 
 
-## Another node asks the level to WAIT before it carries on after a room is
+## Another node asks the level to wait before it carries on after a room is
 ## powered (before it opens the doors and starts the lights-on cutscene).
 ## Like holding a lift door: the level waits until everyone has let go.
 ## rogue_pip.gd holds while PIP glitches, gets rebooted or flies away.
@@ -1907,10 +1907,10 @@ func _draw_fling_preview() -> void:
 				_preview_node.draw_arc(e, 7.0, 0.0, TAU, 16, col, 2.0)
 
 
-## REEL BACK. Press E while carrying the wire and it yanks you back to the last
+## Reel back. Press E while carrying the wire and it yanks you back to the last
 ## pad it's wrapped round (the START, a node or a bend). Took a bend the wrong
 ## way? Reel back and pick again. The timer keeps running while you fly, so it
-## costs a little time - but you never have to stand there waiting for it to run out.
+## costs a little time, but you never have to stand there waiting for it to run out.
 func _reel_back() -> void:
 	var target := _last_anchor
 	var dist := player.position.distance_to(target)
@@ -1943,7 +1943,7 @@ func _reel_back() -> void:
 	_play("clank")
 
 
-## Charge any power cell you're touching - but only with the live wire in hand.
+## Charge any power cell you're touching, but only with the live wire in hand.
 func _check_cells() -> void:
 	if _cells.is_empty():
 		return
@@ -2093,7 +2093,7 @@ func player_drift_refused(at: Vector2, dir: Vector2) -> void:
 		return
 	_drift_warn_cd = 0.8
 	if player.is_wired() and drift_landing(at, dir, Astronaut.FEET_HALF, false).is_finite():
-		wire_strained(at + dir * 24.0)    # there IS a landing: it's the wire that's in the way
+		wire_strained(at + dir * 24.0)    # there is a landing: it's the wire that's in the way
 		return
 	_play("tick")
 	# a short red dotted line out into space: "you'd float away"
@@ -2204,7 +2204,7 @@ func _try_grab() -> void:
 
 
 ## Nodes and bends from stages you already powered in this area work for this
-## wire too - but they're easy to miss. So when you grab the wire, each of them
+## wire too, but they're easy to miss. So when you grab the wire, each of them
 ## flashes, one after another. The first time ever, PIP points one out.
 func _show_shared_pads(r: Room) -> void:
 	var shared: Array[Vector2i] = []
@@ -2229,7 +2229,7 @@ func _tile_hit(c: Vector2i) -> void:
 
 # ===================================================================== dialogue
 
-## PIP says one of his RULE lines (the pip_... texts in the Inspector, group
+## PIP says one of his rule lines (the pip_... texts in the Inspector, group
 ## "PIP's rule lines"). {cells}, {o2_bonus} and {o2_per_cell} get the real
 ## numbers. An empty line = PIP keeps quiet. `point_at` = his blue arrow.
 func _pip_say(text: String, point_at := Vector2.INF) -> void:
@@ -2255,7 +2255,7 @@ func can_pause_for_dialogue() -> bool:
 	return _wire == null and not _complete
 
 
-## Give control back - unless PIP is still talking (then he's released when PIP stops).
+## Give control back, unless PIP is still talking (then he's released when PIP stops).
 func _release_player() -> void:
 	if _dialogue_lock:
 		player.lock(false)
@@ -2368,8 +2368,8 @@ func _open_exit_doors(r: Room, quiet := false) -> void:
 			t.open_door()
 	if opened and not quiet:
 		_play("door")
-	# every barrier group touching this stage sinks - the whole group, even the
-	# crates that aren't right next to the stage
+	# every barrier group touching this stage sinks (the whole group, even the
+	# crates that aren't right next to the stage)
 	var barriers: Array[Vector2i] = []
 	for g in _barrier_groups_of(r):
 		for c in g["tiles"]:
@@ -2414,8 +2414,8 @@ func _all_powered() -> void:
 # _busy keeps the player frozen and _cutscene tells the camera to stop
 # following him and look at _cut_cam instead.
 
-## The camera glides back through every room - from the one you're in to the
-## very first one - and each room lights up at FULL power as it arrives.
+## The camera glides back through every room, from the one you're in to the
+## very first one, and each room lights up at full power as it arrives.
 ## Then a quick fade takes you back to the player.
 func _power_tour() -> void:
 	var order: Array[Room] = []
@@ -2458,7 +2458,7 @@ func _room_view(r: Room) -> Vector2:
 	return b.get_center()
 
 
-## Moves the cutscene camera to room `r`: slow - fast - slow, like a film camera.
+## Moves the cutscene camera to room `r`: slow, fast, slow, like a film camera.
 ## On the way, the darkness goes back to how that room looked before.
 func _glide_to(r: Room) -> void:
 	var target := _room_view(r)
@@ -2472,7 +2472,7 @@ func _glide_to(r: Room) -> void:
 	await tw.finished
 
 
-## One room goes to FULL power: brighter tint, lights flare, sparks, the floor
+## One room goes to full power: brighter tint, lights flare, sparks, the floor
 ## cable flows again. `step` = how many rooms came before (each sounds higher).
 func _light_up(r: Room, step: int) -> void:
 	r.full_power = true
@@ -2559,7 +2559,7 @@ func _fail(kind: String) -> void:
 	hud.set_timer(false, 0.0, 0.0)
 	hud.set_reel_prompt(false)
 	var r := _wire_room if _wire_room != null else _current_room
-	# Pressing R while NOT carrying the wire is just a reset, not a failed try.
+	# Pressing R while not carrying the wire is just a reset, not a failed try.
 	var counts := kind != "restart" or _wire != null
 	var had_wire := _wire != null
 	if counts and r != null and not r.solved:
@@ -2643,7 +2643,7 @@ func _return_cells() -> void:
 
 ## After a fail: the wire is gone, but you stay where you are. If that spot is
 ## somewhere you can't stand (a red tile, open space), a little push moves you
-## back to safe floor - no teleport, no fade.
+## back to safe floor. No teleport, no fade.
 func _stay_after_fail() -> void:
 	var r := _wire_room if _wire_room != null else _current_room
 	_wire_room = null
@@ -2663,7 +2663,7 @@ func _stay_after_fail() -> void:
 
 ## Where to put you after a fail. Where you are, if that's safe. Otherwise back
 ## to the last spot you stood on safely: that's the side you came FROM. (Just
-## taking the nearest safe tile could push you THROUGH a wall of red tiles into
+## taking the nearest safe tile could push you through a wall of red tiles into
 ## a corner you can't get out of without crossing them again.) Only if that
 ## spot is far away or no longer safe do we search for the nearest one.
 func _spot_after_fail(pos: Vector2) -> Vector2:
@@ -2697,7 +2697,7 @@ func _nearest_safe_spot(pos: Vector2) -> Vector2:
 	return center_of(_spawn)
 
 
-## After a fail: can you still WALK back to room r's START without stepping on a
+## After a fail: can you still walk back to room r's START without stepping on a
 ## red tile or a blinking grate? If not (say you got zapped on a node with grates
 ## all round it), you're stranded: an [R] key floats over you until you press it.
 ## Returns true if you're stranded.
@@ -2743,7 +2743,7 @@ func _safe_to_stand(pos: Vector2) -> bool:
 
 ## The pads the wire from room r can use: its own, plus the NODES and BENDS of
 ## stages you already powered in the same area. Once the cargo between them has
-## sunk, those pads are right there - so a later stage can wrap the wire round
+## sunk, those pads are right there, so a later stage can wrap the wire round
 ## them from a new angle.
 func _stage_pads(r: Room) -> Array[Vector2i]:
 	var out: Array[Vector2i] = r.pads.duplicate()
@@ -2835,7 +2835,7 @@ func _cycle_airlock(r: Room) -> void:
 		hud.show_toast("DEPRESSURIZING... %d" % n, 0.9)
 		_play("alarm")
 		await get_tree().create_timer(0.8).timeout
-	# 3. the outer door opens onto space - and the oxygen meter starts
+	# 3. the outer door opens onto space, and the oxygen meter starts
 	_open_exit_doors(r)
 	dust.emitting = false
 	get_tree().create_timer(2.0).timeout.connect(dust.queue_free)
@@ -2929,7 +2929,7 @@ func _shake_cam(duration: float, strength: float) -> void:
 	_shake_strength = strength
 
 
-## Follows the player but never shows outside the current AREA (all the stages
+## Follows the player but never shows outside the current area (all the stages
 ## joined to this one). If the area is smaller than the screen, the camera just
 ## sits in its middle. During the lights-on cutscene it looks at _cut_cam instead.
 ## The HUD's console covers the bottom CONSOLE_H pixels, so the "screen" we frame

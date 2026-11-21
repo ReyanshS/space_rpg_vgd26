@@ -1,28 +1,28 @@
 # ---------------------------------------------------------------------------
-# rogue_pip.gd  -  PIP's body in Level 3, and the boss fight against him.
+# rogue_pip.gd: PIP's body in Level 3, and the boss fight against him.
 #
-# THE STORY: the ship is finally at full power, and the surge scrambles PIP's
+# The story: the ship is finally at full power, and the surge scrambles PIP's
 # safety programs. He decides all that power is "unsafe" and starts switching
 # the ship off again. He hides in his core chamber, docked on a CORE socket.
 # Wrapping the live wire all the way round his core reboots him a little.
 # Three sockets = three reboots = PIP is himself again.
 #
-# HOW IT FITS IN (the same idea as story.gd: the level doesn't know we exist)
-#   - The RULES stay in level.gd: a core room gets power when the wire goes
+# How it fits in (the same idea as story.gd: the level doesn't know we exist)
+#   - The rules stay in level.gd: a core room gets power when the wire goes
 #     all the way round its core. This script never changes a rule.
-#   - It LISTENS: level.room_solved tells it when the malfunction room got
+#   - It listens: level.room_solved tells it when the malfunction room got
 #     power, and when you closed a loop round the core PIP is docked on.
-#   - It ASKS the level for a few things: cut_wire() (his shutdown pulse),
+#   - It asks the level for a few things: cut_wire() (his shutdown pulse),
 #     set_alert() (red lights + boss music), shake(), and hold() / let_go()
 #     ("wait for my cutscene before you open the doors").
 #   - It draws PIP itself in _draw(): a little floating monitor with a face.
 #
-# THE SHUTDOWN METER: while you carry the wire in the room PIP is docked in, a
+# The shutdown meter: while you carry the wire in the room PIP is docked in, a
 # bar of 12 red lights over his head fills up. When it's full he sends out a
 # pulse that cuts your wire (the room resets). shutdown_seconds = how long it
 # takes, one number per phase. So the loop has to be fast, not just possible.
 #
-# MOODS: a small state machine for how he looks (like the player's State).
+# Moods: a small state machine for how he looks (like the player's State).
 #   ASLEEP  docked and dozing, before the surge (green, eyes shut)
 #   ROGUE   red face, angry eyes, the meter is running
 #   HIT     a loop just closed round him: white flash, X eyes
@@ -30,7 +30,7 @@
 #   BOOT    restarting: a loading bar
 #   AWAKE   himself again (green, smiling)
 #
-# WHERE HE GOES: you don't place PIP himself. Paint CORE tiles (@) in the map:
+# Where he goes: you don't place PIP himself. Paint CORE tiles (@) in the map:
 # the core in room `malfunction_room` is the sync pylon that turns him, and the
 # cores in the rooms after it are his sockets, in walking order. This script is
 # a @tool, so the editor shows a preview: a PIP on each socket with its number
@@ -225,7 +225,7 @@ func _meter() -> float:
 	return clampf(_charge / _limit(), 0.0, 1.0)
 
 
-## SHUTDOWN PULSE: a red ring spreads out from him and the wire is cut.
+## Shutdown pulse: a red ring spreads out from him and the wire is cut.
 func _pulse() -> void:
 	_charge = 0.0
 	_wave = 0.0

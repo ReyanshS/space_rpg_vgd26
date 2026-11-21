@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
-# tutorial_step.gd  -  ONE instruction in the guided tutorial.
+# tutorial_step.gd: one instruction in the guided tutorial.
 #
 # A step is a marker you place in the level (it's a Marker2D, so it shows as a
 # little cross in the editor). Where you put it is where the on-screen arrow
-# points. The step does nothing by itself - tutorial.gd (on the parent
+# points. The step does nothing by itself: tutorial.gd (on the parent
 # "Tutorial" node) shows the steps one at a time, in the order they appear in
 # the scene tree, and moves on when `advance_when` happens.
 #

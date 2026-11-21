@@ -1,10 +1,10 @@
 # ---------------------------------------------------------------------------
-# story.gd  -  plays the StoryBeat children: what PIP says, and when.
+# story.gd: plays the StoryBeat children, so what PIP says and when.
 #
-# HOW IT FITS TOGETHER (same idea as tutorial.gd)
-#   - The level ANNOUNCES events with signals: room_entered, room_solved,
+# How it fits together (same idea as tutorial.gd)
+#   - The level announces events with signals: room_entered, room_solved,
 #     wire_grabbed, room_restarted, airlock_cycling, drift_started... This
-#     script LISTENS and plays the beats whose trigger matches.
+#     script listens and plays the beats whose trigger matches.
 #   - Each beat plays once. Its room comes from where the marker is placed.
 #   - The HUD draws the speech box (hud.say). If a beat has "pause_game" on,
 #     the player has to press E through the lines before moving again.

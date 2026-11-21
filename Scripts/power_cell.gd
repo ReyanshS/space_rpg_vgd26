@@ -1,15 +1,15 @@
 # ---------------------------------------------------------------------------
-# power_cell.gd  -  a POWER CELL: a spare battery lying around the ship (a small
-# floating battery with a lightning bolt - the same picture as the cell counter).
+# power_cell.gd: a power cell, a spare battery lying around the ship (a small
+# floating battery with a lightning bolt, the same picture as the cell counter).
 #
 # Cells are painted on the Layout layer like any tile (kind "cell"). Walking
-# over one does nothing. Touch one while you carry the LIVE WIRE and its charge
+# over one does nothing. Touch one while you carry the live wire and its charge
 # jumps into the wire: your timer gets cell_bonus more seconds (level.gd).
 # So a cell is a choice in the middle of a puzzle: is it worth the detour?
 # Every cell you keep also counts for a star, and your suit stores the extra
 # power as oxygen for spacewalks later (Game.o2_bonus()).
 #
-# If you fail, the cells you used on that try come back. You only KEEP them once
+# If you fail, the cells you used on that try come back. You only keep them once
 # you reach the goal. The level does all the counting; this script only draws
 # the cell and plays its animations.
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ func _draw() -> void:
 		var bob := roundf(sin(_t * 3.0) * 1.5)
 		var pulse := 0.2 + 0.1 * sin(_t * 4.0)
 		draw_circle(Vector2(0, bob - 1), 11.0, Color(1.0, 0.8, 0.35, pulse))   # warm halo
-		# FULL: an amber battery whose bolt glows white-hot now and then
+		# full: an amber battery whose bolt glows white-hot now and then
 		var bolt := Color(1.0, 0.95, 0.75).lerp(Color.WHITE, 0.5 + 0.5 * sin(_t * 5.0))
 		draw_battery(self, Vector2(-5, -9 + bob), Color(0.95, 0.62, 0.15), bolt)
 	if _float_text > 0.0:

@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
-# player.gd  -  the astronaut you control.
+# player.gd: the astronaut you control.
 #
-# The player is always in exactly ONE "state". Each state decides what the
+# The player is always in exactly one "state". Each state decides what the
 # arrow keys do:
 #   FREE      walking around, not holding the wire
 #   WIRED     walking around while carrying the wire. The wire is pulled tight
@@ -10,14 +10,14 @@
 #             red tile (level.gd answers that question for us).
 #   CHOOSING  stopped on a purple BEND, waiting for you to press one of its
 #             two arrows
-#   FLUNG     the BEND is throwing you in a straight line - no steering
-#   LOCKED    a short "cut-scene" (shocked, room solved, PIP talking...) - no control
+#   FLUNG     the bend is throwing you in a straight line, no steering
+#   LOCKED    a short "cut-scene" (shocked, room solved, PIP talking...), no control
 #   DRIFT     spacewalk: you walked off the edge of a hull plate and float in a
 #             straight line across open space until your mag boots grab the
-#             next plate. You can only push off where there IS a plate to land
+#             next plate. You can only push off where there is a plate to land
 #             on (level.drift_landing() checks that before you go).
 #
-# This script only handles moving + animation. The RULES live in level.gd.
+# This script only handles moving + animation. The rules live in level.gd.
 # The player tells the level "I moved" by calling level.player_moved(), and
 # the level answers by calling functions back on the player (choose_fling,
 # lock, release...).
@@ -57,7 +57,7 @@ var _choices: Array[Vector2] = []
 var _moving := false
 var _carrying := false
 var _anim_override := ""      # forces an animation ("shock", "burnt")
-var _lamp: PointLight2D       # helmet lamp - only on in rooms with no power
+var _lamp: PointLight2D       # helmet lamp, only on in rooms with no power
 var _lamp_tween: Tween
 var _hand_light: PointLight2D # yellow glow from the live wire in his hands
 
@@ -132,7 +132,7 @@ func fling(from: Vector2, dir: Vector2) -> void:
 	state = State.FLUNG
 
 
-## The fling ended on a node (or hit something) - you can walk again.
+## The fling ended on a node (or hit something), so you can walk again.
 func land() -> void:
 	if state == State.FLUNG:
 		state = State.WIRED
@@ -225,7 +225,7 @@ func _slide(mv: Vector2, may_nudge: bool) -> void:
 	if remaining <= 0.0:
 		return
 	var target := position + dir * remaining
-	# Only OPEN SPACE in the way (no wall, no crate)? Push off and drift across.
+	# Only open space in the way (no wall, no crate)? Push off and drift across.
 	# (box_blocked's last argument = "does open space count as blocked?")
 	if may_nudge and level.box_blocked(target, FEET_HALF) and not level.box_blocked(target, FEET_HALF, false):
 		if _try_drift(dir):
@@ -256,7 +256,7 @@ func _face(v: Vector2) -> void:
 		_last_x = f.x
 
 
-## "down", "up", "right" or "left" - picks which animation set to use.
+## Picks which animation set to use: "down", "up", "right" or "left".
 ## Walking diagonally uses the side view.
 func _dir_name() -> String:
 	if facing.x > 0:
@@ -337,7 +337,7 @@ func _drift_step(delta: float) -> void:
 ## (Assets/images/astronaut/*_frames.tres). Different sprites have different
 ## animations: the original astronaut has "idle", "walk_down", "walk_left",
 ## "walk_right"; the v2 one also has "walk_up" and an idle for every direction.
-## So for each situation we list what we'd LIKE, best first, and play the first
+## So for each situation we list what we'd like, best first, and play the first
 ## one this sprite actually has. Swap the sprite and this code still works.
 func _update_anim() -> void:
 	var dir := _dir_name()

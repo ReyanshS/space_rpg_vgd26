@@ -1,11 +1,11 @@
 # ---------------------------------------------------------------------------
-# starfield.gd  -  the view of space behind everything: stars, a nebula, a planet.
+# starfield.gd: the view of space behind everything. Stars, a nebula, a planet.
 #
-# It lives on a CanvasLayer with a NEGATIVE layer number, so it's drawn behind the
-# level - and it's NOT darkened by the level's CanvasModulate (that only tints its
+# It lives on a CanvasLayer with a negative layer number, so it's drawn behind the
+# level, and it isn't darkened by the level's CanvasModulate (that only tints its
 # own layer). Anywhere the level draws nothing (open space), you see this.
 #
-# PARALLAX: far-away things move slower than near things when the camera moves.
+# Parallax: far-away things move slower than near things when the camera moves.
 # Every star has a "depth" between 0.02 and 0.25: it moves that fraction of the
 # camera's movement. The planet (0.05) and nebula (0.02) barely move at all.
 # That's what makes it feel deep.

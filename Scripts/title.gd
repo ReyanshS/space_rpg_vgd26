@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# title.gd  -  the title screen: the name of the game, the story in one line,
+# title.gd: the title screen. The name of the game, the story in one line,
 # the controls, and "press E to start".
 #
 # The background is the same Starfield the spacewalk uses (on a CanvasLayer
