@@ -100,8 +100,8 @@ func _on_wire_grabbed(room: int) -> void:
 func _on_pad_touched(kind: String, room: int) -> void:
 	if kind == "node":
 		_check(TutorialStep.Trigger.TOUCH_NODE, room)
-	elif kind == "bend":
-		_check(TutorialStep.Trigger.TOUCH_BEND, room)
+	elif kind == "pole":
+		_check(TutorialStep.Trigger.WRAP_POLE, room)
 
 
 func _on_room_solved(room: int) -> void:

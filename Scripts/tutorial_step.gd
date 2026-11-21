@@ -19,7 +19,7 @@ extends Marker2D
 enum Trigger {
 	GRAB_WIRE,        ## you pick up the wire in this step's room
 	TOUCH_NODE,       ## the wire touches an orange node in this room
-	TOUCH_BEND,       ## the wire touches a purple bend in this room
+	WRAP_POLE,        ## the wire wraps round a purple pole in this room
 	SOLVE_ROOM,       ## you power this room's goal
 	ENTER_NEXT_ROOM,  ## you walk into a later room
 	REACH_HERE,       ## you walk to where this marker is

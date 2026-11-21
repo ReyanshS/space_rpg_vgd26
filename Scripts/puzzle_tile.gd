@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# puzzle_tile.gd: one interactive floor tile. Start, goal, node, bend,
+# puzzle_tile.gd: one interactive floor tile. Start, goal, node, pole,
 # red discharge, door, gangway (a door out in space: a catwalk that extends
 # across the gap when the hull section is powered), airlock pad, barrier
 # (a cargo stack on a lift that sinks into the floor when its stage is powered),
@@ -22,7 +22,7 @@ extends Node2D
 # An enum is a list of named numbers: Kind.START == 0, Kind.GOAL == 1, ...
 # The order matches the pictures in puzzle_tiles.png from left to right
 # (DOOR_OPEN and GANGWAY_OPEN are the "after" pictures of a door / gangway).
-enum Kind { START, GOAL, NODE, BEND, DISCHARGE, DISCHARGE_OFF, CRATE, DOOR,
+enum Kind { START, GOAL, NODE, POLE, DISCHARGE, DISCHARGE_OFF, CRATE, DOOR,
 	DOOR_OPEN, GANGWAY, GANGWAY_OPEN, AIRLOCK, BARRIER, CORE }
 
 const SHEET_PATH := "res://Assets/images/tiles/puzzle_tiles.png"
@@ -31,7 +31,7 @@ const GLOW := {
 	Kind.START: Color(1.0, 0.85, 0.3),
 	Kind.GOAL: Color(0.35, 0.65, 1.0),
 	Kind.NODE: Color(1.0, 0.55, 0.2),
-	Kind.BEND: Color(0.75, 0.45, 1.0),
+	Kind.POLE: Color(0.75, 0.45, 1.0),
 	Kind.DISCHARGE: Color(1.0, 0.25, 0.25),
 	Kind.DISCHARGE_OFF: Color(1.0, 0.25, 0.25),   # a blinking grate (red while lit)
 	Kind.DOOR: Color(0.4, 1.0, 0.55),
@@ -66,9 +66,7 @@ var _glow: Sprite2D
 var _light: PointLight2D
 var _crackle: CPUParticles2D
 var _prompt_node: Node2D
-var _preview_node: Node2D
-var _preview_on := false
-var _preview_side := Vector2.ZERO
+var _post_node: Node2D        # poles: the post standing on the purple plate
 var _loop_node: Node2D
 var _loop_on := false
 var _loop_from := 0.0         # the angle the loop starts at (towards the START pad)
@@ -115,8 +113,11 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 		_crackle.emitting = kind == Kind.DISCHARGE      # blinking grates only crackle while lit
 	if kind == Kind.START:
 		_prompt_node = _make_overlay(_draw_prompt)
-	if kind == Kind.BEND:
-		_preview_node = _make_overlay(_draw_preview)
+	if kind == Kind.POLE:
+		_post_node = Node2D.new()
+		_post_node.z_index = 6      # relative to the tile (-7): -1, so just under the player
+		add_child(_post_node)
+		_post_node.draw.connect(_draw_post)
 	if kind == Kind.CORE:
 		_loop_node = _make_overlay(_draw_loop)
 		_loop_node.z_index = 6      # relative to the tile (-7): -1, so just under the player
@@ -153,7 +154,7 @@ func _process(delta: float) -> void:
 	if _glow and not is_open:
 		var a := 0.0
 		match kind:
-			Kind.START, Kind.GOAL, Kind.NODE, Kind.BEND, Kind.AIRLOCK, Kind.CORE:
+			Kind.START, Kind.GOAL, Kind.NODE, Kind.POLE, Kind.AIRLOCK, Kind.CORE:
 				a = 0.18 + 0.12 * sin(_t * 3.0)     # slow gentle pulse
 			Kind.DISCHARGE:
 				a = 0.3 + 0.2 * sin(_t * 9.0)
@@ -183,8 +184,8 @@ func _process(delta: float) -> void:
 			_sprite.modulate = Color(1.5, 1.4, 1.4) if randf() < 0.3 else Color.WHITE
 	if prompt and _prompt_node:
 		_prompt_node.queue_redraw()
-	if _preview_on and _preview_node:
-		_preview_node.queue_redraw()     # keep the bend arrows pulsing
+	if _post_node:
+		_post_node.queue_redraw()        # the cap glows softly
 	if _loop_on and _loop_node:
 		_loop_node.queue_redraw()
 
@@ -205,28 +206,20 @@ func _draw_prompt() -> void:
 	_prompt_node.draw_rect(Rect2(o + Vector2(4, 8), Vector2(5, 1)), ink)
 
 
-## BEND pads: while you're stopped on one, show its two ways out as arrows.
-## `side` is one way; the other way is the exact opposite (-side).
-func show_choice(on: bool, side: Vector2) -> void:
-	_preview_on = on
-	_preview_side = side
-	if _preview_node:
-		_preview_node.queue_redraw()
-
-
-func _draw_preview() -> void:
-	if not _preview_on:
-		return
-	var pulse := 0.6 + 0.4 * sin(_t * 10.0)
-	var col := Color(0.92, 0.7, 1.0, pulse)
-	var outline := Color(0.15, 0.05, 0.25, pulse)
-	for dir in [_preview_side, -_preview_side]:
-		var tip: Vector2 = dir * (32.0 + 2.0 * sin(_t * 10.0))
-		var base: Vector2 = dir * 22.0
-		var side: Vector2 = Vector2(-dir.y, dir.x) * 6.0
-		var tri := PackedVector2Array([tip, base + side, base - side])
-		_preview_node.draw_colored_polygon(tri, col)
-		_preview_node.draw_polyline(PackedVector2Array([tip, base + side, base - side, tip]), outline, 1.0)
+## POLE: a short purple post on its plate. The wire wraps round its middle
+## (the tile's centre, where level.gd puts the corner of the wire).
+func _draw_post() -> void:
+	var dark := Color(0.22, 0.1, 0.34)
+	var body := Color(0.55, 0.3, 0.8)
+	var light := Color(0.85, 0.65, 1.0)
+	_post_node.draw_rect(Rect2(-6, 1, 12, 4), Color(0, 0, 0, 0.35))          # shadow on the floor
+	_post_node.draw_rect(Rect2(-5, -15, 10, 18), dark)                       # outline
+	_post_node.draw_rect(Rect2(-4, -14, 8, 16), body)                        # the post
+	_post_node.draw_rect(Rect2(-3, -14, 2, 16), light)                       # it catches the light
+	_post_node.draw_rect(Rect2(2, -14, 2, 16), body.darkened(0.3))           # ...and the shade
+	var glow := 0.6 + 0.4 * sin(_t * 3.0) if not powered else 1.0
+	_post_node.draw_rect(Rect2(-5, -17, 10, 3), dark)                        # the cap
+	_post_node.draw_rect(Rect2(-4, -16, 8, 2), Color(1.0, 0.8, 1.0, glow))
 
 
 ## CORE: the level calls this every frame while you carry the wire in its room.

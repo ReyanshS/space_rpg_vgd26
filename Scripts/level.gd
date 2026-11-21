@@ -3,7 +3,7 @@
 #
 # The big picture
 #   1. You paint the level on the "Layout" TileMapLayer with simple tiles
-#      (floor, wall, start, goal, node, bend, red, crate, door, spawn, exit,
+#      (floor, wall, start, goal, node, pole, red, crate, door, spawn, exit,
 #      cell, hull, space, airlock, barrier).
 #      Each tile in the palette carries a hidden label called "kind"
 #      (set in Assets/images/tiles/layout_tileset.tres -> Custom Data).
@@ -18,7 +18,7 @@
 #      touching barrier tiles are a group that sinks into the floor as soon as a
 #      stage next to it is powered. Stages joined by barriers form one area:
 #      the camera roams across it, and a later stage can wrap its wire round the
-#      NODES and BENDS of the stages you already powered there. So powering
+#      nodes of the stages you already powered there. So powering
 #      something really changes the room for the next puzzle.
 #   5. During play the player calls player_moved() every frame and that function
 #      checks the rules: red tiles, power cells, new room, touching pads...
@@ -37,8 +37,14 @@
 #   - You walk freely, but the wire is a tight straight line from the last pad
 #     you touched to your hands. It can't pass through walls, crates or red
 #     tiles. If a step would make it, you just can't take that step.
-#   - NODE: wraps the wire, refills the timer and pauses it until you step off.
-#   - BEND: stops you and shows two arrows; press one and it flings you 90 deg.
+#   - The START gives you wire_time seconds. The timer can never go above
+#     max_wire_time (not even with batteries).
+#   - NODE: wraps the wire and adds node_time seconds. Standing on it holds the
+#     timer, but only for node_hold seconds: you can't rest there for ever.
+#   - POLE (purple post): solid, you walk round it. When the wire sweeps across
+#     it, the wire wraps round it like a rope round a post (_update_wraps).
+#     Walk back the way you came and it unwraps. It gives no time; it lets the
+#     wire go round corners it couldn't otherwise.
 #   - GOAL: powers the stage and opens its doors / moves its barriers.
 #   - Timer hits 0, or you step on a red tile (with or without the wire)
 #     -> the wire snaps and the stage resets, but you stay where you are
@@ -96,7 +102,7 @@ signal room_entered(index: int)
 signal room_solved(index: int)
 signal room_restarted(index: int)            # you failed and the room reset
 signal wire_grabbed(index: int)              # you picked up the wire in room `index`
-signal pad_touched(kind: String, index: int) # the wire reached a node / bend / goal
+signal pad_touched(kind: String, index: int) # the wire reached a node / goal, or wrapped a "pole"
 signal level_completed
 signal cell_collected(index: int)            # a power cell got charged in room `index`
 signal empty_cell_touched                    # you touched a cell without the wire (only sent once)
@@ -116,7 +122,6 @@ const DIRS4: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1),
 const START_RADIUS := 20.0
 const NODE_RADIUS := 22.0
 const GOAL_RADIUS := 22.0
-const BEND_RADIUS := 20.0
 const BODY_UP := 10.0
 const CELL_RADIUS := 14.0
 const AIRLOCK_RADIUS := 12.0
@@ -128,7 +133,7 @@ const ROOF_TEX := "res://Assets/images/tiles/roof.png"
 const PUZZLE_TEX := "res://Assets/images/tiles/puzzle_tiles.png"
 const HULL_TEX := "res://Assets/images/tiles/hull.png"
 # Which picture in puzzle_tiles.png belongs to which kind.
-const PUZZLE_FRAME := {"start": 0, "goal": 1, "node": 2, "bend": 3, "discharge": 4,
+const PUZZLE_FRAME := {"start": 0, "goal": 1, "node": 2, "pole": 3, "discharge": 4,
 	"blinker": 5, "crate": 6, "door": 7, "airlock": 11, "barrier": 12, "core": 13}
 const GANGWAY_FRAME := 9
 const SRC_WALL := 0
@@ -158,10 +163,19 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var skill_points := 2
 
 @export_group("Rules")
-## Seconds you get from the START pad, and again at every NODE.
+## Seconds you get from the START pad.
 @export var wire_time := 4.0
-## Should the timer stop while you pick a direction on a BEND?
-@export var bend_pauses_timer := true
+## Seconds a NODE adds to the timer.
+@export var node_time := 3.0
+## The timer never goes above this (START, nodes and batteries all stop here).
+@export var max_wire_time := 5.0
+## Standing on a NODE holds the timer for this many seconds, then it runs again.
+@export var node_hold := 1.5
+## A room's own START time, one number per room in walking order (like Room
+## Names). 0 or missing = use wire_time. Lets an easy room (a tutorial) or a
+## long one get more time without changing the whole level.
+## Check with:  python tools/solver2.py Scenes/level_1.tscn
+@export var room_wire_time: PackedFloat32Array = []
 ## Seconds a power cell adds to the wire's timer when you grab it with the wire.
 @export var cell_bonus := 2.0
 
@@ -250,7 +264,7 @@ class Room:
 	var cells: Array[Vector2i] = []
 	var start := Vector2i(-1, -1)
 	var goal := Vector2i(-1, -1)
-	var pads: Array[Vector2i] = []      # nodes, bends and the goal
+	var pads: Array[Vector2i] = []      # nodes and the goal
 	var doors: Array[Vector2i] = []
 	var neighbors: Array = []
 	var bounds := Rect2i()              # keeps the camera inside the room
@@ -294,10 +308,13 @@ var _current_room: Room
 # --- the wire you're carrying
 var _wire: Wire = null
 var _wire_room: Room
-var _anchor_cells: Array[Vector2i] = []   # pads the wire is wrapped around, in order
+var _anchor_cells: Array[Vector2i] = []   # pads and poles the wire is wrapped around, in order
+var _anchor_signs: Array[float] = []      # for each anchor: which way the wire turns round it (poles only, else 0)
 var _last_anchor := Vector2.ZERO          # pixel position the tight wire starts from
-var _paused_node := Vector2i(-1, -1)      # node you're standing on (timer paused)
-var _choosing_bend := Vector2i(-1, -1)    # bend you're stopped on (picking a direction)
+var _prev_feet := Vector2.ZERO            # where you stood last time player_moved() ran (for wrapping)
+var _poles: Array[Vector2i] = []          # every pole tile in the level
+var _paused_node := Vector2i(-1, -1)      # node you're standing on (timer held)
+var _node_hold_left := 0.0                # how much longer that node holds the timer
 var _time_left := 0.0
 var _tick_accum := 0.0
 var _strain_cd := 0.0
@@ -329,9 +346,6 @@ var _barrier_groups: Array = []           # {"tiles": [...], "rooms": [...]}: ca
 var _group_of := {}                       # barrier tile -> index in _barrier_groups
 var _wire_pads: Array[Vector2i] = []      # the pads the wire you're carrying can use
 var _blinkers: Array[Vector2i] = []       # blinking grate tiles
-var _bend_side := {}                      # bend tile -> its first way out (for reeling back to it)
-var _preview_paths: Array = []            # [from, end, what] for each way out of the bend you're on
-var _preview_node: Node2D                 # draws those dotted fling previews
 var _reel_tween: Tween                    # the reel-back pull, while it's happening
 var _still_time := 0.0                    # how long you've stood still holding the wire
 var _last_safe := Vector2.INF             # the last spot you stood on safely (for after a zap)
@@ -617,12 +631,12 @@ func _is_room_cell(kind: String) -> bool:
 	return _walkable(kind) and kind != "door" and kind != "barrier"
 
 
-## Can't walk through: nothing, walls, crates, cores, closed doors and barriers
+## Can't walk through: nothing, walls, crates, cores, poles, closed doors and barriers
 ## that haven't moved yet. Open space too, unless space_blocks is false (used
 ## for drifting: you float over space).
 func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
 	var kind := kind_at(c)
-	if kind == "" or kind == "wall" or kind == "crate" or kind == "core":
+	if kind == "" or kind == "wall" or kind == "crate" or kind == "core" or kind == "pole":
 		return true
 	if kind == "space":
 		return space_blocks
@@ -973,6 +987,7 @@ func _draw_hull_edges() -> void:
 func _build_rooms(quiet := false) -> void:
 	_rooms.clear()
 	_room_of.clear()
+	_poles.clear()
 	_door_rooms.clear()
 	var spawn_found := false
 	for c in _kinds:
@@ -992,7 +1007,8 @@ func _build_rooms(quiet := false) -> void:
 				"goal":
 					room.goal = cur
 					room.pads.append(cur)
-				"node", "bend": room.pads.append(cur)
+				"node": room.pads.append(cur)
+				"pole": _poles.append(cur)
 				"exit": room.is_exit = true
 				"airlock": room.airlock = cur
 				"core": room.core = cur
@@ -1101,7 +1117,7 @@ func _barrier_groups_of(r: Room) -> Array:
 ## Areas. A room is one puzzle stage. Stages joined by a barrier (or, outside,
 ## by a catwalk) are really one big space, so they form an area: the camera can
 ## roam across the whole area, the room-name popup only shows when you walk into
-## a new area, and a stage can use the NODES and BENDS of stages you already
+## a new area, and a stage can use the nodes of stages you already
 ## powered in its area. Only real doors (with walls beside them) start a new area.
 func _build_areas() -> void:
 	var next_id := 0
@@ -1168,9 +1184,6 @@ func _spawn_runtime_tiles() -> void:
 	_conduit_root = _new_root("Conduits", -8)
 	_tile_root = _new_root("PuzzleTiles", -7)
 	_wire_root = _new_root("Wires", -5)
-	_preview_node = _new_root("FlingPreview", 20)
-	LightFX.glow(_preview_node)
-	_preview_node.draw.connect(_draw_fling_preview)
 	for c in _kinds:
 		var kind: String = _kinds[c]
 		if not PUZZLE_FRAME.has(kind) or kind == "crate":
@@ -1587,16 +1600,16 @@ func _physics_process(delta: float) -> void:
 
 
 func _timer_paused() -> bool:
-	if _paused_node.x >= 0:
-		return true
-	return _choosing_bend.x >= 0 and bend_pauses_timer
+	return _paused_node.x >= 0 and _node_hold_left > 0.0
 
 
 func _tick_timer(delta: float) -> void:
 	var paused := _timer_paused()
-	if not paused:
+	if paused:
+		_node_hold_left -= delta        # a node only holds the timer for so long
+	else:
 		_time_left -= delta
-	var frac := clampf(_time_left / _wire_time(), 0.0, 1.0)
+	var frac := clampf(_time_left / _max_time(), 0.0, 1.0)
 	_wire.set_urgency(1.0 - frac)
 	hud.set_timer(true, frac, maxf(_time_left, 0.0), paused)
 	if _time_left < 1.5 and not paused:
@@ -1686,16 +1699,15 @@ func player_moved() -> void:
 	# Standing on a node pauses the timer; it starts again once you step off.
 	if _paused_node.x >= 0 and player.position.distance_to(center_of(_paused_node)) > NODE_RADIUS + 4.0:
 		_set_paused_node(Vector2i(-1, -1))
+	# Did the wire sweep across a pole (wrap round it), or back again (unwrap)?
+	_update_wraps(_prev_feet, player.position)
+	_prev_feet = player.position
 	# Did we touch a pad we haven't used yet?
 	for pad in _wire_pads:
 		if _anchor_cells.has(pad):
 			continue
 		var kind := kind_at(pad)
-		var radius := BEND_RADIUS
-		if kind == "node":
-			radius = NODE_RADIUS
-		elif kind == "goal":
-			radius = GOAL_RADIUS
+		var radius := NODE_RADIUS if kind == "node" else GOAL_RADIUS
 		var pc := center_of(pad)
 		if not _touching(pc, radius):
 			continue
@@ -1828,121 +1840,127 @@ func _touching_at(feet: Vector2, pc: Vector2, radius: float) -> bool:
 	return feet.distance_to(pc) <= radius or (feet + Vector2(0, -BODY_UP)).distance_to(pc) <= radius
 
 
-func _pad_radius(kind: String) -> float:
-	match kind:
-		"node": return NODE_RADIUS
-		"goal": return GOAL_RADIUS
-	return BEND_RADIUS
+# ===================================================================== poles: the wire wraps round them
+# Think of a rope tied at the last pad, running straight to your hands. If you
+# walk so that the rope would swing across a post, the post catches it: the
+# rope now bends there, and the straight part starts from the post. Walk back
+# the other way and it comes off the post again.
+#
+# How we spot that, every time you move from `from` to `to`:
+#   wrap:   the wire used to run (anchor -> from) and now runs (anchor -> to).
+#           It swept across the triangle between those three points. If a
+#           pole's centre is inside that triangle, the wire hit it.
+#   unwrap: the wire bends round the last pole P (coming from Q before it).
+#           cross(P - Q, hands - P) says which side of the line Q->P your hands
+#           are on. When that side flips, the wire has straightened out again.
+
+## Called from player_moved() while you carry the wire.
+func _update_wraps(from: Vector2, to: Vector2) -> void:
+	if from.is_equal_approx(to):
+		return
+	# unwrap first (maybe several poles in a row came free)
+	while _anchor_cells.size() >= 2 and kind_at(_anchor_cells[-1]) == "pole":
+		var p := center_of(_anchor_cells[-1])
+		var q := center_of(_anchor_cells[-2])
+		var side := signf((p - q).cross(to - p))
+		if side == 0.0 or side == _anchor_signs[-1] or not _line_clear(q, to):
+			break
+		_anchor_cells.pop_back()
+		_anchor_signs.pop_back()
+		_last_anchor = q
+		_wire.remove_last_anchor()
+	# then wrap: the pole the sweep reaches first (smallest angle from the old wire)
+	var a := _last_anchor
+	var best := Vector2i(-1, -1)
+	var best_angle := INF
+	for pole in _poles:
+		if not _anchor_cells.is_empty() and _anchor_cells[-1] == pole:
+			continue
+		var pc := center_of(pole)
+		if pc.distance_to(a) < 2.0 or not _swept_over(pc, a, from, to):
+			continue
+		var ang := absf((from - a).angle_to(pc - a))
+		if ang < best_angle:
+			best_angle = ang
+			best = pole
+	if best.x < 0:
+		return
+	var pc := center_of(best)
+	_anchor_cells.append(best)
+	_anchor_signs.append(signf((from - a).cross(to - a)))   # which way the wire was swinging
+	_last_anchor = pc
+	_wire.add_anchor(pc)
+	_tile_hit(best)
+	_play("bend")
+	pad_touched.emit("pole", _wire_room.index)     # the tutorial listens for this
 
 
-# ===================================================================== bends: preview and reel back
-
-## Where would a fling from the bend at `from` in direction `dir` end? Same
-## steps as the real fling (player.gd, 2 px at a time): it stops at anything
-## solid, on a pad the wire can reach, or on a live red tile.
-## Returns {"end": Vector2, "what": "stop" / "shock" / "node" / "bend" / "goal"}.
-func predict_fling(from: Vector2, dir: Vector2, bend: Vector2i) -> Dictionary:
-	var p := from
-	for i in 500:
-		var next := p + dir * 2.0
-		if box_blocked(next, Astronaut.FEET_HALF):
-			return {"end": p, "what": "stop"}
-		p = next
-		if _is_live_tile(cell_of(p)):
-			return {"end": p, "what": "shock"}
-		for pad in _wire_pads:
-			if pad == bend or _anchor_cells.has(pad):
-				continue
-			var kind := kind_at(pad)
-			if _touching_at(p, center_of(pad), _pad_radius(kind)) and _line_clear(from, center_of(pad)):
-				return {"end": center_of(pad), "what": kind}
-	return {"end": p, "what": "stop"}
+## Did the wire, swinging round anchor a from (a -> from) to (a -> to), pass
+## over point p? True if p is inside that triangle, or on the new wire, but not
+## on the old wire (it was already lying there). A swing of no width (you
+## walked straight along the wire) doesn't count.
+func _swept_over(p: Vector2, a: Vector2, from: Vector2, to: Vector2) -> bool:
+	var turn := (from - a).cross(to - a)
+	if absf(turn) < 0.001:
+		return false
+	var s := signf(turn)
+	return (from - a).cross(p - a) * s > 0.0 and (to - from).cross(p - from) * s >= 0.0 \
+		and (a - to).cross(p - to) * s >= 0.0
 
 
-## Stopped on a bend: show where each of its two ways out would throw you.
-func _show_fling_preview(c: Vector2i, side: Vector2) -> void:
-	var pc := center_of(c)
-	_preview_paths.clear()
-	for d in [side, -side]:
-		var res := predict_fling(pc, d, c)
-		_preview_paths.append([pc, res["end"], res["what"]])
-	_preview_node.queue_redraw()
-
-
-func _hide_fling_preview() -> void:
-	_preview_paths.clear()
-	_preview_node.queue_redraw()
-
-
-## A dotted line for each way out, and a marker where it ends: a ring in the
-## pad's colour if you'd land on a pad, a red X if you'd get zapped, a bar if
-## you'd just hit something.
-func _draw_fling_preview() -> void:
-	for path in _preview_paths:
-		var a: Vector2 = path[0]
-		var b: Vector2 = path[1]
-		var what: String = path[2]
-		var col := Color(0.92, 0.75, 1.0, 0.9)
-		match what:
-			"node": col = Color(1.0, 0.6, 0.25)
-			"goal": col = Color(0.45, 0.75, 1.0)
-			"bend": col = Color(0.8, 0.55, 1.0)
-			"shock": col = Color(1.0, 0.3, 0.25)
-		var dist := a.distance_to(b)
-		var dir := (b - a).normalized() if dist > 0.0 else Vector2.ZERO
-		var y := -10.0                              # drawn at hand height, like the wire
-		var t := 20.0
-		while t < dist:
-			_preview_node.draw_rect(Rect2(a + dir * t + Vector2(-1, y - 1), Vector2(2, 2)), col)
-			t += 6.0
-		var e := b + Vector2(0, y)
-		match what:
-			"shock":
-				for k in range(-3, 4):
-					_preview_node.draw_rect(Rect2(e + Vector2(k, k) - Vector2.ONE * 0.5, Vector2(2, 2)), col)
-					_preview_node.draw_rect(Rect2(e + Vector2(k, -k) - Vector2.ONE * 0.5, Vector2(2, 2)), col)
-			"stop":
-				var side := Vector2(-dir.y, dir.x)
-				for k in range(-4, 5):
-					_preview_node.draw_rect(Rect2(e + side * k - Vector2.ONE, Vector2(2, 2)), col)
-			_:
-				_preview_node.draw_arc(e, 7.0, 0.0, TAU, 16, col, 2.0)
-
-
-## Reel back. Press E while carrying the wire and it yanks you back to the last
-## pad it's wrapped round (the START, a node or a bend). Took a bend the wrong
-## way? Reel back and pick again. The timer keeps running while you fly, so it
-## costs a little time, but you never have to stand there waiting for it to run out.
+## Reel back. Press E while carrying the wire and it pulls you back along the
+## wire to the last pad it's wrapped round (the START or a node), unwrapping
+## any poles on the way. The timer keeps running while you fly, so it costs a
+## little time, but you never have to stand there waiting for it to run out.
 func _reel_back() -> void:
-	var target := _last_anchor
-	var dist := player.position.distance_to(target)
-	if dist < 6.0 or _anchor_cells.is_empty():
+	if _anchor_cells.is_empty():
+		return
+	# the way back: past each pole (just outside it, where the wire runs), then the pad
+	var path: Array[Vector2] = []
+	var hand := player.position
+	var i := _anchor_cells.size() - 1
+	while i > 0 and kind_at(_anchor_cells[i]) == "pole":
+		var p := center_of(_anchor_cells[i])
+		var q := center_of(_anchor_cells[i - 1])
+		var out := -((q - p).normalized() + (hand - p).normalized())
+		path.append(p + (out.normalized() if out.length() > 0.01 else (hand - p).normalized()) * 20.0)
+		hand = p
+		i -= 1
+	var target := center_of(_anchor_cells[i])
+	path.append(target)
+	var dist := 0.0
+	var at := player.position
+	for pt in path:
+		dist += at.distance_to(pt)
+		at = pt
+	if dist < 6.0:
 		return
 	player.lock(true)
 	_play("puff")
 	_wire.strain(player.hand_position())              # a flash and sparks at your hands
 	_reel_tween = create_tween()
-	var secs := clampf(dist / 420.0, 0.12, 0.7)
-	_reel_tween.tween_property(player, "position", target, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	at = player.position
+	for pt in path:
+		var secs := clampf(at.distance_to(pt) / 420.0, 0.05, 0.7)
+		_reel_tween.tween_property(player, "position", pt, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		at = pt
 	await _reel_tween.finished
 	if not is_inside_tree(): return
 	_reel_tween = null
 	if _wire == null or _busy:
 		return                                        # the timer ran out on the way
+	# the poles came off on the way back
+	while _anchor_cells.size() > i + 1:
+		_anchor_cells.pop_back()
+		_anchor_signs.pop_back()
+		_wire.remove_last_anchor()
+	_last_anchor = target
+	_prev_feet = player.position
+	player.grab_wire()                                # walking with the wire again
 	var c: Vector2i = _anchor_cells[-1]
-	player.grab_wire()                                # walking with the wire again...
-	match kind_at(c):
-		"bend":                                       # ...or back to picking a way out
-			var side: Vector2 = _bend_side.get(c, Vector2.RIGHT)
-			_choosing_bend = c
-			var t: PuzzleTile = _tiles.get(c)
-			if t:
-				t.show_choice(true, side)
-			_show_fling_preview(c, side)
-			var options: Array[Vector2] = [side, -side]
-			player.choose_fling(center_of(c), options)
-		"node":
-			_set_paused_node(c)                       # standing on a node: timer paused
+	if kind_at(c) == "node":
+		_set_paused_node(c)                           # back on a node: it holds the timer again
+		_node_hold_left = node_hold
 	_play("clank")
 
 
@@ -1958,7 +1976,7 @@ func _check_cells() -> void:
 		if wired and _room_of.get(c) == _wire_room:
 			# The battery's charge goes into the wire: more time, right now.
 			cell.collect("+%ds" % int(_cell_bonus()))
-			_time_left = minf(_time_left + _cell_bonus(), _wire_time() + _cell_bonus())
+			_time_left = minf(_time_left + _cell_bonus(), _max_time())
 			hud.pulse_timer()
 			_cells_pending.append(c)
 			_play("pickup")
@@ -1975,41 +1993,20 @@ func _touch_pad(c: Vector2i, kind: String) -> void:
 	var pc := center_of(c)
 	var came_from := _last_anchor
 	_anchor_cells.append(c)
+	_anchor_signs.append(0.0)
 	_last_anchor = pc        # the tight wire now starts from this pad
 	_wire.add_anchor(pc)
 	_tile_hit(c)
 	pad_touched.emit(kind, _wire_room.index)     # the tutorial listens for this
 	match kind:
 		"node":
-			player.land()                  # a fling stops on a node
-			_time_left = _wire_time()
+			_time_left = minf(_time_left + _node_time(), _max_time())
 			_set_paused_node(c)
+			_node_hold_left = node_hold    # it holds the timer for a moment
 			_play("node")
 			hud.pulse_timer()
-		"bend":
-			_play("bend")
-			# The two ways out are 90 degrees either side of the way the wire came in.
-			var d := _snap8(pc - came_from)
-			var side := Vector2(d.y, -d.x)
-			_bend_side[c] = side                # remembered for reeling back here
-			_choosing_bend = c
-			var t: PuzzleTile = _tiles.get(c)
-			if t:
-				t.show_choice(true, side)
-			_show_fling_preview(c, side)
-			var options: Array[Vector2] = [side, -side]
-			player.choose_fling(pc, options)
 		"goal":
 			_solve(_wire_room)
-
-
-## Called by the player when he picks one of the bend's two arrows.
-func bend_chosen() -> void:
-	var t: PuzzleTile = _tiles.get(_choosing_bend)
-	if t:
-		t.show_choice(false, Vector2.ZERO)
-	_choosing_bend = Vector2i(-1, -1)
-	_hide_fling_preview()
 
 
 func _set_paused_node(c: Vector2i) -> void:
@@ -2024,12 +2021,6 @@ func _set_paused_node(c: Vector2i) -> void:
 			t.active = true
 
 
-## Rounds a direction to the nearest of the 8 compass directions.
-func _snap8(v: Vector2) -> Vector2:
-	var k := roundi(v.angle() / (PI / 4.0))
-	return Vector2.RIGHT.rotated(k * PI / 4.0)
-
-
 ## Called by the player when the tight wire stops him walking somewhere.
 func wire_strained(at: Vector2) -> void:
 	if _wire == null or _strain_cd > 0.0:
@@ -2039,11 +2030,6 @@ func wire_strained(at: Vector2) -> void:
 	_play("tick")
 	if Game.first_time("strain"):
 		_pip_say(pip_strain)     # the first time ever: why it stopped you
-
-
-## A fling hit a wall or crate before reaching a pad.
-func fling_stopped() -> void:
-	_shake_cam(0.12, 1.5)
 
 
 # ===================================================================== spacewalk: drifting
@@ -2187,11 +2173,11 @@ func _try_grab() -> void:
 	_clear_stranded()
 	_wire_room = r
 	_wire_pads = _stage_pads(r)
-	_bend_side.clear()
 	_anchor_cells = [r.start]
+	_anchor_signs = [0.0]
 	_last_anchor = sc
+	_prev_feet = player.position
 	_set_paused_node(Vector2i(-1, -1))
-	_choosing_bend = Vector2i(-1, -1)
 	_wire = Wire.new(Wire.Style.CABLE)
 	_wire_root.add_child(_wire)
 	_wire.begin(sc)
@@ -2206,7 +2192,7 @@ func _try_grab() -> void:
 	wire_grabbed.emit(r.index)      # the tutorial listens for this
 
 
-## Nodes and bends from stages you already powered in this area work for this
+## Nodes from stages you already powered in this area work for this
 ## wire too, but they're easy to miss. So when you grab the wire, each of them
 ## flashes, one after another. The first time ever, PIP points one out.
 func _show_shared_pads(r: Room) -> void:
@@ -2324,9 +2310,23 @@ func _solve(r: Room) -> void:
 # asks one of these small functions instead of reading wire_time or
 # cell_bonus directly.
 
-## Seconds on the wire timer: this level's wire_time + the Wire skills.
+## Seconds on the wire timer from the START: this room's time (room_wire_time,
+## or else wire_time) + skills. Never above _max_time().
 func _wire_time() -> float:
-	return wire_time + SkillManager.bonus("wire_time")
+	var t := wire_time
+	if _wire_room != null and _wire_room.index < room_wire_time.size() and room_wire_time[_wire_room.index] > 0.0:
+		t = room_wire_time[_wire_room.index]
+	return minf(t + SkillManager.bonus("wire_time"), _max_time())
+
+
+## Seconds a NODE adds: node_time + skills.
+func _node_time() -> float:
+	return node_time + SkillManager.bonus("node_time")
+
+
+## The most the timer can ever hold: max_wire_time + skills.
+func _max_time() -> float:
+	return max_wire_time + SkillManager.bonus("max_time")
 
 
 ## Seconds a battery adds: cell_bonus + the SUPER CELLS skills.
@@ -2340,11 +2340,10 @@ func _cell_bonus() -> float:
 ## You even keep the wire.
 func _shock() -> void:
 	var r := _current_room
-	var can_hop := player.state in [Astronaut.State.FREE, Astronaut.State.WIRED, Astronaut.State.FLUNG]
+	var can_hop := player.state in [Astronaut.State.FREE, Astronaut.State.WIRED]
 	var saves := int(SkillManager.bonus("boots"))
 	if r != null and int(_boots_used.get(r, 0)) < saves and can_hop and _last_safe.is_finite():
 		_boots_used[r] = int(_boots_used.get(r, 0)) + 1
-		player.land()                   # a fling stops right here
 		player.position = _last_safe
 		_play("shock")
 		_shake_cam(0.2, 2.0)
@@ -2565,7 +2564,6 @@ func _fail(kind: String) -> void:
 	_busy = true
 	_set_hum(false)
 	_set_paused_node(Vector2i(-1, -1))
-	bend_chosen()                   # hide the bend arrows if we were choosing
 	if _reel_tween:
 		_reel_tween.kill()          # stop a reel-back that was still pulling you
 		_reel_tween = null
@@ -2762,7 +2760,7 @@ func _safe_to_stand(pos: Vector2) -> bool:
 	return k != "discharge" and k != "blinker" and not box_blocked(pos, Astronaut.FEET_HALF)
 
 
-## The pads the wire from room r can use: its own, plus the NODES and BENDS of
+## The pads the wire from room r can use: its own, plus the nodes of
 ## stages you already powered in the same area. Once the cargo between them has
 ## sunk, those pads are right there, so a later stage can wrap the wire round
 ## them from a new angle.
@@ -2772,7 +2770,7 @@ func _stage_pads(r: Room) -> Array[Vector2i]:
 		if o == r or not o.solved or o.area_id != r.area_id:
 			continue
 		for p in o.pads:
-			if kind_at(p) == "node" or kind_at(p) == "bend":
+			if kind_at(p) == "node":
 				out.append(p)
 	return out
 

@@ -18,6 +18,10 @@ layout = NodePath("Layout")
 level_number = 3
 skill_points = 3
 level_name = "THE CORE"
+wire_time = 3.5
+node_time = 2.5
+max_wire_time = 5.2
+node_hold = 1.0
 complete_message = "PIP's back in control. Next stop: home."
 room_titles = PackedStringArray("CORE ACCESS", "PIP'S CORE", "PIP'S CORE", "PIP'S CORE")
 
@@ -140,7 +144,7 @@ pause_game = true
 [node name="RoguePip" type="Node2D" parent="."]
 position = Vector2(688, 224)
 script = ExtResource("11_pip")
-shutdown_seconds = PackedFloat32Array(18, 15, 19)
+shutdown_seconds = PackedFloat32Array(10, 11.5, 9.5)
 
 [node name="TestStart" type="Marker2D" parent="."]
 position = Vector2(80, 208)

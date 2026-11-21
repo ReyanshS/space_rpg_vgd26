@@ -5,7 +5,7 @@
 # Close the scene in Godot first (or pick "Reload" when Godot asks), or Godot may save
 # its old copy over the new map.
 #
-#   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
+#   # wall   . floor   S start   G goal   N node   B pole   X red (discharge)
 #   x blinking grate   C crate   D door   P spawn   E exit
 #   * power cell   , hull (outside floor)   ~ open space   A airlock pad   = barrier
 #   @ core (Level 3: wrap the wire round it)   (space) = nothing
@@ -16,7 +16,7 @@
 import re, struct, sys
 
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
-SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
+SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'pole': 'B',
           'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
           'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@'}
 
