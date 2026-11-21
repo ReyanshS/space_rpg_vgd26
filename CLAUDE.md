@@ -56,7 +56,11 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   spacewalks), results/stars per level, a save file with Continue. See "RPG" below.
 - Wire timer check (Nov 2026, solver): the tightest stretch of each room needs at most 3.4 s of
   the 5 s with a perfect route (Generator B, Level 2's bridge); most need 1.5-3 s. Feels easy to
-  someone who knows the routes, about right for first-time players (judges). Left at 5 s.
+  someone who knows the routes, about right for first-time players (judges). Left at 5 s then.
+  Nov 2026: the team asked for 3 s; the solver found 4 rooms impossible at 3 s (Level 1 rooms
+  4 and 6, Level 2 rooms 1 and 3), so `wire_time` is now **4 s**. Tightest at 4 s: Level 1
+  room 6 (0.58 s spare on a perfect route) and Level 2 room 1 (0.56 s). Re-run the solver
+  (its TIME must match `wire_time`) before lowering it again.
 - Level 3 exists (the guide says judges play to level 3). A full bot run of it takes ~75 s of play.
 - Judges play from a link, so the game needs a **web export**. Web builds run on WebGL 2 (Godot's
   Compatibility renderer); this project is set to Forward+, so test a web export early and check
@@ -67,7 +71,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 `Assets/ui/theme.tres` at size 16 — only use multiples of 16 or the pixel font blurs.
 
 ## Game rules (level.gd enforces them)
-- START pad: stand on it, press **E/Space** to grab the wire. The 5 s timer (`wire_time`) starts.
+- START pad: stand on it, press **E/Space** to grab the wire. The 4 s timer (`wire_time`) starts.
 - Free movement while carrying. The wire is a taut straight line from the LAST pad touched to the
   player's hands; it can't pass through walls, crates, doors or live red tiles, so steps that would
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
@@ -103,6 +107,14 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `Game` (autoload, `game_state.gd`) stores results; cells from earlier levels = extra oxygen.
 - **H** shows the room's hint route (a FloorGuide with `hint_only`); PIP offers it after 2 fails.
   **Esc** pauses (the HUD runs with process mode Always), **Q** on the pause menu = title.
+- **Menus use real Buttons** (pause: RESUME / SKILL TREE / QUIT; results: NEXT LEVEL /
+  PLAY AGAIN / SKILL TREE; title: START or CONTINUE + NEW GAME; skill tree: UNLOCK / BACK).
+  Their look is in the project theme (`Assets/ui/theme.tres`, textures `Assets/ui/button_*.png`
+  drawn by `tools/art_ui.py`), so new Buttons match on their own. Keys: arrows move the focus,
+  E / Space / Enter press it (Game._ready adds E to `ui_accept`). The top right corner always
+  has SKILLS (opens the tree, shows "+n" when you have points) and MENU (pause); they have
+  `focus_mode` none so Space never presses them while you play. Unpausing is deferred to the
+  end of the frame so the E that pressed RESUME doesn't also grab the wire.
 
 ## Spacewalk rules (Level 2)
 - `hull` = floor outside the ship, `space` = open space (nothing drawn: the Starfield shows). A room
@@ -215,14 +227,14 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   5 skills each, cost 1-2, each needs its `parent_id`. Effects: `wire_time`, `cell_bonus`,
   `walk_speed`, `boots` (zaps per room absorbed), `o2`, `o2_per_cell`.
   Points: level.gd export `skill_points` (L1 2, L2 3, L3 3), given in `_finish_level()` only the
-  first time (`Game.has_finished()`), so replays can't farm them. The tree opens with T on the
-  pause menu or the results screen; it pauses the game and draws itself (`skill_tree.gd`,
+  first time (`Game.has_finished()`), so replays can't farm them. The tree opens at any time
+  (T, the SKILLS corner button, or the SKILL TREE buttons); it pauses the game and draws itself (`skill_tree.gd`,
   layout computed from the parent links). Unlocks apply at once (level listens to
   `skills_changed` -> `_apply_skills()`). Rules read skills through `_wire_time()`,
   `_cell_bonus()`, `_shock()`, `Game.o2_bonus()`: never read `wire_time` / `cell_bonus`
   directly in rules. **No puzzle may require a skill** (the solver uses none).
   Saving: finishing a level and every unlock call `Game.save_game()`; the title screen shows
-  "E: CONTINUE (LEVEL n)" + "N: new game" when a save exists. Bots: `Game.new_game()` first.
+  CONTINUE: LEVEL n + NEW GAME buttons when a save exists. Bots: `Game.new_game()` first.
   `RoguePip` is `@tool`: in the editor it previews the pylon, each socket (number + shutdown
   time) and the flight path, using `level.editor_core_spots()` (a quiet `_build_rooms(true)`).
 - **TestStart** (`Scripts/test_start.gd`, one per level scene, `active` off by default): drag it,
@@ -292,6 +304,8 @@ boss = "Space staccato", ending = "Title theme no dramatic". Claude only wired t
 who made them for the copyright checklist.
 The skill tree system (SkillManager, the skill files and their numbers, the skill tree screen,
 the save file and Continue) was written by Claude in Nov 2026 to replace the XP upgrades; the
-team chose the branches, the points per level and where it opens.
+team chose the branches, the points per level and where it opens. Claude also made the menu
+buttons (art drawn in `tools/art_ui.py`, styled in the theme) and the SKILLS / MENU corner
+buttons, at the team's request.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

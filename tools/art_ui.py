@@ -4,6 +4,11 @@
 #   Assets/ui/frame_screen.png  riveted metal bezel around a dark green screen with
 #                               scanlines (PIP's speech, objective, results, pause)
 #   Assets/ui/frame_plate.png   plain riveted metal plate (meters, popups)
+#   Assets/ui/button_*.png      a metal key you can press, in four states:
+#                               normal, lit (mouse over it or selected with the
+#                               keys), pressed (pushed into the panel) and off
+#                               (disabled). The theme (Assets/ui/theme.tres)
+#                               uses them for every Button in the game.
 #
 # Both are 20x20 "9-slice" pictures: Godot keeps the 6 px border (corners with the
 # rivets) as it is and repeats the middle to fill any size. That's what the
@@ -67,7 +72,55 @@ def frame(screen: bool) -> Image.Image:
     return img
 
 
+# Buttons: 16x16, 9-slice margins left/right 4, top 3, bottom 5. The extra
+# rows at the bottom are the key's side (its "lip"), which makes it look
+# raised. Pressed = the lip is gone and the top sits lower: pushed in.
+B = 16
+AMBER = (255, 194, 77)
+AMBER_DARK = (150, 98, 24)
+
+
+def button(state: str) -> Image.Image:
+    img = Image.new('RGBA', (B, B))
+    px = img.load()
+    pressed = state == 'pressed'
+    off = state == 'disabled'
+    lit = state in ('hover', 'pressed')
+    top = METAL if not lit else (88, 96, 116)
+    if pressed:
+        top = (62, 68, 84)
+    if off:
+        top = (44, 48, 58)
+    light = HIGHLIGHT if not off else (66, 72, 86)
+    lip = SHADOW if not off else (26, 28, 34)
+    lip_rows = 1 if pressed else 3        # rows of side under the top face
+    for y in range(B):
+        for x in range(B):
+            outer = x == 0 or y == 0 or x == B - 1 or y == B - 1
+            if outer:
+                c = (AMBER if lit else OUTLINE)
+            elif y >= B - 1 - lip_rows:
+                c = lip if y < B - 2 else RECESS_DARK              # the side of the key
+            elif pressed and y == 1:
+                c = RECESS_DARK                                    # pushed in: a dark gap on top
+            elif y == 1 or x == 1:
+                c = light                                          # top / left edge catches light
+            elif x == B - 2:
+                c = lip
+            else:
+                c = top if y % 4 else (top[0] - 6, top[1] - 6, top[2] - 6)   # brushed metal
+            px[x, y] = c + (255,)
+    if lit:
+        # amber glow just inside the outline, like the LEDs
+        for x in range(1, B - 1):
+            px[x, 1 if not pressed else 2] = AMBER_DARK + (255,)
+    return img
+
+
 if __name__ == '__main__':
     frame(True).save('Assets/ui/frame_screen.png')
     frame(False).save('Assets/ui/frame_plate.png')
+    for state in ('normal', 'hover', 'pressed', 'disabled'):
+        button(state).save('Assets/ui/button_%s.png' % state)
     print('Assets/ui/frame_screen.png and frame_plate.png drawn (20x20, 9-slice margin 6)')
+    print('Assets/ui/button_*.png drawn (16x16, 9-slice margins 4 / 3 / 4 / 5)')

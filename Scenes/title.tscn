@@ -68,24 +68,22 @@ text = "A solar storm fried the ship and you're the only one awake. Grab the liv
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="Start" type="Label" parent="UI" unique_id=1025221126]
-offset_left = 176.0
-offset_top = 170.0
-offset_right = 474.0
+[node name="Buttons" type="HBoxContainer" parent="UI"]
+offset_left = 186.0
+offset_top = 164.0
+offset_right = 464.0
 offset_bottom = 188.0
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "> PRESS E TO START_"
-horizontal_alignment = 1
+theme_override_constants/separation = 8
+alignment = 1
 
-[node name="NewGame" type="Label" parent="UI"]
+[node name="Play" type="Button" parent="UI/Buttons"]
+layout_mode = 2
+text = "START"
+
+[node name="NewGame" type="Button" parent="UI/Buttons"]
 visible = false
-offset_left = 176.0
-offset_top = 199.0
-offset_right = 474.0
-offset_bottom = 217.0
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
-text = "N: new game"
-horizontal_alignment = 1
+layout_mode = 2
+text = "NEW GAME"
 
 [node name="Controls" type="Label" parent="UI" unique_id=178598356]
 offset_top = 222.0
@@ -93,7 +91,7 @@ offset_right = 480.0
 offset_bottom = 262.0
 theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
 text = "Move: WASD / arrow keys    Grab the wire: E / Space
-Back to start: R    Hint: H    Menu: Esc"
+Back to start: R    Hint: H    Skills: T    Menu: Esc"
 horizontal_alignment = 1
 
 [node name="Fade" type="ColorRect" parent="UI" unique_id=1872592639]

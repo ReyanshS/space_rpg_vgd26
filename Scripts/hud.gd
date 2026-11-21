@@ -4,15 +4,21 @@
 # The console: a metal dashboard along the bottom of the screen (like the status
 # bar in old console games). The game is shown above it (level.gd moves the
 # camera up by CONSOLE_H/2), so nothing in the console ever covers the room.
-#   left:   PIP's little CRT face and his SPEECH. When he's quiet, the current
+#   left:   PIP's little CRT face and his speech. When he's quiet, the current
 #           tutorial instruction (the "objective") is shown there instead.
-#   right:  the ship POWER meter (one LED per goal), the POWER CELL counter, and
-#           the OXYGEN meter on spacewalks (or key reminders inside the ship).
-# Also: the wire TIMER (a small LED bar floating above the astronaut's head, so
-# you don't have to look away), the tutorial ARROW, short "toast" messages at
-# the top (room names, ZAP...), the white flash / black fade, the RESULTS screen
-# with stars, the PAUSE menu, the SKILL TREE screen (skill_tree.gd: T on the
-# pause menu or the results screen), and the black film bar of the cutscenes.
+#   right:  the ship power meter (one LED per goal), the power cell counter, and
+#           the oxygen meter on spacewalks (or key reminders inside the ship).
+# Also: the wire timer (a small LED bar floating above the astronaut's head, so
+# you don't have to look away), the tutorial arrow, short "toast" messages at
+# the top (room names, "ZAP"...), the white flash / black fade, the results
+# screen with stars, the pause menu, the skill tree screen (skill_tree.gd), and
+# the black film bar of the cutscenes.
+#
+# Buttons: the menus use real Buttons (their look comes from the project theme,
+# Assets/ui/theme.tres). Two of them sit in the top right corner the whole
+# time: SKILLS opens the skill tree and MENU pauses. T also opens the skill
+# tree at any moment. You can click a button, or pick it with the arrow keys
+# and press E, Space or Enter.
 #
 # It's a CanvasLayer, which means it stays still on screen while the camera
 # moves. Its nodes live in hud.tscn, so open that scene to change colours and
@@ -28,6 +34,9 @@ extends CanvasLayer
 
 ## Emitted when a speech that freezes the player starts (true) / ends (false).
 signal dialogue_blocking(on: bool)
+## The results screen's buttons (the level listens and loads the next scene).
+signal results_next
+signal results_again
 
 ## Height of the console at the bottom. level.gd keeps the room above it.
 const CONSOLE_H := 48
@@ -64,6 +73,8 @@ const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
 @onready var pause_level: Label = $Pause/VBox/Level
 @onready var bar_top: ColorRect = $BarTop
 @onready var skill_tree: SkillTreeScreen = $SkillTree
+@onready var corner_skills: Button = $Corner/Skills
+@onready var corner_menu: Button = $Corner/Menu
 ## The E key that bobs just under PIP's little screen when you have to press E
 ## to go on (never on top of the text). It's its own node in hud.tscn: move it
 ## there to put it somewhere else.
@@ -119,6 +130,7 @@ var _points_earned := 0             # skill points this level gave (0 on a repla
 
 # the skill tree screen
 var _tree_from_pause := false       # opened from the pause menu (go back to it on close)
+var _paused_before := false         # was the game paused before the tree opened?
 
 var _sfx := {}
 
@@ -141,6 +153,17 @@ func _ready() -> void:
 	bar_top.visible = false
 	bar_top.position.y = -bar_top.size.y        # the film bar waits just above the screen
 	skill_tree.closed.connect(_on_skill_tree_closed)
+	# what each button does
+	$Pause/VBox/Buttons/Resume.pressed.connect(_set_paused.bind(false))
+	$Pause/VBox/Buttons/Skills.pressed.connect(open_skill_tree)
+	$Pause/VBox/Buttons/Quit.pressed.connect(Game.go_to_title)
+	$Complete/VBox/Buttons/Next.pressed.connect(results_next.emit)
+	$Complete/VBox/Buttons/Again.pressed.connect(results_again.emit)
+	$Complete/VBox/Buttons/Skills.pressed.connect(open_skill_tree)
+	corner_skills.pressed.connect(open_skill_tree)
+	corner_menu.pressed.connect(func() -> void: _set_paused(not pause_panel.visible))
+	SkillManager.points_changed.connect(func(_p: int) -> void: _update_corner())
+	_update_corner()
 	_show_idle()
 	_update_keys()
 	for n in ["blip", "star"]:
@@ -170,6 +193,8 @@ func _process(delta: float) -> void:
 	next_key.visible = _waiting_key
 	if _waiting_key:
 		next_key.queue_redraw()        # it bobs
+	# MENU only shows when pausing is allowed (not in cutscenes or on the results)
+	corner_menu.visible = allow_pause
 	# (not while the skill tree is open, or on the frame its Esc closed it)
 	var tree_busy := skill_tree.visible or skill_tree.closed_frame == Engine.get_process_frames()
 	if Input.is_action_just_pressed("pause") and allow_pause and not tree_busy:
@@ -180,23 +205,22 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var key := (event as InputEventKey).physical_keycode
-	# on the pause menu: Q = back to the title screen, T = skill tree
-	if pause_panel.visible:
-		if key == KEY_Q:
-			_set_paused(false)
-			Game.go_to_title()
-		elif key == KEY_T:
-			open_skill_tree()
-	# on the results screen: T = skill tree (spend the points you just got)
-	elif complete_panel.visible and key == KEY_T:
-		open_skill_tree()
+	if key == KEY_T:
+		open_skill_tree()               # any time at all
+	elif key == KEY_Q and pause_panel.visible:
+		Game.go_to_title()
 
 
 func _set_paused(on: bool) -> void:
-	get_tree().paused = on
 	pause_panel.visible = on
 	if on:
+		get_tree().paused = true
 		_update_pause_skills()
+		$Pause/VBox/Buttons/Resume.grab_focus()     # so the keys can pick a button straight away
+	else:
+		# Unpause at the end of this frame, not right now: if E pressed RESUME,
+		# the level would otherwise see that same E and grab the wire too.
+		get_tree().set_deferred("paused", false)
 
 
 ## The line on the pause menu about your skills.
@@ -210,11 +234,13 @@ func _update_pause_skills() -> void:
 
 # ------------------------------------------------------------------ skill tree
 
-## Opens the skill tree screen and pauses the game until it closes.
+## Opens the skill tree screen and pauses the game until it closes. Works at
+## any moment, except while the screen is fading to the next scene.
 func open_skill_tree() -> void:
-	if skill_tree.visible:
+	if skill_tree.visible or fade_rect.color.a > 0.5:
 		return
 	_tree_from_pause = pause_panel.visible
+	_paused_before = get_tree().paused
 	pause_panel.visible = false
 	get_tree().paused = true
 	skill_tree.open()
@@ -228,9 +254,20 @@ func _on_skill_tree_closed() -> void:
 	if _tree_from_pause:
 		pause_panel.visible = true        # back to the pause menu, still paused
 		_update_pause_skills()
+		$Pause/VBox/Buttons/Skills.grab_focus()
+	elif not _paused_before:
+		get_tree().set_deferred("paused", false)   # back to the game (see _set_paused)
+	_update_points_line()
+
+
+## The SKILLS button in the corner: amber, with a count, when you have points to spend.
+func _update_corner() -> void:
+	var pts := SkillManager.points
+	corner_skills.text = "SKILLS +%d" % pts if pts > 0 else "SKILLS"
+	if pts > 0:
+		corner_skills.add_theme_color_override("font_color", AMBER)
 	else:
-		get_tree().paused = false         # back to the results screen
-		_update_points_line()
+		corner_skills.remove_theme_color_override("font_color")
 
 
 ## The pause menu shows which level you're on.
@@ -615,7 +652,7 @@ func _bolt(ci: CanvasItem, b: Vector2, col: Color) -> void:
 		b + Vector2(2, 13), b + Vector2(8, 5), b + Vector2(5, 5), b + Vector2(7, 0)]), col)
 
 
-## Five LEDs (one per second) in a tiny dark case floating above the astronaut.
+## Five LEDs (each one a fifth of the time) in a tiny dark case floating above the astronaut.
 ## Amber, then orange, then blinking red when time is short; blue while paused.
 func _draw_timer() -> void:
 	var size := timer_bar.size
@@ -695,10 +732,6 @@ func _draw_status() -> void:
 		PowerCell.draw_battery(status_box, o, AMBER.lerp(Color.WHITE, _cell_bump), Color(0.4, 0.25, 0.02))
 		var ink2 := PHOSPHOR if _cells < _cells_total else AMBER
 		status_box.draw_string(font, Vector2(88, 14), "%d/%d" % [_cells, _cells_total], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink2)
-	# skill points waiting to be spent (amber when you have some)
-	var pts := SkillManager.points
-	status_box.draw_string(font, Vector2(126, 13), "SP%d" % pts, HORIZONTAL_ALIGNMENT_LEFT, -1, 16,
-		AMBER if pts > 0 else Color(0.42, 0.62, 0.45))
 	if _o2_on and not _reel_prompt and not _restart_prompt and not _waiting_key:
 		var col := Color(0.5, 0.85, 1.0)
 		if _o2_frac < 0.3:
@@ -754,7 +787,7 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	_points_earned = int(stats.get("points", 0))
 	_update_points_line()
 	$Complete/VBox/StarHelp.text = "Stars for finishing, every cell, and %d retries or fewer" % stats.get("retry_goal", 0)
-	$Complete/VBox/Again.text = ("[E] next level" if has_next else "[E] back to title") + "    [R] play again"
+	$Complete/VBox/Buttons/Next.text = "NEXT LEVEL" if has_next else "TITLE SCREEN"
 	_stars_earned = int(stats.get("stars", 1))
 	_stars_shown = 0
 	complete_panel.visible = true
@@ -765,6 +798,10 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	tw.tween_property(complete_panel, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(complete_panel, "modulate:a", 1.0, 0.25)
 	await get_tree().create_timer(0.6).timeout
+	if not is_inside_tree():
+		return
+	if not skill_tree.visible:
+		$Complete/VBox/Buttons/Next.grab_focus()   # E / Space / Enter = next level
 	for i in _stars_earned:
 		_stars_shown += 1
 		_sfx["star"].pitch_scale = 1.0 + i * 0.12
@@ -772,16 +809,17 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 		await get_tree().create_timer(0.35).timeout
 
 
-## The results line about skill points, e.g. "+2 SKILL POINTS   [T] skill tree".
+## The results line about skill points, e.g. "+2 SKILL POINTS".
 func _update_points_line() -> void:
 	var label: Label = $Complete/VBox/Points
 	var pts := SkillManager.points
 	if _points_earned > 0:
-		label.text = "+%d SKILL POINT%s   [T] skill tree" % [_points_earned, "" if _points_earned == 1 else "S"]
+		label.text = "+%d SKILL POINT%s" % [_points_earned, "" if _points_earned == 1 else "S"]
 	elif pts > 0:
-		label.text = "%d skill point%s to spend   [T] skill tree" % [pts, "" if pts == 1 else "s"]
+		label.text = "%d skill point%s to spend" % [pts, "" if pts == 1 else "s"]
 	else:
-		label.text = "[T] skill tree"
+		label.text = ""
+	label.visible = label.text != ""
 
 
 func _draw_stars() -> void:

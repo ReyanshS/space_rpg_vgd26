@@ -76,14 +76,14 @@
 #     isn't part of the rules: it listens to the level's signals, and it can
 #     call cut_wire(), set_alert(), hold() and let_go().
 #
-# THE RPG SIDE (skill points and the skill tree - see skill_manager.gd)
-#   - Finishing a level for the FIRST time gives `skill_points` (an export, so
+# The RPG side (skill points and the skill tree; see skill_manager.gd)
+#   - Finishing a level for the first time gives `skill_points` (an export, so
 #     harder levels can give more). Replays give nothing (_finish_level).
-#   - You spend them on the skill tree (Esc then T, or T on the results screen).
+#   - You spend them on the skill tree (T or the SKILLS button, at any time).
 #     Skills change the rules through _wire_time(), _cell_bonus(), _shock() and
 #     the player's speed_mult, and apply the moment you unlock them
 #     (_apply_skills listens to SkillManager.skills_changed).
-#   - No puzzle ever NEEDS a skill: skills only make rules easier, and the
+#   - No puzzle ever needs a skill: skills only make rules easier, and the
 #     solver checks every room with no skills at all.
 # ---------------------------------------------------------------------------
 @tool
@@ -159,7 +159,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 
 @export_group("Rules")
 ## Seconds you get from the START pad, and again at every NODE.
-@export var wire_time := 5.0
+@export var wire_time := 4.0
 ## Should the timer stop while you pick a direction on a BEND?
 @export var bend_pauses_timer := true
 ## Seconds a power cell adds to the wire's timer when you grab it with the wire.
@@ -426,6 +426,8 @@ func _ready() -> void:
 	_last_safe = player.position
 	_current_room = _room_of.get(_spawn)
 	hud.dialogue_blocking.connect(_on_dialogue_blocking)
+	hud.results_next.connect(func() -> void: _leave(level_number + 1))   # no next level = title screen
+	hud.results_again.connect(func() -> void: _leave(level_number))
 	hud.can_block = can_pause_for_dialogue
 	hud.set_level_info("LEVEL %d: %s" % [level_number, level_name])
 	hud.set_cells(0, _cells.size())
@@ -2907,16 +2909,18 @@ func _finish_level() -> void:
 	level_completed.emit()
 
 
+## The results screen's buttons (NEXT LEVEL, PLAY AGAIN) are in the HUD, which
+## sends results_next / results_again (connected in _ready). R still plays again.
 func _results_input() -> void:
 	if _input_cooldown > 0.0 or _leaving:
 		return
-	if Input.is_action_just_pressed("interact"):
-		_leave(level_number + 1)          # (no next level = back to the title screen)
-	elif Input.is_action_just_pressed("restart"):
+	if Input.is_action_just_pressed("restart"):
 		_leave(level_number)
 
 
 func _leave(number: int) -> void:
+	if _leaving:
+		return                            # (a second click while it fades)
 	_leaving = true
 	await hud.fade_out(0.5)
 	Game.go_to_level(number)

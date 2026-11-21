@@ -1,15 +1,15 @@
 # ---------------------------------------------------------------------------
-# skill_def.gd  -  ONE skill on the skill tree, as a Resource.
+# skill_def.gd: one skill on the skill tree, as a Resource.
 #
 # A Resource is a bundle of data Godot can save as a file (.tres) and show in
 # the Inspector. Every skill is its own file in Data/skills/. SkillManager
 # (the autoload) loads every file in that folder when the game starts, so:
-#   - to REBALANCE a skill: open its .tres and change cost or amount.
-#   - to ADD a skill: duplicate a .tres in the FileSystem dock (right click >
+#   - to rebalance a skill: open its .tres and change cost or amount.
+#   - to add a skill: duplicate a .tres in the FileSystem dock (right click >
 #     Duplicate), give it a new id, and set parent_id to the skill it hangs
 #     under. The skill tree screen places it by itself.
 # No code needed for either, as long as the skill uses one of the effects
-# below. A brand new KIND of effect also needs code that reads it
+# below. A brand new kind of effect also needs code that reads it
 # (search for SkillManager.bonus).
 # ---------------------------------------------------------------------------
 class_name SkillDef

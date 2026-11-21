@@ -2,7 +2,7 @@
 # Simulates the real rules (free walking, taut wire that can't cross walls/crates/red,
 # nodes refill + pause the timer, bends fling you, walking off a hull edge makes you
 # DRIFT across open space) on a 4 px grid and lists every route that finishes each
-# 5 s segment in time. It also checks every POWER CELL: can you charge it with the
+# 4 s segment in time. It also checks every POWER CELL: can you charge it with the
 # live wire and still make it to the next pad in time?
 # Use it after changing a room to make sure there's no shortcut and no impossible segment.
 # The constants below must match player.gd (walk_speed, fling_speed, drift_speed)
@@ -10,7 +10,7 @@
 #     python tools/map_from_scene.py
 #     python tools/solver2.py tools/out/level1.txt
 import math, heapq, sys
-TILE = 32; FEET = (6, 4); WALK = 100.0; FLING = 260.0; DRIFT = 150.0; TIME = 5.0
+TILE = 32; FEET = (6, 4); WALK = 100.0; FLING = 260.0; DRIFT = 150.0; TIME = 4.0
 R = {'N': 22.0, 'G': 22.0, 'B': 20.0}
 CELL_R = 14.0
 BODY_UP = 10.0          # pads count from the feet AND from 10 px higher (level.gd _touching)

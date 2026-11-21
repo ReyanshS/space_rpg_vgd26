@@ -1,18 +1,18 @@
 # ---------------------------------------------------------------------------
-# skill_manager.gd  -  the skill tree's brain. It's an AUTOLOAD named "SkillManager".
+# skill_manager.gd: the skill tree's brain. It's an autoload named "SkillManager".
 #
-# It holds two things that last for the whole game: your SKILL POINTS and the
-# skills you've UNLOCKED. You earn points by finishing a level for the first
+# It holds two things that last for the whole game: your skill points and the
+# skills you've unlocked. You earn points by finishing a level for the first
 # time (level.gd _finish_level, the level's skill_points export). You spend
 # them on the skill tree screen (skill_tree.gd).
 #
-# The skills themselves are DATA, not code: one SkillDef file per skill in
+# The skills themselves are data, not code: one SkillDef file per skill in
 # Data/skills/ (see skill_def.gd). This script loads them all at the start.
 #
 # Anything can ask it questions:
 #   SkillManager.has_skill("rubber_boots")   -> true / false
 #   SkillManager.bonus("wire_time")          -> the seconds all your wire skills add up to
-# and anything can LISTEN to its signals instead of checking every frame.
+# and anything can listen to its signals instead of checking every frame.
 # That's the point of a signal: the level doesn't have to keep asking "did
 # something change?", SkillManager tells it.
 #

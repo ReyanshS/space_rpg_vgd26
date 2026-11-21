@@ -237,18 +237,29 @@ theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
 text = "Stars for finishing, every cell, and few retries"
 horizontal_alignment = 1
 
-[node name="Again" type="Label" parent="Complete/VBox"]
+[node name="Buttons" type="HBoxContainer" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "[E] next level    [R] play again"
-horizontal_alignment = 1
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Next" type="Button" parent="Complete/VBox/Buttons"]
+layout_mode = 2
+text = "NEXT LEVEL"
+
+[node name="Again" type="Button" parent="Complete/VBox/Buttons"]
+layout_mode = 2
+text = "PLAY AGAIN"
+
+[node name="Skills" type="Button" parent="Complete/VBox/Buttons"]
+layout_mode = 2
+text = "SKILL TREE"
 
 [node name="Pause" type="PanelContainer" parent="."]
 visible = false
 offset_left = 104.0
-offset_top = 24.0
+offset_top = 32.0
 offset_right = 376.0
-offset_bottom = 246.0
+offset_bottom = 250.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_complete")
 
@@ -270,6 +281,23 @@ theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
 text = "LEVEL 1: ENGINEERING DECK"
 horizontal_alignment = 1
 
+[node name="Buttons" type="HBoxContainer" parent="Pause/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Resume" type="Button" parent="Pause/VBox/Buttons"]
+layout_mode = 2
+text = "RESUME"
+
+[node name="Skills" type="Button" parent="Pause/VBox/Buttons"]
+layout_mode = 2
+text = "SKILL TREE"
+
+[node name="Quit" type="Button" parent="Pause/VBox/Buttons"]
+layout_mode = 2
+text = "QUIT"
+
 [node name="Controls" type="Label" parent="Pause/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
@@ -277,10 +305,7 @@ text = "Move ............ WASD / arrows
 Grab the wire ... E / Space
 Reel back ....... E (holding wire)
 Back to START ... R
-Show a hint ..... H
-Skill tree ...... T
-Resume .......... Esc
-Quit to title ... Q"
+Show a hint ..... H"
 
 [node name="Suit" type="Label" parent="Pause/VBox"]
 layout_mode = 2
@@ -294,5 +319,28 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
 text = "Batteries add time to the wire. Keep them!"
 horizontal_alignment = 1
+
+[node name="Corner" type="HBoxContainer" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -150.0
+offset_top = 4.0
+offset_right = -4.0
+offset_bottom = 26.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_constants/separation = 4
+alignment = 2
+
+[node name="Skills" type="Button" parent="Corner"]
+layout_mode = 2
+focus_mode = 0
+text = "SKILLS"
+
+[node name="Menu" type="Button" parent="Corner"]
+layout_mode = 2
+focus_mode = 0
+text = "MENU"
 
 [node name="SkillTree" parent="." instance=ExtResource("4_tree")]

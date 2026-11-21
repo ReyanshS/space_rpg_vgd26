@@ -10,7 +10,7 @@
 # Any script can use it by its name, e.g.  Game.o2_bonus()  or  Game.go_to_level(2)
 #
 # The RPG side (skill points and the skill tree) lives in its own autoload,
-# SkillManager (skill_manager.gd). This script SAVES it, together with which
+# SkillManager (skill_manager.gd). This script saves it, together with which
 # levels you've finished, to one save file (save_game / load_game), so the
 # title screen can offer "Continue".
 # ---------------------------------------------------------------------------
@@ -68,6 +68,12 @@ func new_game() -> void:
 func _ready() -> void:
 	# Buying a skill saves straight away, so quitting mid level doesn't lose it.
 	SkillManager.skill_unlocked.connect(func(_id: String) -> void: save_game())
+	# Menu buttons react to the "ui_accept" action (Enter and Space). Add E to it
+	# too, so E presses the selected button, like it moves PIP's lines on.
+	var e := InputEventKey.new()
+	e.physical_keycode = KEY_E
+	if not InputMap.action_has_event("ui_accept", e):
+		InputMap.action_add_event("ui_accept", e)
 
 
 ## The level calls this when you finish it. It also saves the game.

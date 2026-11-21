@@ -30,15 +30,15 @@ they leave behind. At the end of each level you get up to three stars.
 | Reel back to the last pad (while holding the wire) | E or Space |
 | Go back to the START pad | R |
 | Show a hint (harder puzzles) | H |
-| Pause menu (controls, quit) | Esc |
-| Skill tree | T (on the pause menu or the results screen) |
-| New game (title screen, when you have a save) | N |
+| Pause menu (controls, quit) | Esc, or the **MENU** button (top right) |
+| Skill tree | T at any time, or the **SKILLS** button (top right) |
+| Menu buttons | click them, or pick one with the arrow keys and press E, Space or Enter |
 
 ## Rules
-- **Grab the wire** on the yellow START pad. A **5-second timer** starts.
+- **Grab the wire** on the yellow START pad. A **4-second timer** starts.
 - The wire is pulled **tight in a straight line** from the last pad you touched to your hands.
   It can't pass through walls, crates or red tiles, so you can't walk where it would have to.
-- **Orange NODE**: the wire wraps around it, the timer refills to 5 seconds and pauses while you
+- **Orange NODE**: the wire wraps around it, the timer refills to 4 seconds and pauses while you
   stand on it.
 - **Purple BEND**: stops you and shows two arrows, with dotted lines showing where each one will
   throw you. Press one and you're flung around the corner; the wire bends with you.
@@ -73,15 +73,16 @@ they leave behind. At the end of each level you get up to three stars.
 ## The skill tree (the RPG part)
 - Finishing a level for the first time gives you **skill points**: 2 for Level 1, 3 for the
   harder levels. Points you haven't spent show in the console as **SP**.
-- Spend them on the **skill tree**: press **T** on the results screen, or **Esc** then **T**
-  during a level. Arrows pick a skill, **E** unlocks it (or click a skill, then click it again).
+- Spend them on the **skill tree**: press **T** or click **SKILLS** (top right) at any time,
+  or use the SKILL TREE button on the pause menu and the results screen. Arrows pick a skill,
+  **E** or the UNLOCK button unlocks it. With the mouse, click a skill, then UNLOCK.
 - Three branches: **Wire** (longer timer, stronger batteries), **Suit** (faster legs, boots
   that shrug off zaps) and **Life Support** (more air on spacewalks).
 - A skill costs 1 or 2 points and needs the skill above it first. Grey = locked,
   amber = you can buy it, green = yours. Skills work straight away and last all game.
 - Every puzzle can be solved with no skills at all. They just make it easier.
 - The game saves when you finish a level or unlock a skill. The title screen then offers
-  **Continue** (E) or a **new game** (N, which deletes the save).
+  **Continue** or **New game** (which deletes the save).
 
 ## If you get stuck
 - Zapped somewhere with no safe way back to the START? An **[R]** appears over you:

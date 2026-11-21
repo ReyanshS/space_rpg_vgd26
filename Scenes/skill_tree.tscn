@@ -49,3 +49,21 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+
+[node name="Buttons" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 26.0
+offset_top = 236.0
+offset_right = 226.0
+offset_bottom = 258.0
+theme_override_constants/separation = 6
+
+[node name="Unlock" type="Button" parent="Buttons"]
+layout_mode = 2
+focus_mode = 0
+text = "UNLOCK"
+
+[node name="Back" type="Button" parent="Buttons"]
+layout_mode = 2
+focus_mode = 0
+text = "BACK"

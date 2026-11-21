@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# skill_tree.gd  -  the SKILL TREE screen (Scenes/skill_tree.tscn, inside hud.tscn).
+# skill_tree.gd: the skill tree screen (Scenes/skill_tree.tscn, inside hud.tscn).
 #
 # Three columns (Wire, Suit, Life Support). Every skill is a little box, and a
 # line joins it to the skill you need first (its parent). Each box shows its
@@ -7,8 +7,9 @@
 #   LOCKED     dark grey: unlock the skill above it first
 #   AVAILABLE  amber outline with its cost inside: you can buy it
 #   UNLOCKED   lit green: it's yours
-# Arrows move between boxes, E unlocks the selected one, T or Esc closes.
-# You can also click a box to select it, and click it again to unlock it.
+# Arrows move between boxes and E unlocks the selected one. T or Esc closes.
+# With the mouse: click a box to select it, then the UNLOCK button (or click
+# the box again). BACK closes.
 #
 # Nothing here is typed in by hand: the boxes come from SkillManager, which
 # loads the skill files in Data/skills/. A new skill file shows up here on its
@@ -41,6 +42,7 @@ const LABEL_H := 16.0              # room under a box for its name
 var closed_frame := -1
 
 @onready var board: Control = $Board
+@onready var unlock_button: Button = $Buttons/Unlock
 
 var _pos := {}           # skill id -> where its box is (middle), in screen pixels
 var _sel := ""           # the selected skill's id
@@ -53,6 +55,8 @@ var _sfx := {}
 func _ready() -> void:
 	visible = false
 	board.draw.connect(_draw_board)
+	unlock_button.pressed.connect(func() -> void: _try_unlock(_sel))
+	$Buttons/Back.pressed.connect(close)
 	for n in ["blip", "powerup", "warn"]:
 		var p := AudioStreamPlayer.new()
 		var path := "res://Assets/audio/%s.wav" % n
@@ -81,12 +85,15 @@ func _process(delta: float) -> void:
 	_t += delta
 	if visible:
 		board.queue_redraw()       # the selection blinks
+		unlock_button.disabled = not SkillManager.can_unlock(_sel)
 
 
 # ------------------------------------------------------------------ input
 
+## Keys. (Mouse clicks aren't handled here: they go to the buttons, or to
+## _gui_input below for the skill boxes.)
 func _input(event: InputEvent) -> void:
-	if not visible:
+	if not visible or event is InputEventMouse:
 		return
 	get_viewport().set_input_as_handled()    # nothing behind this screen gets the keys
 	if Engine.get_process_frames() == _opened_frame:
@@ -103,7 +110,12 @@ func _input(event: InputEvent) -> void:
 		_try_unlock(_sel)
 	elif event.is_action_pressed("pause") or _is_key(event, KEY_T):
 		close()
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+
+
+## A click on the screen itself (not on a button): select the box under the
+## mouse, or unlock it if it was already selected.
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var id := _skill_at(get_global_mouse_position())
 		if id == "":
 			return
@@ -172,7 +184,7 @@ func _first_choice() -> String:
 
 # ------------------------------------------------------------------ layout
 # Each branch is drawn as a tree, top to bottom. A skill with no children is a
-# LEAF: leaves get the next free slot from left to right. A skill with
+# leaf: leaves get the next free slot from left to right. A skill with
 # children sits in the middle above them. So any shape of tree fits.
 
 func _layout() -> void:
@@ -304,7 +316,7 @@ func _draw_info(font: Font) -> void:
 			SkillManager.State.AVAILABLE:
 				var pts := "%d POINT%s" % [s.cost, "" if s.cost == 1 else "S"]
 				if SkillManager.can_unlock(s.id):
-					status = "[E] UNLOCK FOR " + pts
+					status = "COSTS " + pts
 					col = AMBER
 				else:
 					status = "NEEDS " + pts
@@ -315,7 +327,6 @@ func _draw_info(font: Font) -> void:
 				col = LOCKED_INK
 		_text(font, Vector2(450, 198), status, col, 16, HORIZONTAL_ALIGNMENT_RIGHT)
 		board.draw_multiline_string(font, Vector2(30, 214), s.description, HORIZONTAL_ALIGNMENT_LEFT, 420, 16, 2, PHOSPHOR)
-	_text(font, Vector2(30, 251), "[E] UNLOCK   [T] BACK", DIM)
 	var x := 236.0
 	for item in [["LOCKED", LOCKED_INK, false], ["AVAILABLE", AMBER, false], ["UNLOCKED", PHOSPHOR, true]]:
 		var r := Rect2(x, 242, 8, 8)

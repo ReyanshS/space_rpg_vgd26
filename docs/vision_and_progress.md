@@ -8,7 +8,7 @@
 
 **The game.** A top-down pixel-art game set on a spaceship that has lost all power. You play an
 astronaut who restores power room by room by **carrying a live wire** from pad to pad, racing a
-5-second timer. It's an electricity puzzle game: sparks, crackling wires, lights flickering back
+4-second timer. It's an electricity puzzle game: sparks, crackling wires, lights flickering back
 on. It fits the 2026-27 TSA theme: *a deep space-themed RPG where progression comes from
 puzzle-solving rather than combat.* Title: **STAR CIRCUIT** (the team's choice).
 
@@ -27,7 +27,7 @@ do a **spacewalk** to rewire it, then come back in through a hatch.
 | Room | Teaches | What happens |
 | - | - | - |
 | 1 | Grabbing the wire | Spawn in the bottom-left room, grab the wire at the yellow START, run it to the blue GOAL. The door opens. |
-| 2 | Nodes | Start at the lightning bolt; crates block the direct path. Touch the orange heart NODE (it gives you another 5 seconds), then reach the goal. |
+| 2 | Nodes | Start at the lightning bolt; crates block the direct path. Touch the orange heart NODE (it gives you another 4 seconds), then reach the goal. |
 | 3 | Bends | The purple BEND turns the wire 90°. START → bend → node → bend → GOAL. |
 | 4 | Red tiles | Red tiles are a barrier: walk on one and you get shocked and the room restarts. Go to the left node first and follow the route to the goal. |
 
@@ -81,7 +81,7 @@ the game. Every change gets explained, with "check yourself" tasks.
 ## 3. What's built
 
 ### Gameplay
-- Wire carrying with taut-wire line-of-sight, 5 s timer, node refill and pause, bend arrow choice
+- Wire carrying with taut-wire line-of-sight, 4 s timer (was 5), node refill and pause, bend arrow choice
   and fling, goals that power rooms and open doors, red tiles that shock (with or without the
   wire), timer-out wire snap, **R** to restart a room, respawn at the room's START.
 - **Power cells**: charge them by touching them with the live wire (also mid-fling and mid-drift);
