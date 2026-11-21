@@ -605,6 +605,8 @@ func _draw_portrait() -> void:
 ## wait finishes, it checks the number. If a newer toast arrived meanwhile,
 ## it leaves that one alone instead of hiding it.
 func show_toast(text: String, seconds := 2.0) -> void:
+	if not is_inside_tree():
+		return                        # the level was closed (a coroutine woke up late)
 	_toast_token += 1
 	var token := _toast_token
 	toast_label.text = text
@@ -613,7 +615,7 @@ func show_toast(text: String, seconds := 2.0) -> void:
 	toast.visible = true
 	toast.modulate.a = 1.0
 	await get_tree().create_timer(seconds).timeout
-	if token != _toast_token:
+	if token != _toast_token or not is_inside_tree():
 		return
 	var tw := create_tween()
 	tw.tween_property(toast, "modulate:a", 0.0, 0.4)
@@ -807,6 +809,8 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 		_sfx["star"].pitch_scale = 1.0 + i * 0.12
 		_sfx["star"].play()
 		await get_tree().create_timer(0.35).timeout
+		if not is_inside_tree():
+			return
 
 
 ## The results line about skill points, e.g. "+2 SKILL POINTS".

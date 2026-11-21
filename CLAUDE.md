@@ -269,7 +269,12 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - `tile_map_data` is binary (uint16 format version, then 12 bytes per cell:
   int16 x, int16 y, uint16 source, uint16 atlas_x, uint16 atlas_y, uint16 alternative).
   Edit the map in the Godot editor, or sketch it as text and use `tools/map_to_scene.py`.
-- Coroutines (`await`) on the HUD can resume after the scene changed: check `is_inside_tree()`.
+- Coroutines (`await`) can resume after the scene changed (quit to title): SceneTree timers and
+  `process_frame` still fire, but the node is out of the tree, so `get_tree()` is null. After
+  every `await` in level.gd / hud.gd / rogue_pip.gd: `if not is_inside_tree(): return`.
+  rogue_pip.gd's `_wait()` / `_until_quiet()` return false then (`if not await _wait(0.6): return`).
+  (Nov 2026: quitting during PIP's malfunction crashed on `create_timer`; a bot that quits at
+  54 moments per level now runs clean.)
 - Running a test script with `--script` loads before autoloads are registered: don't use the
   project's class names as types in such scripts (access them dynamically).
 - Unused, safe to delete: `Scripts/hint_sign.gd`, `Scenes/hint_sign.tscn` (if present).

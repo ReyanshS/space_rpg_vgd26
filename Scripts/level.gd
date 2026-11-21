@@ -1925,6 +1925,7 @@ func _reel_back() -> void:
 	var secs := clampf(dist / 420.0, 0.12, 0.7)
 	_reel_tween.tween_property(player, "position", target, secs).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await _reel_tween.finished
+	if not is_inside_tree(): return
 	_reel_tween = null
 	if _wire == null or _busy:
 		return                                        # the timer ran out on the way
@@ -2286,6 +2287,7 @@ func _solve(r: Room) -> void:
 	_wire = null
 	w.finish()
 	await w.power_flow(0.8)
+	if not is_inside_tree(): return
 	_hide_loop(r)
 	for c in [r.goal, r.start, r.core]:
 		var t: PuzzleTile = _tiles.get(c)
@@ -2306,10 +2308,13 @@ func _solve(r: Room) -> void:
 		_pip_say(pip_cell_kept)
 	if r.conduit:
 		await r.conduit.power_flow(0.5)
+		if not is_inside_tree(): return
 	await _wait_for_holds()         # e.g. PIP glitching (rogue_pip.gd called hold())
+	if not is_inside_tree(): return
 	_open_exit_doors(r)
 	if _rooms_powered >= _rooms_with_goal:
 		await _all_powered()        # the lights-on cutscene: wait here until it's over
+		if not is_inside_tree(): return
 	_busy = false
 	_release_player()
 
@@ -2406,7 +2411,9 @@ func _all_powered() -> void:
 	_shake_cam(0.4, 2.5)
 	hud.show_toast(popup_all_online, 2.5)
 	await get_tree().create_timer(0.8).timeout
+	if not is_inside_tree(): return
 	await _power_tour()
+	if not is_inside_tree(): return
 	all_rooms_powered.emit()        # PIP says what to do next (StoryBeat: ALL_POWERED)
 
 
@@ -2436,14 +2443,18 @@ func _power_tour() -> void:
 	for i in order.size():
 		var r := order[i]
 		await _glide_to(r)
+		if not is_inside_tree(): return
 		_light_up(r, i)
 		await get_tree().create_timer(1.1 if r.cells.size() > 12 else 0.7).timeout
+		if not is_inside_tree(): return
 	# let PIP finish what he's saying (but never wait forever)
 	var wait := 4.0
 	while hud.is_talking() and wait > 0.0:
 		await get_tree().process_frame
+		if not is_inside_tree(): return
 		wait -= get_process_delta_time()
 	await hud.fade_out(0.3)
+	if not is_inside_tree(): return
 	_cutscene = false
 	_ship_powered = true             # the inside of the ship stays brighter from now on
 	if _sfx.has("powerup"):
@@ -2579,8 +2590,10 @@ func _fail(kind: String) -> void:
 			_shake_cam(0.5, 4.0)
 			hud.show_toast(popup_zap)
 			await get_tree().create_timer(0.85).timeout
+			if not is_inside_tree(): return
 			player.play_burnt()
 			await get_tree().create_timer(0.45).timeout
+			if not is_inside_tree(): return
 		"timeout":
 			_play("snap")
 			hud.flash(Color(1.0, 0.45, 0.15), 0.45)
@@ -2592,6 +2605,7 @@ func _fail(kind: String) -> void:
 			_shake_cam(0.3, 2.0)
 			hud.show_toast(popup_out_of_air)
 			await get_tree().create_timer(0.8).timeout
+			if not is_inside_tree(): return
 		"cut":
 			# PIP's shutdown pulse (rogue_pip.gd) reached the wire
 			_play("pulse")
@@ -2603,18 +2617,22 @@ func _fail(kind: String) -> void:
 		var w := _wire
 		_wire = null
 		await w.snap()
+		if not is_inside_tree(): return
 		w.queue_free()
 	if kind == "restart":
 		# R = "take me back": a quick fade and you're on the START pad again.
 		await hud.fade_out(0.2)
+		if not is_inside_tree(): return
 		_respawn()
 		if _o2_on:
 			_refill_o2()
 		await hud.fade_in(0.25)
+		if not is_inside_tree(): return
 	else:
 		# Zapped / timer / oxygen: you stay where you fell. Walk back to the
 		# START yourself (or press R to jump there).
 		await _stay_after_fail()
+		if not is_inside_tree(): return
 		if _o2_on:
 			_refill_o2()            # the suit switches to its reserve tank
 		if _check_stranded(r):
@@ -2655,6 +2673,7 @@ func _stay_after_fail() -> void:
 		var tw := create_tween()
 		tw.tween_property(player, "position", safe, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		await tw.finished
+		if not is_inside_tree(): return
 	var here: Room = _room_of.get(cell_of(player.position))
 	if here != null:
 		_current_room = here
@@ -2824,6 +2843,7 @@ func _cycle_airlock(r: Room) -> void:
 	if closed:
 		_play("door")
 	await get_tree().create_timer(0.9).timeout
+	if not is_inside_tree(): return
 	# 2. let the air out: hiss, a flashing red light, dust blowing towards the outer door
 	_play("hiss")
 	var warn := LightFX.make(Color(1.0, 0.35, 0.2), 110.0, 0.0)
@@ -2837,6 +2857,7 @@ func _cycle_airlock(r: Room) -> void:
 		hud.show_toast("DEPRESSURIZING... %d" % n, 0.9)
 		_play("alarm")
 		await get_tree().create_timer(0.8).timeout
+		if not is_inside_tree(): return
 	# 3. the outer door opens onto space, and the oxygen meter starts
 	_open_exit_doors(r)
 	dust.emitting = false
@@ -2923,6 +2944,8 @@ func _leave(number: int) -> void:
 		return                            # (a second click while it fades)
 	_leaving = true
 	await hud.fade_out(0.5)
+	if not is_inside_tree():
+		return                      # (you quit to the title meanwhile)
 	Game.go_to_level(number)
 
 
