@@ -359,11 +359,11 @@ var _boots_used := {}                     # Room -> how many zaps your boots alr
 var _alert := false            # red alert: the ship's tinted red, the boss music plays
 var _holds := 0                # how many other nodes asked the level to wait (hold / let_go)
 
-# --- playtesting from the editor (TestStart marker, F6)
-## The room a TestStart marker put you in (-1 = normal start). The story,
+# --- playtesting (TestStart marker + F6, or the dev menu)
+## The room a TestStart marker or the dev menu put you in (-1 = normal start). The story,
 ## tutorial and rogue PIP read this to catch up with the rooms you skipped.
 var test_room := -1
-## The marker said "skip PIP's level intro".
+## Skip PIP's level intro (the marker said so, or the dev menu).
 var test_skip_intro := false
 
 # lights-on cutscene
@@ -517,10 +517,18 @@ func _active_test_start() -> TestStart:
 	return null
 
 
-## Start the playtest at the TestStart marker. Every room before it is powered
-## quietly (no cutscenes, no PIP lines): lights on, doors open, cargo sunk.
+## Start the playtest at the TestStart marker, or in the room the dev menu
+## picked (dev_menu.gd, Game.dev_room). Every room before it is powered quietly
+## (no cutscenes, no PIP lines): lights on, doors open, cargo sunk.
 ## The story, tutorial and rogue PIP read `test_room` and catch up themselves.
 func _apply_test_start() -> void:
+	if Game.dev_room >= 0:
+		var index := Game.dev_room
+		Game.dev_room = -1                  # only this one load
+		for r in _rooms:
+			if r.index == index and index > 0:
+				_start_in_room(r, _dev_spot(r), true, true)
+		return
 	var ts := _active_test_start()
 	if ts == null:
 		return
@@ -529,22 +537,69 @@ func _apply_test_start() -> void:
 	if r == null:
 		push_warning("TestStart isn't on the floor of a room - starting at the spawn.")
 		return
+	_start_in_room(r, at, ts.skip_earlier_rooms, not ts.play_intro)
+
+
+## Puts the player at `at` in room r, as if they had just got there.
+func _start_in_room(r: Room, at: Vector2, skip_earlier_rooms: bool, skip_intro: bool) -> void:
 	test_room = r.index
-	test_skip_intro = not ts.play_intro
+	test_skip_intro = skip_intro
 	player.position = _nearest_safe_spot(at)
 	_last_safe = player.position
 	_current_room = r
-	if ts.skip_earlier_rooms:
+	if skip_earlier_rooms:
 		for o in _rooms:
 			if o.index < r.index and not o.is_exit:
 				_power_quietly(o)
-	if r.outside and (_o2_on or ts.skip_earlier_rooms):
+	if r.outside and (_o2_on or skip_earlier_rooms):
 		_o2_on = true                       # you're outside: the airlock was "used" already
 		_o2_max = o2_seconds + Game.o2_bonus()
 		_refill_o2()
 	player.set_lamp(not r.solved)
 	hud.set_power(_rooms_powered, _rooms_with_goal)
-	print("TestStart: playtest starts in room %d (%d rooms before it powered)." % [r.index + 1, _rooms_powered])
+	print("Playtest starts in room %d (%d rooms before it powered)." % [r.index + 1, _rooms_powered])
+
+
+## Where the dev menu drops you in room r: on its START pad. A room without one
+## (an airlock) puts you just inside the door you came in by.
+func _dev_spot(r: Room) -> Vector2:
+	if r.start.x >= 0:
+		return center_of(r.start)
+	var best := r.cells[0]
+	var best_d := INF
+	for door in r.doors:
+		var came_from := false
+		for o in _door_rooms.get(door, []):
+			if o != r and o.index >= 0 and o.index < r.index:
+				came_from = true
+		if not came_from:
+			continue
+		for c in r.cells:
+			var d := Vector2(c - door).length()
+			if d < best_d and (kind_at(c) == "floor" or kind_at(c) == "hull"):
+				best_d = d
+				best = c
+	return center_of(best)
+
+
+## For the dev menu: the rooms you can jump to, in walking order, as
+## [room index, name] pairs. Rooms with a START, and airlocks. It works on a
+## level that was loaded but never added to the scene tree (its _ready hasn't run).
+func dev_checkpoints() -> Array:
+	if layout == null:
+		layout = get_node_or_null("Layout") as TileMapLayer
+	if layout == null:
+		return []
+	_read_layout()
+	_build_rooms(true)
+	var out: Array = []
+	for r in _rooms:
+		if r.index < 0 or r.is_exit or (r.start.x < 0 and r.airlock.x < 0):
+			continue
+		var title := room_titles[r.index] if r.index < room_titles.size() else "ROOM %d" % (r.index + 1)
+		out.append([r.index, title])
+	out.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	return out
 
 
 ## A skipped room: everything a win would change, but instantly and silently.

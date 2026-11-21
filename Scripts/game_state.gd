@@ -53,6 +53,9 @@ var results := {}
 ## Stays false when you run one level scene straight from the editor with F6:
 ## that's the only time a level's TestStart marker is used.
 var playing_through := false
+## The dev menu (dev_menu.gd) sets this to the room to start in when the next
+## level loads (-1 = the normal start). The level reads it once and resets it.
+var dev_room := -1
 # Tips PIP already gave (so he explains something only once, even across levels)
 var _tips_seen := {}
 
@@ -74,6 +77,10 @@ func _ready() -> void:
 	e.physical_keycode = KEY_E
 	if not InputMap.action_has_event("ui_accept", e):
 		InputMap.action_add_event("ui_accept", e)
+	# The dev menu (the ` key): only when the game runs from the Godot editor,
+	# never in an exported or web build, so judges can't open it by accident.
+	if OS.has_feature("editor"):
+		add_child(preload("res://Scripts/dev_menu.gd").new())
 
 
 ## The level calls this when you finish it. It also saves the game.
@@ -137,6 +144,13 @@ func go_to_level(number: int) -> void:
 		get_tree().change_scene_to_file(LEVELS[number - 1])
 	else:
 		go_to_title()
+
+
+## Dev menu: load level `number` and start in room `room` (0 = the normal start),
+## with every room before it already powered.
+func dev_jump(number: int, room: int) -> void:
+	dev_room = room
+	go_to_level(number)
 
 
 func go_to_title() -> void:

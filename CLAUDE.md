@@ -252,6 +252,12 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   rogue_pip.gd catch up. Only used when the level scene is run on its own from the editor
   (`OS.has_feature("editor")` and not `Game.playing_through`), so F5 and exports ignore it.
   Bots that load a level with `change_scene_to_file` count as "on its own": keep markers inactive.
+- **Dev menu** (`Scripts/dev_menu.gd`, added by Game._ready only when `OS.has_feature("editor")`,
+  so never in exports): ` or F1 anywhere lists every room of every level (level.gd
+  `dev_checkpoints()`, read from each scene without adding it to the tree). A pick sets
+  `Game.dev_room` and loads the level; `_apply_test_start()` then runs the same
+  `_start_in_room()` as TestStart, on the room's START (`_dev_spot()`). While open it freezes
+  the current scene (process_mode DISABLED, also the HUD's Always nodes) so keys don't leak.
 - **Tutorial**: `Scripts/tutorial.gd` on the `Tutorial` node runs its `TutorialStep` children
   (`Scripts/tutorial_step.gd`, Marker2D) in tree order. Each step has `text`, `advance_when`
   (GRAB_WIRE, TOUCH_NODE, WRAP_POLE, SOLVE_ROOM, ENTER_NEXT_ROOM, REACH_HERE, DRIFT) and its
@@ -325,7 +331,7 @@ who made them for the copyright checklist.
 Nov 2026 (Claude, at the team's request): bends turned into poles (the wrap rule, the post art
 in puzzle_tile.gd), the new timer rules and all the balance numbers, the reworked Level 1 room 4
 and Level 2 room 5 (solver-checked, then replayed by a bot), the KeyHint keycaps and results tiles,
-and fixes for errors when quitting mid-level.
+and fixes for errors when quitting mid-level. Also the dev menu (jump to any room).
 The skill tree system (SkillManager, the skill files and their numbers, the skill tree screen,
 the save file and Continue) was written by Claude in Nov 2026 to replace the XP upgrades; the
 team chose the branches, the points per level and where it opens. Claude also made the menu

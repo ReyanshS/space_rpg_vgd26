@@ -161,6 +161,13 @@ cargo sunk, PIP already turned and on the right socket. Options:
 It only works with F6 from the editor. **F5** (the whole game from the title) and
 the exported web game ignore it, so a forgotten flag can't break the real game.
 
+**Quicker: the dev menu.** While the game runs from the editor (F5 or F6), press
+**`** (the key left of 1) or **F1** at any time, even on the title screen. It lists
+every room of every level: pick one and that level loads with you on the room's
+START pad and every room before it powered (the same as a TestStart flag, nothing
+to drag). Room 1 is the normal start with PIP's intro. **Esc** or **`** closes it.
+New rooms show up in the list by themselves. Exported and web builds don't have it.
+
 ## 8. Check the puzzle with the solver
 
 After changing a room's map:
