@@ -257,6 +257,14 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var popup_stranded := "NO WAY BACK? PRESS R"
 @export var popup_boots := "YOUR BOOTS SAVED YOU"
 
+# The last level only: when you reach the exit, the camera flies out into space
+# and the whole ship fires its engines and leaves (_fly_away), then the results.
+@export_group("Ending")
+## What PIP says while the engines warm up, and as the ship jumps away.
+@export var ending_lines: PackedStringArray = ["Engines are warm. Hold on to something.", "Next stop, home."]
+## Which way the ship flies off the screen.
+@export var ending_direction := Vector2.RIGHT
+
 
 # An inner class: a little bundle of data describing one room.
 class Room:
@@ -370,6 +378,7 @@ var test_skip_intro := false
 # lights-on cutscene
 var _cutscene := false         # true while the cutscene moves the camera
 var _cut_cam := Vector2.ZERO   # where the cutscene camera looks (a Tween moves it)
+var _flying := false           # the ending: the camera is out in space, the ship flies off
 var _ship_powered := false     # every room has power: the inside of the ship is brighter
 var _env_tween: Tween          # the tween changing the darkness tint (so two never fight)
 
@@ -2985,6 +2994,10 @@ func _finish_level() -> void:
 	_input_cooldown = 1.5           # let the results screen appear before keys work
 	if not Game.has_level(level_number + 1):
 		set_music_override("ending")   # the very last results screen: the ending theme
+		_input_cooldown = 999.0        # no keys while the ship flies away...
+		await _fly_away()
+		if not is_inside_tree(): return
+		_input_cooldown = 1.5          # ...then the results screen as usual
 	player.lock(false)
 	hud.set_timer(false, 0.0, 0.0)
 	_o2_on = false
@@ -3029,6 +3042,125 @@ func _leave(number: int) -> void:
 	Game.go_to_level(number)
 
 
+# ===================================================================== the ending: the ship flies away
+# Another cutscene made of awaits. The trick: the camera is a child of the
+# level, so moving the level would move the camera with it. Setting the
+# camera's top_level makes it ignore its parent, so it stays put in space while
+# we move and shrink the whole level (the ship) away from it.
+
+## The last level's ending. Called from _finish_level() before the results.
+func _fly_away() -> void:
+	if camera == null:
+		return
+	_flying = true
+	player.lock(false)
+	hud.set_cinematic(true)                       # film bar, no arrows or timers
+	_ensure_starfield()
+	_tween_env(Color(0.95, 0.96, 1.0), 1.8)       # seen from outside, the ship is lit up
+	if ending_lines.size() > 0:
+		hud.say(PackedStringArray([ending_lines[0]]))
+	# 1. pull the camera back until the whole deck fits above the console
+	var ship := Rect2(Vector2(_rect.position * TILE), Vector2(_rect.size * TILE))
+	var view := get_viewport_rect().size - Vector2(0, GameHUD.CONSOLE_H)
+	var z := minf(view.x / ship.size.x, view.y / ship.size.y) * 0.8
+	camera.top_level = true                       # from now on the camera stays put in space
+	var cam_to := ship.get_center() + Vector2(0, GameHUD.CONSOLE_H * 0.5 / z)
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(camera, "zoom", Vector2(z, z), 2.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(camera, "global_position", cam_to, 2.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw.finished
+	if not is_inside_tree(): return
+	# 2. the engines light up at the back of the ship
+	var back := -ending_direction.normalized()
+	for spot in _engine_spots(ship, back):
+		var flame := _engine_flame(back)
+		flame.position = spot
+		add_child(flame)
+	_play("powerup")
+	_play("puff")
+	_shake_cam(0.8, 2.0)
+	await get_tree().create_timer(1.2).timeout
+	if not is_inside_tree(): return
+	# 3. off it goes: slowly at first, then faster and faster
+	var far := ending_direction.normalized() * ship.size.length() * 2.5
+	var away := create_tween().set_parallel(true)
+	away.tween_property(self, "position", position + far, 2.4).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	away.tween_property(self, "scale", Vector2(0.55, 0.55), 2.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	if ending_lines.size() > 1:
+		hud.say(PackedStringArray([ending_lines[1]]))
+	await get_tree().create_timer(2.0).timeout
+	if not is_inside_tree(): return
+	hud.flash(Color(1, 1, 1), 0.9)                # the jump
+	_play("fanfare")
+	await away.finished
+	if not is_inside_tree(): return
+	await get_tree().create_timer(0.8).timeout     # a moment of empty space
+	if not is_inside_tree(): return
+	hud.set_cinematic(false)
+
+
+## Levels without open space have no starfield yet: the ending needs one.
+func _ensure_starfield() -> void:
+	if get_node_or_null("Sky") != null:
+		return
+	var sky_layer := CanvasLayer.new()
+	sky_layer.name = "Sky"
+	sky_layer.layer = -10        # behind the level, and untouched by its darkness
+	add_child(sky_layer)
+	var sky := Starfield.new()
+	sky.focus = Vector2(_rect.get_center() * TILE)
+	sky_layer.add_child(sky)
+
+
+## Three spots along the back edge of the ship for the engines: on the rows (or
+## columns) a quarter, a half and three quarters of the way along, at the
+## furthest painted tile on that side.
+func _engine_spots(ship: Rect2, back: Vector2) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var horizontal := absf(back.x) >= absf(back.y)
+	var s := signf(back.x) if horizontal else signf(back.y)     # -1 = the left (or top) side
+	for k in [0.25, 0.5, 0.75]:
+		var line := floori((ship.position.y + ship.size.y * k) / TILE) if horizontal \
+			else floori((ship.position.x + ship.size.x * k) / TILE)
+		var found := false
+		var best := Vector2i.ZERO
+		for c in _kinds:
+			var on_line: bool = c.y == line if horizontal else c.x == line
+			if not on_line:
+				continue
+			var along: float = c.x if horizontal else c.y
+			var best_along: float = best.x if horizontal else best.y
+			if not found or along * s > best_along * s:
+				best = c
+				found = true
+		if found:
+			var edge := Vector2(0.5 + 0.5 * s, 0.5) if horizontal else Vector2(0.5, 0.5 + 0.5 * s)
+			out.append(Vector2(best * TILE) + edge * TILE)
+	return out
+
+
+## One engine: a long stream of hot sparks pointing out of the back of the ship.
+func _engine_flame(back: Vector2) -> CPUParticles2D:
+	var p := Wire.make_sparks(Color(1.0, 0.7, 0.3), 90, 0.9)
+	p.direction = back
+	p.spread = 7.0
+	p.gravity = Vector2.ZERO
+	p.initial_velocity_min = 260.0
+	p.initial_velocity_max = 420.0
+	p.scale_amount_min = 4.0
+	p.scale_amount_max = 9.0
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = Vector2(4, 10) if absf(back.x) >= absf(back.y) else Vector2(10, 4)
+	var ramp := Gradient.new()                     # white hot, then orange, then gone
+	ramp.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
+	ramp.colors = PackedColorArray([Color(1.0, 1.0, 0.9, 1.0), Color(1.0, 0.6, 0.2, 0.9), Color(0.9, 0.2, 0.1, 0.0)])
+	p.color = Color.WHITE                          # the ramp gives the colours
+	p.color_ramp = ramp
+	p.z_index = 10
+	p.emitting = true
+	return p
+
+
 # ===================================================================== camera
 
 func _shake_cam(duration: float, strength: float) -> void:
@@ -3043,7 +3175,7 @@ func _shake_cam(duration: float, strength: float) -> void:
 ## the room in is that much shorter, and the camera sits CONSOLE_H/2 lower than
 ## the point we want in the middle of it.
 func _update_camera(delta: float, snap: bool) -> void:
-	if camera == null or _current_room == null:
+	if camera == null or _current_room == null or _flying:
 		return
 	var below := Vector2(0, GameHUD.CONSOLE_H * 0.5)
 	if _cutscene:
