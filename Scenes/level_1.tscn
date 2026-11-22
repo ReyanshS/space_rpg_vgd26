@@ -139,7 +139,7 @@ pause_game = true
 position = Vector2(624, 208)
 script = ExtResource("10_beat")
 trigger = 2
-lines = PackedStringArray("Nice flying.")
+lines = PackedStringArray("Nice. Round the pillars and in.")
 
 [node name="Room4Intro" type="Marker2D" parent="Story" unique_id=1388293789]
 position = Vector2(912, 720)

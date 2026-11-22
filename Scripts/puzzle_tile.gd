@@ -159,8 +159,10 @@ func _process(delta: float) -> void:
 	if _glow and not is_open:
 		var a := 0.0
 		match kind:
-			Kind.START, Kind.GOAL, Kind.NODE, Kind.POLE, Kind.AIRLOCK, Kind.CORE:
+			Kind.START, Kind.GOAL, Kind.NODE, Kind.AIRLOCK, Kind.CORE:
 				a = 0.18 + 0.12 * sin(_t * 3.0)     # slow gentle pulse
+			Kind.POLE:
+				a = 0.06 + 0.04 * sin(_t * 3.0)     # just the plate's little lights: the pillar's ring does the glowing
 			Kind.DISCHARGE:
 				a = 0.3 + 0.2 * sin(_t * 9.0)
 			Kind.DISCHARGE_OFF:
@@ -174,6 +176,8 @@ func _process(delta: float) -> void:
 			a = 0.5 + 0.25 * sin(_t * 10.0)       # fast pulse: "timer paused here"
 		if powered:
 			a = 0.5 + 0.2 * sin(_t * 8.0)
+			if kind == Kind.POLE:
+				a = 0.15
 		_glow.modulate.a = a
 	if _light:
 		var e := 0.5 + 0.08 * sin(_t * 3.0)

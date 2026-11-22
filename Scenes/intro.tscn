@@ -5,6 +5,9 @@
 [ext_resource type="Texture2D" path="res://Assets/images/cutscenes/intro_2_uranus.png" id="3_uranus"]
 [ext_resource type="Texture2D" path="res://Assets/images/cutscenes/intro_3_wake_up.png" id="4_wake"]
 [ext_resource type="Script" path="res://Scripts/key_hint.gd" id="5_key"]
+[ext_resource type="AudioStream" path="res://Assets/audio/intro_alarm.wav" id="6_alarm"]
+[ext_resource type="AudioStream" path="res://Assets/audio/intro_space.wav" id="7_space"]
+[ext_resource type="AudioStream" path="res://Assets/audio/intro_wake.wav" id="8_wake"]
 
 [node name="Intro" type="Control"]
 layout_mode = 3
@@ -16,6 +19,7 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_cut")
 slides = Array[Texture2D]([ExtResource("2_cryo"), ExtResource("3_uranus"), ExtResource("4_wake")])
+slide_sounds = Array[AudioStream]([ExtResource("6_alarm"), ExtResource("7_space"), ExtResource("8_wake")])
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
