@@ -23,6 +23,8 @@ const LEVELS: Array[String] = [
 	"res://Scenes/level_3.tscn",
 ]
 const TITLE_SCENE := "res://Scenes/title.tscn"
+## The opening cutscene, played when you start a new game (before Level 1).
+const INTRO_SCENE := "res://Scenes/intro.tscn"
 
 ## The music: the team's own tracks, as Assets/audio/music_<name>.ogg.
 ## The number is each track's volume in dB (0 = as loud as the file, -6 = about
@@ -156,6 +158,12 @@ func dev_jump(number: int, room: int) -> void:
 func go_to_title() -> void:
 	get_tree().paused = false
 	get_tree().change_scene_to_file(TITLE_SCENE)
+
+
+## The opening cutscene (it loads Level 1 itself when it's over).
+func go_to_intro() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file(INTRO_SCENE)
 
 
 ## Values that story text can use: write {cells}, {o2_bonus} or {o2_per_cell} inside a line.

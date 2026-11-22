@@ -294,6 +294,7 @@ var _ground: TileMapLayer
 var _walls: TileMapLayer
 var _props: TileMapLayer
 var _hull_edges: Node2D        # draws the thickness of the hull plates
+var _pillar_preview: Node2D    # editor only: draws the support pillars on pole tiles
 var _rebuild_queued := false
 
 # --- rooms
@@ -816,6 +817,14 @@ func _build_visuals() -> void:
 		_hull_edges.draw.connect(_draw_hull_edges)
 		_walls = _new_layer("Walls", -9)
 		_props = _new_layer("Props", -7)
+		# in the editor only: the support pillars standing on the pole tiles, so you
+		# see what you're painting (in the game each pole draws its own pillar)
+		if Engine.is_editor_hint():
+			_pillar_preview = Node2D.new()
+			_pillar_preview.name = "PillarPreview"
+			_pillar_preview.z_index = -6
+			add_child(_pillar_preview)
+			_pillar_preview.draw.connect(_draw_pillar_preview)
 	for l in [_ground, _walls, _props]:
 		l.tile_set = ts
 		l.clear()
@@ -851,6 +860,18 @@ func _build_visuals() -> void:
 			var alt := 1 if (kind == "door" and _door_rotated(c)) else 0
 			_props.set_cell(c, SRC_PUZZLE, Vector2i(PUZZLE_FRAME[kind], 0), alt)
 	_hull_edges.queue_redraw()
+	if _pillar_preview:
+		_pillar_preview.queue_redraw()
+
+
+## Editor only: a support pillar on every pole tile (the same picture the game uses).
+func _draw_pillar_preview() -> void:
+	var tex := load(PuzzleTile.PILLAR_TEX) as Texture2D
+	if tex == null:
+		return
+	for c in _kinds:
+		if _kinds[c] == "pole":
+			_pillar_preview.draw_texture(tex, center_of(c) + Vector2(-16, -PuzzleTile.PILLAR_FOOT))
 
 
 func _new_layer(layer_name: String, z: int) -> TileMapLayer:

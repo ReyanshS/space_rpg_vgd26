@@ -42,6 +42,11 @@ const GLOW := {
 }
 const LOOP_COLOR := Color(1.0, 0.82, 0.25)    # the same yellow as the live wire
 const DOOR_LOCKED := Color(1.0, 0.3, 0.25)
+# The pole is a support pillar (drawn by tools/art_pillar.py). The picture is
+# 32 x 64 and its foot is PILLAR_FOOT px down from its top, on the tile's centre.
+const PILLAR_TEX := "res://Assets/images/tiles/pillar.png"
+const PILLAR_GLOW_TEX := "res://Assets/images/tiles/pillar_glow.png"
+const PILLAR_FOOT := 56
 
 # "static" = shared by all tiles, so the picture is only loaded once.
 static var _sheet: Texture2D
@@ -66,7 +71,10 @@ var _glow: Sprite2D
 var _light: PointLight2D
 var _crackle: CPUParticles2D
 var _prompt_node: Node2D
-var _post_node: Node2D        # poles: the post standing on the purple plate
+var _post_node: Node2D        # poles: the pillar standing on the plate
+var _ring_glow: Sprite2D      # poles: the purple cable ring, shining in the dark
+var _ring_flash := 0.0        # poles: flashes when the wire wraps round it
+var _player: Node2D           # poles: to see if he's walking behind the pillar
 var _loop_node: Node2D
 var _loop_on := false
 var _loop_from := 0.0         # the angle the loop starts at (towards the START pad)
@@ -114,10 +122,7 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 	if kind == Kind.START:
 		_prompt_node = _make_overlay(_draw_prompt)
 	if kind == Kind.POLE:
-		_post_node = Node2D.new()
-		_post_node.z_index = 6      # relative to the tile (-7): -1, so just under the player
-		add_child(_post_node)
-		_post_node.draw.connect(_draw_post)
+		_make_pillar()
 	if kind == Kind.CORE:
 		_loop_node = _make_overlay(_draw_loop)
 		_loop_node.z_index = 6      # relative to the tile (-7): -1, so just under the player
@@ -185,7 +190,7 @@ func _process(delta: float) -> void:
 	if prompt and _prompt_node:
 		_prompt_node.queue_redraw()
 	if _post_node:
-		_post_node.queue_redraw()        # the cap glows softly
+		_update_pillar(delta)
 	if _loop_on and _loop_node:
 		_loop_node.queue_redraw()
 
@@ -206,20 +211,43 @@ func _draw_prompt() -> void:
 	_prompt_node.draw_rect(Rect2(o + Vector2(4, 8), Vector2(5, 1)), ink)
 
 
-## POLE: a short purple post on its plate. The wire wraps round its middle
-## (the tile's centre, where level.gd puts the corner of the wire).
-func _draw_post() -> void:
-	var dark := Color(0.22, 0.1, 0.34)
-	var body := Color(0.55, 0.3, 0.8)
-	var light := Color(0.85, 0.65, 1.0)
-	_post_node.draw_rect(Rect2(-6, 1, 12, 4), Color(0, 0, 0, 0.35))          # shadow on the floor
-	_post_node.draw_rect(Rect2(-5, -15, 10, 18), dark)                       # outline
-	_post_node.draw_rect(Rect2(-4, -14, 8, 16), body)                        # the post
-	_post_node.draw_rect(Rect2(-3, -14, 2, 16), light)                       # it catches the light
-	_post_node.draw_rect(Rect2(2, -14, 2, 16), body.darkened(0.3))           # ...and the shade
-	var glow := 0.6 + 0.4 * sin(_t * 3.0) if not powered else 1.0
-	_post_node.draw_rect(Rect2(-5, -17, 10, 3), dark)                        # the cap
-	_post_node.draw_rect(Rect2(-4, -16, 8, 2), Color(1.0, 0.8, 1.0, glow))
+## POLE: a steel support pillar standing on its floor plate, holding up the
+## deck above. The wire wraps round its foot (the tile's centre, where level.gd
+## puts the corner of the wire). The purple ring on it glows in the dark, so you
+## can spot the pillars a wire can catch on.
+func _make_pillar() -> void:
+	_post_node = Node2D.new()
+	_post_node.z_index = 6      # relative to the tile (-7): -1, over the wires but under the player
+	add_child(_post_node)
+	var column := Sprite2D.new()
+	column.texture = load(PILLAR_TEX)
+	column.centered = false
+	column.position = Vector2(-16, -PILLAR_FOOT)   # its foot on the tile's centre
+	_post_node.add_child(column)
+	_ring_glow = Sprite2D.new()
+	_ring_glow.texture = load(PILLAR_GLOW_TEX)
+	_ring_glow.centered = false
+	_ring_glow.position = column.position
+	_ring_glow.material = _add_mat                 # colours add up: it shines
+	LightFX.glow(_ring_glow)
+	_post_node.add_child(_ring_glow)
+
+
+## Every frame: the ring pulses, and if the astronaut walks BEHIND the pillar
+## (above it on screen, where the column would hide him), it's drawn over him
+## and turns see-through. In front of it, he's drawn over the pillar.
+## (A top-down game has no real depth: we fake it by changing the order.)
+func _update_pillar(delta: float) -> void:
+	_ring_flash = maxf(0.0, _ring_flash - delta * 2.5)
+	_ring_glow.modulate.a = minf(1.0, (0.55 + 0.25 * sin(_t * 3.0) if not powered else 0.9) + _ring_flash)
+	if _player == null:
+		_player = get_tree().get_first_node_in_group("player") as Node2D
+	var behind := false
+	if _player:
+		var d := _player.global_position - global_position
+		behind = d.y < 0.0 and d.y > -PILLAR_FOOT - 8.0 and absf(d.x) < 22.0
+	_post_node.z_index = 8 if behind else 6      # 1 = over the player, -1 = under him
+	_post_node.modulate.a = move_toward(_post_node.modulate.a, 0.45 if behind else 1.0, delta * 4.0)
 
 
 ## CORE: the level calls this every frame while you carry the wire in its room.
@@ -272,6 +300,7 @@ func set_live(on: bool, warning := false) -> void:
 ## Quick flash + spark burst when the wire touches this tile.
 func hit() -> void:
 	burst(GLOW.get(kind, Color.WHITE), 14)
+	_ring_flash = 1.0                 # poles: the ring lights up as the wire catches
 	_sprite.scale = Vector2(1.25, 1.25)
 	# A Tween animates a property over time: here, scale goes back to 1 in 0.18 s.
 	var tw := create_tween()

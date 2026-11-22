@@ -23,7 +23,7 @@ paint. Untick **Show Layout In Editor** on the level node to see it without the 
 | start | `S` | yellow pad: press E here to grab the wire. **One per room.** |
 | goal | `G` | blue pad: touch it with the wire to power the room |
 | node | `N` | orange: wraps the wire, adds Node Time, holds the clock for Node Hold seconds |
-| pole | `B` | purple post: solid; the wire wraps round it when you walk past it |
+| pole | `B` | support pillar (steel column with a purple ring): solid; the wire wraps round it when you walk past it. The column covers the tile above it, so don't put anything there players must see |
 | discharge | `X` | red: zaps you, and the wire can't cross it |
 | blinker | `x` | blinking grate: zaps only while lit |
 | crate | `C` | blocks you and the wire |

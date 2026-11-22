@@ -57,7 +57,8 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Balance (Nov 2026, "too easy")**: timer rules per level (Inspector, Rules group):
   L1 START 4.5 / node +3.5 / max 6 / hold 2 s, own START times 5.5, -, 6, 3.5, 3.2, -, 5;
   L2 3.5 / +3 / 5 / 1 s, room 3 = 4.2, room 5 = 5, `o2_seconds` 50; L3 3.5 / +2.5 / 5.2 / 1 s,
-  PIP's `shutdown_seconds` 10 / 11.5 / 9.5 (about 1.5x the best route). Target "lowest timer"
+  PIP's `shutdown_seconds` 14 / 13.5 / 9.5 (about 1.5x the best route: after the Nov 21 map
+  the best routes take 9.3 / 8.9 / 5.4 s plus grate waits; 10 s for stage A was too tight). Target "lowest timer"
   on the most forgiving perfect route: tutorial rooms (L1 1-3) 2.3-3 s, rest of L1 1-1.8 s,
   L2 0.7-1.3 s (hard but fair), L3 rooms are timed mostly by PIP's meter. A bot replayed the
   solver's route in every room in the real game: all solvable, lowest timer within ~0.1 s of
@@ -79,8 +80,13 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
 - NODE (orange): wraps the wire and ADDS `node_time` (no full refill), capped at `max_wire_time`.
   Standing on it holds the clock, but only for `node_hold` s. Touch radius 22 px.
-- POLE (purple post, map char `B`, tile kind `pole`; was the "bend" until Nov 2026): solid for
-  feet, not for the wire. The wire wraps round its centre when it sweeps across it and unwraps when
+- POLE (a steel support pillar with a purple cable ring, map char `B`, tile kind `pole`; was the
+  "bend" until Nov 2026): solid for
+  feet, not for the wire. Looks: `Assets/images/tiles/pillar.png` (32x64, foot on the tile's
+  centre) + `pillar_glow.png` (the ring, glow channel), drawn by `tools/art_pillar.py`;
+  `PuzzleTile._make_pillar()` / `_update_pillar()` draw it over the wires, under the player, but
+  over him and see-through while he walks behind it. level.gd draws the same picture in the
+  editor (`_draw_pillar_preview`). The column covers the tile above the pole. The wire wraps round its centre when it sweeps across it and unwraps when
   you sweep back (`_update_wraps()` / `_swept_over()`: the swung triangle anchor->old hands->new
   hands must contain the pole, with real width). Gives no time. Anchors list = pads AND poles
   (`_anchor_cells` + `_anchor_signs`), so `_winding()` counts poles too. The solver uses the exact
@@ -154,7 +160,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `cut_wire()` (fail kind "cut"), `set_alert()`, `shake()`, `hold()`/`let_go()` (`_solve()`
   waits for every hold before opening doors / the cutscene). Its SHUTDOWN METER (12 red LEDs over
   his head) fills only while you carry the wire in his stage: `shutdown_seconds` per phase
-  (18, 15, 19). Full = pulse that cuts the wire. A Mood enum (ASLEEP, ROGUE, HIT, OFF, BOOT, AWAKE)
+  (see Balance above). Full = pulse that cuts the wire. A Mood enum (ASLEEP, ROGUE, HIT, OFF, BOOT, AWAKE)
   drives how he's drawn (code-drawn monitor, 2x scale via `draw_set_transform`).
 - HUD: `set_rogue(on)` turns PIP's console face red and angry; any line with speaker
   `GameHUD.ROGUE_SPEAKER` ("P!P") is red.
@@ -273,6 +279,10 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Space background** (`Scripts/starfield.gd`): parallax stars + `Assets/images/space/planet.png`
   and `nebula.png`, on a CanvasLayer at layer -10 (not darkened by the CanvasModulate).
 - `Scenes/title.tscn` + `Scripts/title.gd`: title, premise, controls, press E.
+- **Intro cutscene** (`Scenes/intro.tscn` + `Scripts/cutscene.gd`, a reusable slideshow):
+  START on a new game / NEW GAME -> `Game.go_to_intro()` -> 3 pictures (`Assets/images/cutscenes/`,
+  480x270, shown 1:1) -> Level 1. E / Space / Enter / click = next, Esc = skip all.
+  CONTINUE skips it. Slides, order, next level and music are exports on the Intro node.
 - **Player sprite**: animations live in SpriteFrames files, `Assets/images/astronaut/
   astronaut_frames.tres` (original art: idle, walk_down/left/right, carry, shock, burnt) and
   `astronaut_v2_frames.tres` (adds walk_up and idle_<dir>). `player.gd` picks the first animation
@@ -306,6 +316,10 @@ writer and the art/sound generators. See `tools/README.md`. After editing a room
 and lists routes with their "lowest timer" (the least time left on the way; carried over from
 pad to pad) and whether every power cell can be charged in time. `--paths f.json --margin 3`
 exports routes a bot can replay in the game.
+Known blind spots of the cell check (false "NOT collectible"): it ignores the +2 s a cell gives,
+it forgets pole wraps when it checks the way on from a cell (L1 cell (24,7) is fine in the game),
+and in core rooms it never checks cells on the last stretch before the loop closes (L3 (21,3)).
+Check such a cell with a bot in the game before moving it.
 
 ## AI-generated content (for TSA documentation)
 Made with Claude (Anthropic) in the Claude app and Claude Code: the level/tutorial/lighting/story/
@@ -337,5 +351,10 @@ the save file and Continue) was written by Claude in Nov 2026 to replace the XP 
 team chose the branches, the points per level and where it opens. Claude also made the menu
 buttons (art drawn in `tools/art_ui.py`, styled in the theme) and the SKILLS / MENU corner
 buttons, at the team's request.
+Nov 22 2026 (Claude): the support pillar art for the poles (`tools/art_pillar.py`, drawn pixel by
+pixel in Python), the slideshow cutscene script, and PIP's new Level 3 shutdown times. The three
+intro cutscene PICTURES were provided by the team (record who made them, and the tool if they
+were AI-generated, for the copyright checklist); Claude only cropped them to 16:9 and shrank them
+to 480x270 with Python.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

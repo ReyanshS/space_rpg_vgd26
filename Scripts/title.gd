@@ -4,7 +4,8 @@
 #
 # The background is the same Starfield the spacewalk uses (on a CanvasLayer
 # behind everything). With no camera in this scene, the stars drift on their own.
-# START fades to black and asks Game (the autoload) to load Level 1.
+# START fades to black and plays the intro cutscene (Scenes/intro.tscn), which
+# then asks Game (the autoload) to load Level 1.
 # If there's a save file (you finished a level before), the first button says
 # CONTINUE instead and goes to the next level, with your skills. NEW GAME
 # appears next to it and starts over (it deletes the save).
@@ -31,10 +32,15 @@ func _ready() -> void:
 	else:
 		Game.new_game()              # a fresh run: forget old results
 	new_game_button.visible = saved
-	play_button.pressed.connect(func() -> void: _start(Game.continue_level() if Game.has_save() else 1))
+	# A new game starts with the intro cutscene; CONTINUE goes straight to the level.
+	play_button.pressed.connect(func() -> void:
+		if Game.has_save():
+			_start(Game.continue_level())
+		else:
+			_start(1, true))
 	new_game_button.pressed.connect(func() -> void:
 		Game.new_game()
-		_start(1))
+		_start(1, true))
 	fade.color.a = 1.0
 	create_tween().tween_property(fade, "color:a", 0.0, 0.8)
 	_music = AudioStreamPlayer.new()             # the title theme (see Game.MUSIC)
@@ -66,7 +72,8 @@ func _process(delta: float) -> void:
 	astronaut.rotation = sin(_t * 0.5) * 0.25
 
 
-func _start(level: int) -> void:
+## intro = play the opening cutscene first (it loads Level 1 when it's done).
+func _start(level: int, intro := false) -> void:
 	if _starting:
 		return                       # (a second click while it fades)
 	_starting = true
@@ -77,4 +84,8 @@ func _start(level: int) -> void:
 	tw.tween_property(fade, "color:a", 1.0, 0.7)
 	tw.parallel().tween_property(_music, "volume_db", -60.0, 0.7)
 	await tw.finished
-	Game.go_to_level(level)
+	if not is_inside_tree(): return
+	if intro:
+		Game.go_to_intro()
+	else:
+		Game.go_to_level(level)

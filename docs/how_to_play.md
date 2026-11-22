@@ -41,9 +41,9 @@ they leave behind. At the end of each level you get up to three stars.
   It can't pass through walls, crates or red tiles, so you can't walk where it would have to.
 - **Orange NODE**: the wire wraps around it and you get a few **extra seconds** (never more than
   the timer can hold). Standing on it holds the clock, but only for a moment.
-- **Purple POLE**: a post you walk round. Walk past it and the wire **wraps round it** like a rope
-  round a post, so the wire can go round corners. Walk back and it comes off again. Poles don't
-  give you time.
+- **PILLAR** (a steel support column with a purple ring): walk past it and the wire **wraps round
+  it** like a rope round a post, so the wire can go round corners. Walk back and it comes off
+  again. Pillars don't give you time.
 - **Reel back**: took a wrong turn? Press E while holding the wire and it pulls you back along it
   to the last pad it's wrapped around, so you can try again. The timer keeps running while you fly.
 - **Red tiles** are live: step on one and you're shocked, and the wire snaps.
