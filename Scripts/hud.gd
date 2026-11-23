@@ -154,6 +154,9 @@ func _ready() -> void:
 	portrait.draw.connect(_draw_portrait)
 	stars_box.draw.connect(_draw_stars)
 	next_key.draw.connect(_draw_next_key)
+	# PIP's text size depends on the font (OpenDyslexic is wider, see Game.console_font_size)
+	_fit_console_font()
+	Game.font_changed.connect(_fit_console_font)
 	timer_bar.visible = false
 	complete_panel.visible = false
 	toast.visible = false
@@ -170,6 +173,15 @@ func _ready() -> void:
 	$Pause/VBox/Buttons/Resume.pressed.connect(_set_paused.bind(false))
 	$Pause/VBox/Buttons/Skills.pressed.connect(open_skill_tree)
 	$Pause/VBox/Buttons/Quit.pressed.connect(Game.go_to_title)
+	# the DYSLEXIA FONT switch (Game.set_dyslexic_font), at the bottom of the pause menu
+	var font_switch := Button.new()
+	font_switch.add_theme_font_size_override("font_size", UIStyle.SMALL + 1)
+	font_switch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	font_switch.text = Game.font_switch_text()
+	font_switch.pressed.connect(func() -> void:
+		Game.set_dyslexic_font(not Game.dyslexic_font)
+		font_switch.text = Game.font_switch_text())
+	$Pause/VBox.add_child(font_switch)
 	$Complete/VBox/Buttons/Next.pressed.connect(results_next.emit)
 	$Complete/VBox/Buttons/Again.pressed.connect(results_again.emit)
 	$Complete/VBox/Buttons/Skills.pressed.connect(open_skill_tree)
@@ -544,6 +556,10 @@ func _pages(speaker: String, line: String) -> PackedStringArray:
 	if page != "":
 		pages.append(page)
 	return pages
+
+
+func _fit_console_font() -> void:
+	dialogue_text.add_theme_font_size_override("normal_font_size", Game.console_font_size())
 
 
 func _text_width(font: Font, fsize: int, text: String) -> float:

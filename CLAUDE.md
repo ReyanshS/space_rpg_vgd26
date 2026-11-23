@@ -75,9 +75,25 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 **canvas_items** (Nov 2026, "scale up" + sharper UI): positions and sizes are still in game
 pixels, but everything is drawn at the window's real resolution, so text and panels are sharp
 while the pixel art keeps its pixels (movement is a bit smoother: sub pixel steps show).
-UI font: the one built into Godot (Open Sans; the theme sets no font, so nothing to credit).
+UI font (Nov 22 2026, Nilay: "find a good pixelated font", plus a dyslexia option):
+**Departure Mono** (`Assets/fonts/departure_mono/`, a monospace pixel font on an 11 px grid,
+Helena Zhang, SIL OFL: credit it). At size 11 one font pixel = one game pixel. Its import has
+`subpixel_positioning=0` and `keep_rounding_remainders=false`, so every letter steps the same
+whole number of screen pixels (with remainders on, spacing alternated: "ME NU").
+**DYSLEXIA FONT** switch (title top left, bottom of the pause menu; `Game.set_dyslexic_font`,
+saved in `user://settings.cfg`, which NEW GAME doesn't delete; off by default): OpenDyslexic
+(`Assets/fonts/opendyslexic/`, Abbie Gonzalez, SIL OFL), as a FontVariation with letter spacing
+-1 (its built-in gaps looked s p a c e d out at our sizes). How: no scene sets a font, so
+`Game.apply_font()` sets the project theme's `default_font` (Labels, Buttons) and
+`ThemeDB.fallback_font` (draw_string, `UIStyle.font()`) at runtime; the theme file is unchanged,
+so the editor previews show Godot's font. Both fonts load at runtime (`UIStyle.pixel_font()`,
+`dyslexic_font()`), not preload: a preload fails before the first import.
 Sizes in game pixels (x3 on screen): `UIStyle.SMALL` 6, `BODY` 8 (theme default), `HEAD` 11,
-`TITLE` 18; PIP's console text is 9. The pixel font m6x11 is still in `Assets/fonts`, unused.
+`TITLE` 18. PIP's console: `Game.console_font_size()` = 8 for both fonts (both are wider than
+Open Sans; at 8 every line fits two rows). StoryBeats' TOO LONG check measures both fonts.
+Tried and rejected: Pixelify Sans, Jersey 10, VT323 (uneven gaps or cramped at our small sizes).
+m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky because the old
+"viewport" stretch forced it to size 16.
 
 ## Game rules (level.gd enforces them)
 - START pad: stand on it, press **E/Space** to grab the wire. The timer starts with `wire_time`
@@ -487,5 +503,9 @@ map; canvas_items stretch for sharp text). The UI font is Godot's built-in Open 
 Nov 22 2026 (Claude, at Nilay's request): the clamp / fuse rework of Level 1 (no fuse, the clamp in
 the reactor ring, the one-lamp door to the Service Duct, the lamp door and empty socket messages),
 the NODE REST switch in the dev menu, and the node hold fix (a node reached from below holds too).
+Nov 22 2026 (Claude, at Nilay's request): picked the pixel font Departure Mono and the DYSLEXIA
+FONT switch with OpenDyslexic (both fonts by other people, free under the SIL Open Font License:
+list them in the copyright checklist with their OFL.txt; Claude only wired them in and set the
+letter spacing).
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

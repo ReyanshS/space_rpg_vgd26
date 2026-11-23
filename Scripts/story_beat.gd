@@ -58,14 +58,24 @@ enum Trigger {
 		queue_redraw()
 
 
-const CONSOLE_SIZE := 9           # the console's text size (hud.tscn, Dialogue/Row/Text)
+# The TOO LONG check measures with both of the game's fonts, at the console
+# size each one gets (game_state.gd CONSOLE_SIZE_PIXEL / CONSOLE_SIZE_DYSLEXIC):
+# the pixel font and OpenDyslexic (the DYSLEXIA FONT switch).
+const CONSOLE_SIZE := 8           # PIP's text size with either font
 const CONSOLE_WIDTH := 254.0      # pixels of text per row in PIP's console (hud.tscn)
 
 
-## Editor only: how many rows `line` takes in PIP's console at font size `size`
+## Editor only: too long for two rows in either font?
+func _too_long(line: String) -> bool:
+	for font in [UIStyle.pixel_font(), UIStyle.dyslexic_font()]:
+		if font != null and _rows(line, font, CONSOLE_SIZE) > 2:
+			return true
+	return false
+
+
+## How many rows `line` takes in PIP's console in `font` at size `size`
 ## (wrapping word by word, like the console does).
-func _rows(line: String, size: int) -> int:
-	var font := ThemeDB.fallback_font       # the game's font (see ui_style.gd)
+func _rows(line: String, font: Font, size: int) -> int:
 	var rows := 1
 	var row := speaker + ": "
 	for word in line.split(" ", false):
@@ -114,7 +124,7 @@ func _draw() -> void:
 	# Will every line fit in the two rows of PIP's console? Too long = it gets
 	# split in two in the game, and people miss half of it.
 	for i in lines.size():
-		if _rows(lines[i], CONSOLE_SIZE) > 2:
+		if _too_long(lines[i]):
 			draw_string(font, Vector2(9, y), "line %d TOO LONG: shorten it" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.3, 0.25))
 			y += 11.0
 	if point_here:

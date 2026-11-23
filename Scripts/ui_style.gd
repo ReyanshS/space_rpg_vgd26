@@ -13,9 +13,12 @@
 # and panels are drawn at the window's real resolution (sharp), while the
 # pixel art world keeps its chunky pixels.
 #
-# The font is the one built into Godot (Open Sans), so there's no font file to
-# credit. The pixel font (m6x11) is still in Assets/fonts if you want it for
-# something retro.
+# The font: the pixel font Departure Mono by default (pixel_font below), or
+# OpenDyslexic when the DYSLEXIA FONT switch is on (title screen, pause menu,
+# see Game.apply_font). Both are free (SIL Open Font License); credit them:
+# Assets/fonts/departure_mono/OFL.txt and Assets/fonts/opendyslexic/OFL.txt.
+# font() is always the one in use. The old pixel font m6x11 is still in
+# Assets/fonts, unused.
 # ---------------------------------------------------------------------------
 @tool
 class_name UIStyle
@@ -44,6 +47,47 @@ const TITLE := 18
 
 static func font() -> Font:
 	return ThemeDB.fallback_font
+
+
+# --- the two fonts (Game.apply_font puts one of them on all the text)
+# Both are loaded the first time they're asked for, not preloaded: a preload
+# fails if a script is read before Godot has imported the font (that happens
+# the first time a teammate opens the project).
+
+## Departure Mono, the game's font: a pixel font on an 11 pixel grid. At size 11
+## each of its pixels is exactly one game pixel (3 screen pixels), the same
+## size as the pixels of the art. Every letter is the same width (monospace),
+## like a ship's computer screen.
+const PIXEL_PATH := "res://Assets/fonts/departure_mono/DepartureMono-Regular.otf"
+static var _pixel: Font
+
+
+## Departure Mono, or null if the file isn't there.
+static func pixel_font() -> Font:
+	if _pixel == null and ResourceLoader.exists(PIXEL_PATH):
+		_pixel = load(PIXEL_PATH)
+	return _pixel
+
+
+## OpenDyslexic: for players with dyslexia. Its letters are heavier at the
+## bottom, so b, d, p and q don't seem to flip.
+const DYSLEXIC_PATH := "res://Assets/fonts/opendyslexic/OpenDyslexic-Regular.otf"
+## OpenDyslexic has very wide gaps between letters built in. At our small text
+## sizes that looked like s p a c e d  o u t words, so the letters are pulled
+## 1 pixel closer (a FontVariation is the font plus changes like this).
+const DYSLEXIC_SPACING := -1
+static var _dyslexic: Font
+
+
+## OpenDyslexic with the tighter letter spacing, or null if the file isn't there.
+static func dyslexic_font() -> Font:
+	if _dyslexic == null and ResourceLoader.exists(DYSLEXIC_PATH):
+		var v := FontVariation.new()
+		v.base_font = load(DYSLEXIC_PATH)
+		v.spacing_glyph = DYSLEXIC_SPACING
+		v.spacing_space = DYSLEXIC_SPACING
+		_dyslexic = v
+	return _dyslexic
 
 
 ## A glass panel style: use it for a Panel / PanelContainer, or draw it with draw_box.

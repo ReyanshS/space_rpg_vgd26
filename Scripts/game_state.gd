@@ -48,6 +48,24 @@ const O2_PER_CELL := 5.0
 ## The save file. "user://" is a folder Godot keeps for this game on the
 ## player's computer (in a web build: inside the browser's storage).
 const SAVE_PATH := "user://save.cfg"
+## Settings live in their own file, so NEW GAME (which deletes the save) keeps them.
+const SETTINGS_PATH := "user://settings.cfg"
+
+## The game's font: the pixel font Departure Mono. The DYSLEXIA FONT switch
+## (title screen, pause menu) changes it to OpenDyslexic, whose letters are
+## heavier at the bottom so b, d, p and q don't seem to flip: that helps
+## players with dyslexia. How the switch works: no scene picks a font of its
+## own, they all use the theme's default font or ThemeDB.fallback_font, so
+## changing those two changes all the text at once (apply_font). The fonts
+## themselves: UIStyle.pixel_font() and UIStyle.dyslexic_font().
+## PIP's console text size for each font, so his lines fit in its two rows
+## (both fonts are wider than Godot's built-in one).
+const CONSOLE_SIZE_PIXEL := 8
+const CONSOLE_SIZE_DYSLEXIC := 8
+const CONSOLE_SIZE_PLAIN := 9     # Godot's built-in font, if a font file is missing
+signal font_changed            # the switch was flipped (the HUD resizes PIP's text)
+var dyslexic_font := false
+var _plain_font: Font          # Godot's built-in font (Open Sans), only if a file is missing
 
 # One entry per level number, e.g. results[1] = {"time": 140.2, "cells": 7, ...}
 var results := {}
@@ -79,6 +97,11 @@ func new_game() -> void:
 
 
 func _ready() -> void:
+	_plain_font = ThemeDB.fallback_font
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK:
+		dyslexic_font = cfg.get_value("settings", "dyslexic_font", false)
+	apply_font()
 	# Buying a skill saves straight away, so quitting mid level doesn't lose it.
 	SkillManager.skill_unlocked.connect(func(_id: String) -> void: save_game())
 	# Menu buttons react to the "ui_accept" action (Enter and Space). Add E to it
@@ -91,6 +114,54 @@ func _ready() -> void:
 	# never in an exported or web build, so judges can't open it by accident.
 	if OS.has_feature("editor"):
 		add_child(preload("res://Scripts/dev_menu.gd").new())
+
+
+## Puts the chosen font on every piece of text (see the notes above dyslexic_font).
+func apply_font() -> void:
+	var f := _current_font()
+	# Labels and Buttons ask the project theme (Assets/ui/theme.tres) for a font
+	# first, so it goes there (only while the game runs; the file isn't changed).
+	# Text drawn in code (UIStyle.text, the console's pages) uses the fallback font.
+	var theme := ThemeDB.get_project_theme()
+	if theme:
+		theme.default_font = f
+	ThemeDB.fallback_font = f
+	font_changed.emit()
+
+
+## The font in use: OpenDyslexic with the switch on, else Departure Mono (or
+## Godot's built-in font if that file is missing).
+func _current_font() -> Font:
+	if dyslexic_font and UIStyle.dyslexic_font():
+		return UIStyle.dyslexic_font()
+	if UIStyle.pixel_font():
+		return UIStyle.pixel_font()
+	return _plain_font
+
+
+## PIP's console text size for the font in use (hud.gd), so his lines fit.
+func console_font_size() -> int:
+	var f := _current_font()
+	if f == UIStyle.dyslexic_font():
+		return CONSOLE_SIZE_DYSLEXIC
+	if f == UIStyle.pixel_font():
+		return CONSOLE_SIZE_PIXEL
+	return CONSOLE_SIZE_PLAIN
+
+
+## The DYSLEXIA FONT switch: change the font now and remember it.
+func set_dyslexic_font(on: bool) -> void:
+	dyslexic_font = on
+	apply_font()
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)              # (keeps any other settings in the file)
+	cfg.set_value("settings", "dyslexic_font", on)
+	cfg.save(SETTINGS_PATH)
+
+
+## The text on the switch's button.
+func font_switch_text() -> String:
+	return "DYSLEXIA FONT: " + ("ON" if dyslexic_font else "OFF")
 
 
 ## The level calls this when you finish it. It also saves the game.

@@ -10,7 +10,8 @@
 # CONTINUE instead and goes to the next level, with your skills. NEW GAME
 # appears next to it and starts over (it deletes the save).
 # Click a button, or pick one with the arrow keys and press E, Space or Enter.
-# Top left: JUDGE MODE (see _make_judge_buttons) for the TSA judges.
+# Top left: DYSLEXIA FONT on/off (Game.set_dyslexic_font), and JUDGE MODE
+# (see _make_judge_buttons) for the TSA judges.
 # Edit the texts in title.tscn: select a Label or Button and change its Text.
 # ---------------------------------------------------------------------------
 extends Node2D
@@ -67,6 +68,14 @@ func _make_judge_buttons() -> void:
 	box.position = Vector2(6, 16)
 	box.add_theme_constant_override("separation", 3)
 	$UI.add_child(box)
+	# the font switch first (see Game.DYSLEXIC_FONT): everyone sees it
+	var font_switch := Button.new()
+	font_switch.add_theme_font_size_override("font_size", UIStyle.SMALL + 1)
+	font_switch.text = Game.font_switch_text()
+	font_switch.pressed.connect(func() -> void:
+		Game.set_dyslexic_font(not Game.dyslexic_font)
+		font_switch.text = Game.font_switch_text())
+	box.add_child(font_switch)
 	var toggle := Button.new()
 	toggle.add_theme_font_size_override("font_size", UIStyle.SMALL + 1)
 	box.add_child(toggle)

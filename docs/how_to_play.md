@@ -101,6 +101,10 @@ they leave behind. At the end of each level you get up to three stars.
 - The game saves when you finish a level or unlock a skill. The title screen then offers
   **Continue** or **New game** (which deletes the save).
 
+## Easier to read
+- **DYSLEXIA FONT** (title screen, top left, and at the bottom of the pause menu) switches
+  all the text to OpenDyslexic, a font made for readers with dyslexia. The game remembers it.
+
 ## If you get stuck
 - Zapped somewhere with no safe way back to the START? An **[R]** appears over you:
   press R to go straight back to the START.

@@ -52,7 +52,8 @@ do a **spacewalk** to rewire it, then come back in through a hatch.
 - **Rewarding**: power cells to collect with clever routes, a ship power meter, a results screen
   with stars, and the cells carry over as extra oxygen for the spacewalk.
 - **The team can edit the maps** in Godot's editor by painting tiles, not by changing code.
-- **Text is readable**: pixel style, but clean (the m6x11 font).
+- **Text is readable**: pixel style, but clean (the Departure Mono font), and a DYSLEXIA FONT
+  switch (OpenDyslexic) on the title screen and the pause menu.
 
 **How we work:** AI is allowed for TSA 2026-27, but the team has to *understand* everything in
 the game. Every change gets explained, with "check yourself" tasks.
