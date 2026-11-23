@@ -4,8 +4,8 @@
 #   amber room   powered          blue room    you've been in, no power yet
 #   dark room    not visited yet  grey room    a hall (nothing to solve)
 #   white dot    you (it blinks)
-#   doors        green = open, red = shut, amber = needs a fuse,
-#                big red/green = the main door
+#   doors        green = open, red = shut (a lamp door: it opens when its
+#                lamps are lit), amber = needs a fuse
 #   amber dot    a fuse lying there     purple dot   the cable clamp
 #   small number how many batteries are still in that room
 # It asks the level for everything (level.gd, map_info()) and draws it with
@@ -113,8 +113,18 @@ func _draw() -> void:
 	# the key, along the bottom
 	var y := panel.end.y - 8
 	var x := panel.position.x + 10
-	for k in [[AMBER.darkened(0.25), "powered"], [DIM, "no power"], [AMBER, "fuse door"],
-			[Color(1.0, 0.2, 0.15), "main door"], [Color.WHITE, "you"]]:
+	# (only what this level has: no "fuse door" in a level without fuses)
+	var has := func(list: Array, kind: String) -> bool:
+		return list.any(func(e: Dictionary) -> bool: return e["kind"] == kind)
+	var key := [[AMBER.darkened(0.25), "powered"], [DIM, "no power"]]
+	if has.call(_info["doors"], "fuse_door"):
+		key.append([AMBER, "fuse door"])
+	if has.call(_info["doors"], "main_door"):
+		key.append([Color(1.0, 0.2, 0.15), "lamp door"])
+	if has.call(_info["items"], "clamp") or _info["clamp_at"].x >= 0:
+		key.append([Color(0.75, 0.47, 1.0), "clamp"])
+	key.append([Color.WHITE, "you"])
+	for k in key:
 		var dot := StyleBoxFlat.new()
 		dot.set_corner_radius_all(2)
 		dot.bg_color = k[0]

@@ -62,6 +62,10 @@ var judge_mode := false
 ## The dev menu (dev_menu.gd) sets this to the room to start in when the next
 ## level loads (-1 = the normal start). The level reads it once and resets it.
 var dev_room := -1
+## NODE REST, a rule to try out (the dev menu switches it on and off): while the
+## wire is latched on a node and you stand close to it, the timer waits.
+## level.gd _node_rest() reads it. Not saved: every run starts with it off.
+var node_rest := false
 # Tips PIP already gave (so he explains something only once, even across levels)
 var _tips_seen := {}
 

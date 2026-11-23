@@ -7,6 +7,10 @@
 # TestStart marker does with F6, see test_start.gd). Room 1 is the normal start,
 # with PIP's intro.
 #
+# At the top there's an on/off switch for a rule we're trying out: NODE REST
+# (Game.node_rest, used by level.gd _node_rest). Flip it and keep playing: it
+# works straight away. Every run starts with it off.
+#
 # Game (game_state.gd) only adds this menu when the game runs from the Godot
 # editor (F5 / F6). Exported and web builds never have it.
 #
@@ -136,6 +140,8 @@ func _build() -> void:
 	top.add_child(gap)
 	top.add_child(KeyHint.make(["`"], "close", DIM))
 
+	box.add_child(_rule_switch())
+
 	var columns := HBoxContainer.new()
 	columns.add_theme_constant_override("separation", 8)
 	box.add_child(columns)
@@ -143,6 +149,26 @@ func _build() -> void:
 		columns.add_child(_level_column(i + 1, Game.LEVELS[i]))
 
 	box.add_child(_label("Earlier rooms start powered. Room 1 = normal start.", DIM))
+
+
+## An on/off button for a rule we're trying out: NODE REST (Game.node_rest).
+## It works straight away, in the level you're in too. Every run starts with it off.
+func _rule_switch() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var b := Button.new()
+	b.toggle_mode = true
+	b.button_pressed = Game.node_rest
+	b.add_theme_font_size_override("font_size", UIStyle.SMALL + 1)
+	var write_text := func() -> void:
+		b.text = "NODE REST: " + ("ON" if Game.node_rest else "OFF")
+	write_text.call()
+	b.toggled.connect(func(on: bool) -> void:
+		Game.node_rest = on
+		write_text.call())
+	row.add_child(b)
+	row.add_child(_label("Wire on a node and you stay close: the timer waits.", DIM))
+	return row
 
 
 ## One column: the level's name, then a button per room.

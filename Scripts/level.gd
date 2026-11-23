@@ -41,6 +41,10 @@
 #     max_wire_time (not even with batteries).
 #   - NODE: wraps the wire and adds node_time seconds. Standing on it holds the
 #     timer, but only for node_hold seconds: you can't rest there for ever.
+#   - NODE REST (a switch in the dev menu, off unless you turn it on): while the
+#     wire is latched on a node (the node is the last pad it touched) and you stay
+#     within node_rest_radius of it, the timer waits as long as you like. Time to
+#     look round the room. (_node_rest)
 #   - POLE (purple post): solid, you walk round it. When the wire sweeps across
 #     it, the wire wraps round it like a rope round a post (_update_wraps).
 #     Walk back the way you came and it unwraps. It gives no time; it lets the
@@ -87,8 +91,11 @@
 #     are open from the start. Halls join the puzzle rooms like a hub.
 #   - FUSE (pickup) and FUSE DOOR: walk over a fuse to pick it up (the console
 #     counts them). Walk into a fuse door with one and it opens, using it up.
-#   - MAIN DOOR: needs power from several places. Each PowerLink with the action
-#     "unlock" that points at it lights one of its lamps; all lit = it opens.
+#     (No level uses fuses right now. Level 1 uses lamp doors instead.)
+#   - MAIN DOOR (the red lamp door): needs power from somewhere else. Each
+#     PowerLink with the action "unlock" that points at it lights one of its
+#     lamps; all lit = it opens. One link = a door with one lamp. Walk into it
+#     and the popup says how many lamps are lit (popup_lamps).
 #   - POWER LINKS (power_link.gd): a marker on a room's goal with markers on
 #     tiles anywhere in the level. When that room gets power, those tiles change:
 #     doors open or close, barriers sink or rise, red floors switch off or on,
@@ -96,6 +103,8 @@
 #   - The CLAMP (pickup): a cable clamp you carry. Press E next to a SOCKET tile
 #     to drop it in (or take it back). In a socket it works like a pole: the
 #     wire wraps round it. Puzzles that need a corner where there isn't one.
+#     Walk up to a socket without the clamp and PIP says where to look
+#     (pip_socket_empty).
 #   - M opens the ship map (hud.gd), drawn from map_info().
 #
 # Movable crates (push_crate.gd; tile kind "box", map char c)
@@ -215,6 +224,9 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var max_wire_time := 5.0
 ## Standing on a NODE holds the timer for this many seconds, then it runs again.
 @export var node_hold := 1.5
+## Only with NODE REST switched on in the dev menu: how close (in pixels, a tile
+## is 32) you must stay to the node the wire is latched on for the timer to wait.
+@export var node_rest_radius := 48.0
 ## A room's own START time, one number per room in walking order (like Room
 ## Names). 0 or missing = use wire_time. Lets an easy room (a tutorial) or a
 ## long one get more time without changing the whole level.
@@ -304,6 +316,10 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var popup_fuse_used := "FUSE FITTED. DOOR OPEN"
 @export var popup_fuse_locked := "LOCKED. IT NEEDS A FUSE"
 @export var popup_clamp := "GOT THE CABLE CLAMP"
+## Walking into a lamp door that's still shut. {lit} and {needs} = its lamps.
+@export var popup_lamps := "LOCKED. LAMPS LIT: {lit} OF {needs}"
+## Walking up to a clamp socket without the clamp.
+@export var popup_socket_empty := "THIS SOCKET TAKES THE CABLE CLAMP"
 @export var popup_crate_grounded := "SHORTED OUT. SAFE TO CROSS"
 @export var popup_crates_reset := "CRATES PUT BACK"
 
@@ -322,6 +338,10 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var pip_clamp := "A cable clamp. Press E by a purple socket to set it down."
 ## The first time you put the clamp in a socket.
 @export var pip_clamp_placed := "Now the wire wraps round it, like a pillar. E takes it back out."
+## The first time you walk up to a socket without the clamp (say where it is).
+@export var pip_socket_empty := "That socket takes a cable clamp. Have a look round for one."
+## The first time you walk into a lamp door that's still shut.
+@export var pip_lamps := "Each lamp on a red door is a room that has to get power first."
 ## The first time you push a movable crate.
 @export var pip_crate := "Those striped crates roll. Lean on one and it moves a tile."
 ## The first time a crate shorts out a red tile.
@@ -452,6 +472,7 @@ var _visited := {}             # Room -> true once you've walked in (for the shi
 var _main_groups: Array = []   # main doors: {"tiles": [...], "needs": n, "lit": n}
 var _main_group_of := {}       # main door tile -> index in _main_groups
 var _locked_msg_cd := 0.0      # don't repeat "it's locked" every frame
+var _socket_tip_shown := false # PIP said where the clamp is (once per level)
 
 # --- movable crates (push_crate.gd)
 const PUSH_LEAN := 0.14        # seconds you lean on a crate before it rolls
@@ -974,7 +995,8 @@ func _glance_at(pos: Vector2) -> void:
 	_cutscene = false
 
 
-## Walking about: pick up fuses and the clamp, and open fuse doors you bump into.
+## Walking about: pick up fuses and the clamp, open fuse doors you bump into,
+## and say why a lamp door or a socket won't do anything yet.
 func _check_dungeon() -> void:
 	for c in _pickups.keys():
 		if _touching(center_of(c), PICKUP_RADIUS):
@@ -983,21 +1005,38 @@ func _check_dungeon() -> void:
 	var here := cell_of(player.position)
 	for d in DIRS4:
 		var c := here + d
-		if kind_at(c) != "fuse_door" or _open_doors.has(c):
+		if _open_doors.has(c) or center_of(c).distance_to(player.position) > 24.0:
 			continue
-		if center_of(c).distance_to(player.position) > 24.0:
-			continue
-		if _fuses > 0:
-			_fuses -= 1
-			hud.set_fuses(_fuses)
-			_open_door_tiles(_door_group(c))
-			hud.show_toast(popup_fuse_used, 2.0)
-			door_unlocked.emit(_room_index_beyond(c))
-		elif _locked_msg_cd <= 0.0:
+		var kind := kind_at(c)
+		if kind == "fuse_door":
+			if _fuses > 0:
+				_fuses -= 1
+				hud.set_fuses(_fuses)
+				_open_door_tiles(_door_group(c))
+				hud.show_toast(popup_fuse_used, 2.0)
+				door_unlocked.emit(_room_index_beyond(c))
+			elif _locked_msg_cd <= 0.0:
+				_locked_msg_cd = 3.0
+				hud.show_toast(popup_fuse_locked, 2.0)
+				if Game.first_time("fuse_locked"):
+					_pip_say(pip_fuse_locked)
+		elif kind == "main_door" and _main_group_of.has(c) and _locked_msg_cd <= 0.0:
+			# a lamp door: the popup counts its lamps, so you know how far you are
+			var g: Dictionary = _main_groups[_main_group_of[c]]
 			_locked_msg_cd = 3.0
-			hud.show_toast(popup_fuse_locked, 2.0)
-			if Game.first_time("fuse_locked"):
-				_pip_say(pip_fuse_locked)
+			hud.show_toast(popup_lamps.format({"lit": g["lit"], "needs": g["needs"]}), 2.0)
+			if Game.first_time("lamps_locked"):
+				_pip_say(pip_lamps)
+	# next to a clamp socket with no clamp anywhere in reach: say where to look
+	if not _has_clamp and _clamp_at.x < 0 and _locked_msg_cd <= 0.0:
+		for s in _sockets:
+			if center_of(s).distance_to(player.position) <= SOCKET_REACH:
+				_locked_msg_cd = 3.0
+				hud.show_toast(popup_socket_empty, 2.0)
+				if not _socket_tip_shown:
+					_socket_tip_shown = true
+					_pip_say(pip_socket_empty)
+				break
 
 
 func _take_pickup(c: Vector2i, quiet := false) -> void:
@@ -2683,11 +2722,22 @@ func _timer_paused() -> bool:
 	return _paused_node.x >= 0 and _node_hold_left > 0.0
 
 
+## NODE REST (the dev menu switch, Game.node_rest): the wire is latched on a
+## node (that node is the last thing it touched, no pole after it) and you're
+## within node_rest_radius of it. Then the timer waits for as long as you like.
+func _node_rest() -> bool:
+	if not Game.node_rest or _anchor_cells.is_empty():
+		return false
+	var c: Vector2i = _anchor_cells[-1]
+	return kind_at(c) == "node" and player.position.distance_to(center_of(c)) <= node_rest_radius
+
+
 func _tick_timer(delta: float) -> void:
-	var paused := _timer_paused() or autopilot_on    # PIP's autopilot never runs out of time
-	if paused:
+	# PIP's autopilot never runs out of time, and neither does a node rest
+	var paused := _timer_paused() or autopilot_on or _node_rest()
+	if _timer_paused():
 		_node_hold_left -= delta        # a node only holds the timer for so long
-	else:
+	elif not paused:
 		_time_left -= delta
 	var frac := clampf(_time_left / _max_time(), 0.0, 1.0)
 	_wire.set_urgency(1.0 - frac)
@@ -2778,7 +2828,9 @@ func player_moved() -> void:
 	if _wire == null:
 		return
 	# Standing on a node pauses the timer; it starts again once you step off.
-	if _paused_node.x >= 0 and player.position.distance_to(center_of(_paused_node)) > NODE_RADIUS + 4.0:
+	# "On it" is the same test as touching it (feet, or a bit higher up), else
+	# coming at a node from below would step you off it the moment you touch it.
+	if _paused_node.x >= 0 and not _touching(center_of(_paused_node), NODE_RADIUS + 4.0):
 		_set_paused_node(Vector2i(-1, -1))
 	# Did the wire sweep across a pole (wrap round it), or back again (unwrap)?
 	_update_wraps(_prev_feet, player.position)

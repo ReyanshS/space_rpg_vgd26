@@ -33,9 +33,9 @@ paint. Untick **Show Layout In Editor** on the level node to see it without the 
 | spawn / exit | `P` / `E` | where you start / walking onto it finishes the level |
 | hull / space / airlock | `,` / `~` / `A` | spacewalk tiles (Level 2) |
 | core | `@` | Level 3: power the room by looping the wire all the way round it |
-| fuse | `f` | pickup: walk over it. The console counts your fuses |
+| fuse | `f` | pickup: walk over it. The console counts your fuses (no level uses fuses right now) |
 | fuse door | `F` | amber door: walk into it with a fuse and it opens (uses the fuse) |
-| main door | `M` | big red door: opens when every power link pointing at it has lit its lamp |
+| main door | `M` | red lamp door: opens when every power link pointing at it has lit its lamp. One link = one lamp, so it also works as a small "powered from over there" door |
 | socket | `o` | where the cable clamp can be set down (E next to it). In a socket the clamp works like a pole |
 | clamp | `k` | the cable clamp lying on the floor: walk over it to pick it up (one per level) |
 | movable crate | `c` | steel crate with yellow stripes (the last tile in the palette): walk into it and it rolls one tile. Blocks you and the wire. Rolled onto a red tile, it shorts it out: that tile becomes safe for you and the wire |
@@ -74,17 +74,27 @@ take a minute on a room with crates.
 
 Level 1 is built like a small dungeon: the Reactor Hall is a hub with three wings you
 can do in different orders, and the main door only opens when all three are powered.
+Two chains, in any order:
+- the **reactor ring** in the hub (roll a crate onto it) holds the **cable clamp**, which
+  **Coolant Pumps** needs;
+- the **Cable Store** is open, and powering it lights the one lamp of the red door to the
+  **Service Duct**, the way to **Reactor Access**.
+Keep it that way when you change things: every item is found in one place and used in
+another, and every locked door shows what opens it (lamps).
 - **Power links** are the switches. Add a **PowerLink** (right-click Links > Add Child
   Node > PowerLink), drag it onto a room's goal, give it Marker2D children and drag
   each onto a tile it should change. **Action**: OPEN or CLOSE a door or barrier,
   RED_OFF or RED_ON a red floor (the whole patch touching the marker), or UNLOCK
   (lights one lamp of a main door). **Show Camera** glides the camera over so the
   player sees what changed. The editor draws a dotted line from the link to each target.
-- A **main door** has one lamp per UNLOCK link pointing at it.
+- A **main door** has one lamp per UNLOCK link pointing at it. Walk into a shut one and
+  the popup counts its lamps (**Popup Lamps**).
 - **Fuses** open fuse doors. Make sure there are never more fuse doors on the way than
   fuses the player can reach (or they get stuck).
 - The **clamp**: put a few **sockets** in a room, only one in the right place. That's a
   "think first" puzzle: the solver says "needs the clamp" when there's no route without it.
+  Walk up to a socket without the clamp and PIP says where to look: write that in **Pip
+  Socket Empty** (level node, Inspector > PIP's dungeon lines).
 - **Walkthrough** (level node, Inspector > Level): the room numbers in the order PIP's
   autopilot does them (judge mode). Halls are skipped.
 - Press **M** in the game for the deck map.
@@ -218,6 +228,12 @@ every room of every level: pick one and that level loads with you on the room's
 START pad and every room before it powered (the same as a TestStart flag, nothing
 to drag). Room 1 is the normal start with PIP's intro. **Esc** or **`** closes it.
 New rooms show up in the list by themselves. Exported and web builds don't have it.
+
+At the top of the dev menu is **NODE REST: OFF/ON**, a rule we're trying out. When it's
+on: while the wire is latched on a node (the node is the last thing it touched) and you
+stay close to it (about a tile and a half, **Node Rest Radius** in Rules), the timer
+waits. Time to look round the room before you go. Flip it and keep playing, it works
+straight away. Every run starts with it off. If the team likes it, it can become a real rule.
 
 ## 8. Check the puzzle with the solver
 

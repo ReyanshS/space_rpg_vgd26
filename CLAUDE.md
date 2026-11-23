@@ -5,7 +5,7 @@ must be documented). Title **STAR CIRCUIT** (the team's name). The player is an 
 power to a dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship's
 maintenance AI. `Scenes/title.tscn` is the main scene (logo: `Assets/images/ui/logo.png`) ->
 `level_1.tscn` (Engineering Deck: the team's 3 tutorial rooms, then a small dungeon: the Reactor
-Hall hub (the fuse sits in a live reactor ring: roll a crate in to short a way through) with 3
+Hall hub (the cable clamp sits in a live reactor ring: roll a crate in to short a way through) with 3
 wings and a main door, then the Generator Room: 3 stages split by cargo barriers, ending in
 blinking grates; see "Dungeon parts" and "Movable crates") -> `level_2.tscn` (Main Deck: bridge,
 airlock, spacewalk across one open hull) -> `level_3.tscn` (The Core: PIP malfunctions and you
@@ -86,7 +86,13 @@ Sizes in game pixels (x3 on screen): `UIStyle.SMALL` 6, `BODY` 8 (theme default)
   player's hands; it can't pass through walls, crates, doors or live red tiles, so steps that would
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
 - NODE (orange): wraps the wire and ADDS `node_time` (no full refill), capped at `max_wire_time`.
-  Standing on it holds the clock, but only for `node_hold` s. Touch radius 22 px.
+  Standing on it holds the clock, but only for `node_hold` s. Touch radius 22 px. "Standing on
+  it" uses the same test as touching (feet or `BODY_UP` higher), so a node reached from below
+  holds too (before Nov 22 2026 it didn't).
+- NODE REST (being tried out; dev menu switch `Game.node_rest`, off by default, not saved):
+  wire latched on a node (`_anchor_cells[-1]` is a node) and feet within `node_rest_radius`
+  (48 px) of it = the timer waits with no limit (`_node_rest()` in `_tick_timer`). The solver
+  ignores it (it only makes rooms easier). To make it a real rule, set it on and test the rooms.
 - POLE (a steel support pillar with a purple cable ring, map char `B`, tile kind `pole`; was the
   "bend" until Nov 2026): solid for
   feet, not for the wire. Looks: `Assets/images/tiles/pillar.png` (32x64, foot on the tile's
@@ -137,15 +143,25 @@ Sizes in game pixels (x3 on screen): `UIStyle.SMALL` 6, `BODY` 8 (theme default)
 
 ## Dungeon parts (Nov 2026: "make it less linear, like a Zelda dungeon")
 - Level 1 is a dungeon: tutorial rooms 1-3 (the team's), then the REACTOR HALL hub with three
-  wings: CABLE STORE (open; its cargo hides the clamp; the fuse is in the hub's reactor ring), COOLANT PUMPS (open, needs the
-  clamp: `needs the clamp` in the solver), REACTOR ACCESS (the team's old room 4, behind a fuse
-  door). Each wing's goal has a PowerLink UNLOCK to the MAIN DOOR, which opens onto the
-  Generator Room finale. Built by `tools/maps/build_level1_dungeon.py`. Order: B, then A and C in
-  any order. Room numbers changed (halls count): room_titles / room_wire_time are 14 long.
+  wings, two chains you can do in any order:
+  - hub reactor ring (crate puzzle) -> the CABLE CLAMP -> COOLANT PUMPS (needs it: `needs the
+    clamp` in the solver).
+  - CABLE STORE (open) -> its PowerLink `CableStoreDuct` lights the one lamp of the red lamp door
+    to the SERVICE DUCT -> REACTOR ACCESS (the team's old room 4).
+  Each wing's goal also has a PowerLink UNLOCK to the MAIN DOOR (3 lamps), which opens onto the
+  Generator Room finale. Rooms: 13 (halls count), so room_titles / room_wire_time are 13 long.
+- Nov 22 2026 rework (Nilay: "the clamp and the fuse don't make sense, they're right next to each
+  other"): the fuse is gone from Level 1 (the fuse door became a one-lamp main door), the clamp
+  moved from the Cable Store's barrier stash into the reactor ring, so you see it the moment you
+  walk into the hub, and the stash was walled up (it was its own room, so the rooms after it
+  moved down one: Generator Room is 10-12, walkthrough 1,2,3,7,5,9,10,11,12). Each item now has
+  one job, found in one place and used in another. Fuse tiles still work if a level wants them.
 - A **hall** = a room with no START and no goal/core (`is_hall()`): never a puzzle, its doors open
   at the start (`_setup_dungeon`), it never sinks barriers.
-- Tiles (map char): `fuse` f (pickup), `fuse_door` F (opens if you carry a fuse), `main_door` M
-  (lamps = UNLOCK links pointing at it), `socket` o, `clamp` k (pickup, one per level). Art:
+- Tiles (map char): `fuse` f (pickup), `fuse_door` F (opens if you carry a fuse; no level uses
+  them now), `main_door` M (the red lamp door: lamps = UNLOCK links pointing at it, one link = one
+  lamp; walking into it shows `popup_lamps` and PIP's `pip_lamps` once), `socket` o, `clamp` k
+  (pickup, one per level). Art:
   `tools/art_dungeon.py` (puzzle frames 14-16, palette 18-22). Pickups draw themselves
   (`Scripts/pickup.gd`).
 - **PowerLink** (`Scripts/power_link.gd`, @tool Marker2D under a "Links" node): sits on a goal,
@@ -153,7 +169,9 @@ Sizes in game pixels (x3 on screen): `UIStyle.SMALL` 6, `BODY` 8 (theme default)
   `show_camera` (`_glance_at`). Applied in `_solve()` after `_open_exit_doors` (`_apply_links`),
   and quietly by `_power_quietly`. Red floors switched off live in `_red_off`; use `_is_red(c)`.
 - **Clamp**: E next to a socket (no wire) drops / takes it (`_try_clamp`); in a socket it's added
-  to `_poles`, so the wrap rule is the pole rule. The solver tries every socket.
+  to `_poles`, so the wrap rule is the pole rule. The solver tries every socket. Near a socket
+  without the clamp: `popup_socket_empty` + PIP's `pip_socket_empty` once per level (Level 1
+  sets it to "...There's one in the reactor ring.").
 - **Ship map** (M): `Scripts/ship_map.gd`, drawn from `level.map_info()`; only in levels with
   halls / fuse doors / main doors / links (`hud.set_map_available`).
 - Console: fuse count and clamp icon (hud.gd `set_fuses`, `set_clamp`).
@@ -186,12 +204,11 @@ Sizes in game pixels (x3 on screen): `UIStyle.SMALL` 6, `BODY` 8 (theme default)
   wired). A route's "pushes" = [[x, y, dx, dy], ...].
 - Autopilot: resets the room's crates, does the route's pushes (`_push`: walk behind, lean),
   then the wire; hall plans run once, as soon as he can walk into that hall (`_do_hall_plans`).
-- Level 1 uses: REACTOR HALL (fuse in a 2 thick red ring, 2 crates: the one under the entrance
-  pushed down twice is the way in), CABLE STORE (rebuilt bigger: a red strip across the room;
-  short out the one tile (13,26) on the line START -> node; 2 crates, at least 3 pushes; lowest
-  timer 1.52 s), COOLANT PUMPS (a crate on the clamp's line). Built by
-  `tools/maps/build_level1_crates.py` (from the dungeon map). The fuse moved from the Cable Store
-  stash to the hub (the stash keeps the clamp).
+- Level 1 uses: REACTOR HALL (the clamp in a 2 thick red ring, 2 crates: the one under the
+  entrance pushed down twice is the way in), CABLE STORE (rebuilt bigger: a red strip across the
+  room; short out the one tile (13,26) on the line START -> node; 2 crates, at least 3 pushes;
+  lowest timer 1.52 s), COOLANT PUMPS (a crate on the clamp's line). Built by
+  `tools/maps/build_level1_crates.py` (from the dungeon map), then the clamp / fuse rework above.
 
 ## Making levels in the editor (Nov 22 2026, team: "it should be very easy to create levels")
 - Painting is all it takes: each palette tile's `kind` gives it its art and its rules live.
@@ -467,5 +484,8 @@ and push.wav), the reworked Level 1 hub and Cable Store and the Coolant Pumps cr
 then walked by the autopilot in the real game), the editor's room labels and growing room lists,
 the dev menu, and the "clean sci-fi" UI restyle (ui_style.gd, theme, HUD, title, skill tree,
 map; canvas_items stretch for sharp text). The UI font is Godot's built-in Open Sans.
+Nov 22 2026 (Claude, at Nilay's request): the clamp / fuse rework of Level 1 (no fuse, the clamp in
+the reactor ring, the one-lamp door to the Service Duct, the lamp door and empty socket messages),
+the NODE REST switch in the dev menu, and the node hold fix (a node reached from below holds too).
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

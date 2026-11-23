@@ -60,11 +60,12 @@ they leave behind. At the end of each level you get up to three stars.
 ## Exploring the deck (Level 1)
 - Some rooms lead on to several others. The **Reactor Hall** has three wings: power all three
   and the big **main door** opens (a lamp lights on it for each wing).
-- **Fuses** lie around the ship: walk over one to take it. An **amber door** opens when you walk
-  into it with a fuse.
-- The **cable clamp**: once you find it, press **E** next to a purple **socket** to set it
-  down. The wire wraps round it like a pillar, so you can make a corner where you need one.
-  E again takes it back. Only one socket is ever the right one.
+- **Red lamp doors** open when power reaches them from somewhere else: each lamp is a room
+  you have to power first. Walk into one to see how many lamps are lit.
+- The **cable clamp** lies in the middle of the live reactor ring in the Reactor Hall. Once
+  you have it, press **E** next to a purple **socket** to set it down. The wire wraps round it
+  like a pillar, so you can make a corner where you need one. E again takes it back. Only one
+  socket is ever the right one.
 - **Movable crates** (steel, with yellow stripes): walk into one and keep walking, and it rolls
   a tile. Crates block the wire too, so move them out of the way first. Roll one onto a red
   tile and it shorts it out: that tile is safe to walk on, and the wire can cross it.
