@@ -18,7 +18,8 @@ import re, struct, sys
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
 SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'pole': 'B',
           'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
-          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@'}
+          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@',
+          'fuse': 'f', 'fuse_door': 'F', 'main_door': 'M', 'socket': 'o', 'clamp': 'k'}
 
 if len(sys.argv) < 3:
     sys.exit('usage: python tools/map_to_scene.py <map.txt> <scene.tscn>')

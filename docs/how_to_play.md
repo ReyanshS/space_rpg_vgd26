@@ -57,6 +57,16 @@ they leave behind. At the end of each level you get up to three stars.
   2 seconds to your timer. You keep them once you reach the GOAL, and every one you keep gives
   your space suit 5 more seconds of oxygen later.
 
+## Exploring the deck (Level 1)
+- Some rooms lead on to several others. The **Reactor Hall** has three wings: power all three
+  and the big **main door** opens (a lamp lights on it for each wing).
+- **Fuses** lie around the ship: walk over one to take it. An **amber door** opens when you walk
+  into it with a fuse.
+- The **cable clamp**: once you find it, press **E** next to a purple **socket** to set it
+  down. The wire wraps round it like a pillar, so you can make a corner where you need one.
+  E again takes it back. Only one socket is ever the right one.
+- **M** shows the deck map: which rooms have power, which doors are locked, where you are.
+
 ## Spacewalk (Level 2)
 - Outside the ship you walk on **hull plates**. There is no floor between plates: walk straight
   off an edge and you **drift** across the gap to the next plate (only if there's one straight
@@ -89,6 +99,8 @@ they leave behind. At the end of each level you get up to three stars.
 ## If you get stuck
 - Zapped somewhere with no safe way back to the START? An **[R]** appears over you:
   press R to go straight back to the START.
+- **Judge mode** (title screen, top left): pick any level, and press **R** in a level to let
+  PIP walk the room for you. Press R again for the next one.
 
 ## Stars
 1. Finish the level. 2. Charge every power cell. 3. Few retries (no more than one per puzzle).

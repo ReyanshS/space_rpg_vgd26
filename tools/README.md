@@ -17,6 +17,9 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | `astro2.py` | Generates the v2 astronaut sheet `astronaut_v2.png` from text-drawn body parts | `python tools/astro2.py` |
 | `art_space.py` | Draws the Level 2 art: hull plates, gangway + airlock pad pictures, the 4 new palette icons, planet and nebula | `python tools/art_space.py` |
 | `maps/build_level2.py` | How Level 2's first map was pasted together from separately-solved pieces (reference only — edit Level 2 in Godot now) | `python tools/maps/build_level2.py` |
+| `art_dungeon.py` | Draws the dungeon tiles: fuse door, main door and clamp socket into `puzzle_tiles.png` frames 14-16, and the palette icons (fuse, fuse door, main door, socket, clamp) into `layout_tiles.png` frames 18-22 | `python tools/art_dungeon.py` |
+| `sfx_intro.py` | Makes the three looping sounds under the intro cutscene (`intro_alarm.wav`, `intro_space.wav`, `intro_wake.wav`) | `python tools/sfx_intro.py` |
+| `maps/build_level1_dungeon.py` | How Level 1 became a dungeon (hub, three wings, main door). Reference only: edit Level 1 in Godot now | see the file |
 | `art_pillar.py` | Draws the POLE as a support pillar: `Assets/images/tiles/pillar.png` (the 32x64 column), `pillar_glow.png` (its purple ring, made to shine), the steel floor plate in `puzzle_tiles.png` frame 3 and the palette icon in `layout_tiles.png` frame 5 | `python tools/art_pillar.py` |
 | `art_barrier.py` | Draws the BARRIER tile (crate on a lift, hazard stripes) into `puzzle_tiles.png` frame 12 and its palette icon into `layout_tiles.png` frame 16 | `python tools/art_barrier.py` |
 | `art_ui.py` | Draws the UI frames `Assets/ui/frame_screen.png` (riveted bezel + green screen) and `frame_plate.png` (riveted plate) | `python tools/art_ui.py` |

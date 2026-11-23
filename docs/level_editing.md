@@ -33,10 +33,35 @@ paint. Untick **Show Layout In Editor** on the level node to see it without the 
 | spawn / exit | `P` / `E` | where you start / walking onto it finishes the level |
 | hull / space / airlock | `,` / `~` / `A` | spacewalk tiles (Level 2) |
 | core | `@` | Level 3: power the room by looping the wire all the way round it |
+| fuse | `f` | pickup: walk over it. The console counts your fuses |
+| fuse door | `F` | amber door: walk into it with a fuse and it opens (uses the fuse) |
+| main door | `M` | big red door: opens when every power link pointing at it has lit its lamp |
+| socket | `o` | where the cable clamp can be set down (E next to it). In a socket the clamp works like a pole |
+| clamp | `k` | the cable clamp lying on the floor: walk over it to pick it up (one per level) |
 
 Rules the game checks:
-- Every room needs exactly **one START** and **one GOAL or CORE**. The Output panel
-  warns you if one is missing.
+- Every room needs exactly **one START** and **one GOAL or CORE**, except a **hall**: a
+  room with neither (a corridor, a hub). Halls never lock anything: their doors are open
+  from the start. The Output panel warns you if a puzzle room is missing something.
+
+## 1b. Dungeon parts: halls, fuses, the main door, the clamp, power links
+
+Level 1 is built like a small dungeon: the Reactor Hall is a hub with three wings you
+can do in different orders, and the main door only opens when all three are powered.
+- **Power links** are the switches. Add a **PowerLink** (right-click Links > Add Child
+  Node > PowerLink), drag it onto a room's goal, give it Marker2D children and drag
+  each onto a tile it should change. **Action**: OPEN or CLOSE a door or barrier,
+  RED_OFF or RED_ON a red floor (the whole patch touching the marker), or UNLOCK
+  (lights one lamp of a main door). **Show Camera** glides the camera over so the
+  player sees what changed. The editor draws a dotted line from the link to each target.
+- A **main door** has one lamp per UNLOCK link pointing at it.
+- **Fuses** open fuse doors. Make sure there are never more fuse doors on the way than
+  fuses the player can reach (or they get stuck).
+- The **clamp**: put a few **sockets** in a room, only one in the right place. That's a
+  "think first" puzzle: the solver says "needs the clamp" when there's no route without it.
+- **Walkthrough** (level node, Inspector > Level): the room numbers in the order PIP's
+  autopilot does them (judge mode). Halls are skipped.
+- Press **M** in the game for the deck map.
 - Rooms are numbered in the order you walk to them from the spawn. That number is
   what "room" means everywhere else (room names, PIP's beats, `malfunction_room`...).
 
@@ -179,6 +204,22 @@ python tools/solver2.py tools/out/level1.txt
 
 It lists every route that works in time, and whether each battery can be reached.
 "0 solutions" = nobody can solve that room. More in `tools/README.md`.
+
+**Then update PIP's autopilot routes** (judge mode walks these), or he powers the
+changed room without walking it:
+
+```
+python tools/solver2.py Scenes/level_1.tscn --paths Data/routes/level_1.json --margin 3
+```
+
+## 9. Judge mode (for the TSA judges)
+
+On the title screen, top left: **JUDGE MODE**. When it's on:
+- LEVEL 1 / 2 / 3 buttons appear, so a judge can jump straight to any level.
+- In a level, **R** makes PIP take over: he walks to the next room, sets the clamp
+  down if it's needed, grabs the wire and walks the route (no timer, no zaps). Then
+  you get the controls back. R again for the next room. After two fails PIP says
+  "Press R and I'll walk you through it" instead of offering a hint.
 
 ## Common mistakes
 

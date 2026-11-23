@@ -82,6 +82,22 @@
 #     isn't part of the rules: it listens to the level's signals, and it can
 #     call cut_wire(), set_alert(), hold() and let_go().
 #
+# Dungeon parts (so a level isn't just one room after another)
+#   - A room with no START and no goal (a hall) never locks anything: its doors
+#     are open from the start. Halls join the puzzle rooms like a hub.
+#   - FUSE (pickup) and FUSE DOOR: walk over a fuse to pick it up (the console
+#     counts them). Walk into a fuse door with one and it opens, using it up.
+#   - MAIN DOOR: needs power from several places. Each PowerLink with the action
+#     "unlock" that points at it lights one of its lamps; all lit = it opens.
+#   - POWER LINKS (power_link.gd): a marker on a room's goal with markers on
+#     tiles anywhere in the level. When that room gets power, those tiles change:
+#     doors open or close, barriers sink or rise, red floors switch off or on,
+#     main doors get a lamp. The camera glances over so you see what changed.
+#   - The CLAMP (pickup): a cable clamp you carry. Press E next to a SOCKET tile
+#     to drop it in (or take it back). In a socket it works like a pole: the
+#     wire wraps round it. Puzzles that need a corner where there isn't one.
+#   - M opens the ship map (hud.gd), drawn from map_info().
+#
 # The RPG side (skill points and the skill tree; see skill_manager.gd)
 #   - Finishing a level for the first time gives `skill_points` (an export, so
 #     harder levels can give more). Replays give nothing (_finish_level).
@@ -111,6 +127,8 @@ signal drift_started(index: int)             # you pushed off into open space
 signal airlock_cycling(index: int)           # the airlock in room `index` started its sequence
 signal ship_lighting_up                      # every room has power: the lights-on cutscene starts
 signal all_rooms_powered                     # ...and the cutscene is over (you can move again)
+signal item_picked(kind: String, index: int) # you picked up a "fuse" or the "clamp" in room `index`
+signal door_unlocked(index: int)             # a fuse door or main door opened (index = the room it leads to)
 
 const TILE := 32
 const DIRS4: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
@@ -134,7 +152,11 @@ const PUZZLE_TEX := "res://Assets/images/tiles/puzzle_tiles.png"
 const HULL_TEX := "res://Assets/images/tiles/hull.png"
 # Which picture in puzzle_tiles.png belongs to which kind.
 const PUZZLE_FRAME := {"start": 0, "goal": 1, "node": 2, "pole": 3, "discharge": 4,
-	"blinker": 5, "crate": 6, "door": 7, "airlock": 11, "barrier": 12, "core": 13}
+	"blinker": 5, "crate": 6, "door": 7, "airlock": 11, "barrier": 12, "core": 13,
+	"fuse_door": 14, "main_door": 15, "socket": 16}
+const DOOR_KINDS := ["door", "fuse_door", "main_door"]
+const PICKUP_RADIUS := 16.0    # how close you walk to a fuse or the clamp to pick it up
+const SOCKET_REACH := 30.0     # how close you stand to a socket to drop / take the clamp with E
 const GANGWAY_FRAME := 9
 const SRC_WALL := 0
 const SRC_FLOOR := 1
@@ -159,6 +181,10 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var level_name := "ENGINEERING DECK"
 ## Shown on the results screen.
 @export var complete_message := "Power's back on in this part of the ship."
+## The order PIP's autopilot (judge mode) does the rooms in: room numbers as in
+## Room Titles (1 = the first). Rooms with nothing to solve are skipped. Empty =
+## every room with a START, in number order.
+@export var walkthrough: PackedInt32Array = []
 ## Skill points for finishing this level the first time. Give harder levels more.
 @export var skill_points := 2
 
@@ -256,6 +282,26 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var popup_outer_door := "OUTER DOOR OPEN"
 @export var popup_stranded := "NO WAY BACK? PRESS R"
 @export var popup_boots := "YOUR BOOTS SAVED YOU"
+@export var popup_fuse := "GOT A FUSE"
+@export var popup_fuse_used := "FUSE FITTED. DOOR OPEN"
+@export var popup_fuse_locked := "LOCKED. IT NEEDS A FUSE"
+@export var popup_clamp := "GOT THE CABLE CLAMP"
+
+# What PIP says about the dungeon parts (each one only once).
+@export_group("PIP's dungeon lines")
+## The first fuse you pick up.
+@export var pip_fuse := "A fuse. One of the amber doors takes these."
+## You walk into a fuse door without a fuse.
+@export var pip_fuse_locked := "That door needs a fuse. There'll be one lying around somewhere."
+## Judge mode: offered after two fails in a room (instead of the hint line).
+@export var pip_hint_judge := "Stuck? Press R and I'll walk you through it."
+## Judge mode: when the autopilot takes over, and when it hands back.
+@export var pip_autopilot_start := "Hands off the controls. I've got this one."
+@export var pip_autopilot_done := "There. Your turn. R again if you want me to do the next one."
+## You pick up the clamp.
+@export var pip_clamp := "A cable clamp. Press E by a purple socket to set it down."
+## The first time you put the clamp in a socket.
+@export var pip_clamp_placed := "Now the wire wraps round it, like a pillar. E takes it back out."
 
 # The last level only: when you reach the exit, the camera flies out into space
 # and the whole ship fires its engines and leaves (_fly_away), then the results.
@@ -368,6 +414,24 @@ var _boots_used := {}                     # Room -> how many zaps your boots alr
 var _alert := false            # red alert: the ship's tinted red, the boss music plays
 var _holds := 0                # how many other nodes asked the level to wait (hold / let_go)
 
+# --- dungeon parts (see "Dungeon parts" at the top)
+var _red_off := {}             # red tiles a power link switched off: tile -> true
+var _fuses := 0                # fuses you're carrying
+var _has_clamp := false        # you're carrying the cable clamp
+var _clamp_at := Vector2i(-1, -1)   # the socket the clamp is in ((-1, -1) = none)
+var _clamp_post: Node2D        # the clamp standing in its socket (drawn by pickup.gd)
+var _pickups := {}             # tile -> Pickup node (fuses and the clamp still lying around)
+var _sockets: Array[Vector2i] = []
+var _visited := {}             # Room -> true once you've walked in (for the ship map)
+var _main_groups: Array = []   # main doors: {"tiles": [...], "needs": n, "lit": n}
+var _main_group_of := {}       # main door tile -> index in _main_groups
+var _locked_msg_cd := 0.0      # don't repeat "it's locked" every frame
+
+# --- judge mode: PIP walks the room for you (autopilot.gd)
+## True while the autopilot has the controls: no timer, no zaps, keys ignored.
+var autopilot_on := false
+var _autopilot: Autopilot
+
 # --- playtesting (TestStart marker + F6, or the dev menu)
 ## The room a TestStart marker or the dev menu put you in (-1 = normal start). The story,
 ## tutorial and rogue PIP read this to catch up with the rooms you skipped.
@@ -456,6 +520,9 @@ func _ready() -> void:
 	hud.set_level_info("LEVEL %d: %s" % [level_number, level_name])
 	hud.set_cells(0, _cells.size())
 	hud.set_power(0, _rooms_with_goal)
+	_setup_dungeon()
+	_visited[_current_room] = true
+	hud.set_judge(Game.judge_mode)
 	_apply_skills()                        # skills you unlocked earlier...
 	SkillManager.skills_changed.connect(_apply_skills)   # ...and ones you unlock mid level
 	_update_hint_label.call_deferred()     # after the floor guides know their rooms
@@ -495,6 +562,7 @@ func _apply_layout_visibility() -> void:
 
 
 func _ensure_input_actions() -> void:
+	_add_key_action("map", [KEY_M])
 	# Backup in case these actions are missing from Project Settings > Input Map.
 	_add_key_action("interact", [KEY_E, KEY_SPACE])
 	_add_key_action("restart", [KEY_R])
@@ -637,6 +705,526 @@ func _power_quietly(o: Room) -> void:
 			l.visible = true
 			l.energy = room_light_energy
 	_open_exit_doors(o, true)
+	_apply_links(o, true)
+	# a playtest that starts past a fuse or main door: those are open already,
+	# and the clamp is in your pocket if it was lying in a room you skipped
+	for d in o.doors:
+		if (kind_at(d) == "fuse_door" or kind_at(d) == "main_door") and not _open_doors.has(d):
+			for other in _door_rooms.get(d, []):
+				if other != o and other.index > o.index:
+					_open_door_tiles(_door_group(d), true)
+	for c in _pickups.keys():
+		if _room_of.get(c) == o and _pickups[c].kind == "clamp":
+			_take_pickup(c, true)
+
+
+# ===================================================================== dungeon parts
+# Halls, fuses and fuse doors, main doors, power links and the clamp. See
+# "Dungeon parts" at the top of this script for what each one does.
+
+## A hall: a room with no START and no goal. Nothing to solve, so it never
+## locks anything: its doors are open from the start. Halls join puzzle rooms
+## like the hub of a dungeon.
+func is_hall(r: Room) -> bool:
+	return r.start.x < 0 and r.target().x < 0 and r.airlock.x < 0 and not r.is_exit
+
+
+func _setup_dungeon() -> void:
+	for r in _rooms:
+		if is_hall(r):
+			_open_exit_doors(r, true)
+	_build_main_groups()
+	# a level with halls, special doors or power links gets the map (M)
+	var dungeon: bool = _rooms.any(is_hall) or not _main_groups.is_empty() \
+		or not _power_links().is_empty() or _kinds.values().has("fuse_door")
+	hud.set_map_available(dungeon)
+
+
+## Door tiles side by side (of the same kind) are one door: they open together.
+func _door_group(c: Vector2i) -> Array[Vector2i]:
+	var kind := kind_at(c)
+	var out: Array[Vector2i] = [c]
+	var i := 0
+	while i < out.size():
+		for d in DIRS4:
+			var n := out[i] + d
+			if kind_at(n) == kind and not out.has(n):
+				out.append(n)
+		i += 1
+	return out
+
+
+func _open_door_tiles(tiles: Array[Vector2i], quiet := false) -> void:
+	for i in tiles.size():
+		var d := tiles[i]
+		if _open_doors.has(d):
+			continue
+		_open_doors[d] = true
+		var t: PuzzleTile = _tiles.get(d)
+		if t:
+			t.open_door(i * 0.05)
+	if not quiet:
+		_play("door")
+
+
+## Main doors: count how many "unlock" power links point at each one. That's
+## how many lamps it has, and how many parts of the deck must get power first.
+func _build_main_groups() -> void:
+	_main_groups.clear()
+	_main_group_of.clear()
+	for c in _kinds:
+		if _kinds[c] != "main_door" or _main_group_of.has(c):
+			continue
+		var tiles := _door_group(c)
+		for t in tiles:
+			_main_group_of[t] = _main_groups.size()
+		_main_groups.append({"tiles": tiles, "needs": 0, "lit": 0})
+	for link in _power_links():
+		if link.action != PowerLink.Action.UNLOCK:
+			continue
+		for target in link.target_cells(self):
+			if _main_group_of.has(target):
+				_main_groups[_main_group_of[target]]["needs"] += 1
+	for g in _main_groups:
+		_show_main_lamps(g)
+
+
+func _show_main_lamps(g: Dictionary) -> void:
+	for tile in g["tiles"]:
+		var t: PuzzleTile = _tiles.get(tile)
+		if t:
+			t.set_lamps(g["lit"], g["needs"])
+
+
+## Every PowerLink in the level (power_link.gd puts them in this group).
+func _power_links() -> Array:
+	return get_tree().get_nodes_in_group("power_link") if is_inside_tree() else []
+
+
+## The power links that start in room r (their marker sits on one of its tiles).
+func _links_from(r: Room) -> Array:
+	return _power_links().filter(func(l: PowerLink) -> bool: return _room_of.get(cell_of(to_local(l.global_position))) == r)
+
+
+## Room r just got power: every power link starting there does its job.
+## Not quiet: the camera glances at each place that changed, so you see it.
+func _apply_links(r: Room, quiet := false) -> void:
+	for link in _links_from(r):
+		var cells: Array[Vector2i] = link.target_cells(self)
+		if cells.is_empty():
+			continue
+		for c in cells:
+			_link_effect(link.action, c, quiet)
+		if not quiet:
+			if link.message != "":
+				hud.show_toast(link.message, 2.5)
+			if link.show_camera:
+				await _glance_at(center_of(cells[0]))
+				if not is_inside_tree(): return
+
+
+func _link_effect(action: int, c: Vector2i, quiet: bool) -> void:
+	var kind := kind_at(c)
+	match action:
+		PowerLink.Action.OPEN:
+			if kind == "barrier":
+				var g: Dictionary = _barrier_groups[_group_of[c]]
+				var tiles: Array[Vector2i] = []
+				for t in g["tiles"]:
+					if not _open_doors.has(t):
+						_open_doors[t] = true
+						tiles.append(t)
+				if not tiles.is_empty():
+					_move_barriers(_room_of.get(c, _current_room), tiles, quiet)
+			elif DOOR_KINDS.has(kind):
+				_open_door_tiles(_door_group(c), quiet)
+		PowerLink.Action.CLOSE:
+			var tiles: Array[Vector2i] = []
+			if kind == "barrier":
+				tiles.assign(_barrier_groups[_group_of[c]]["tiles"])
+			elif DOOR_KINDS.has(kind):
+				tiles = _door_group(c)
+			for t in tiles:
+				if _open_doors.has(t) and not _box_on(t):
+					_open_doors.erase(t)
+					var pt: PuzzleTile = _tiles.get(t)
+					if pt:
+						pt.close_door()
+			if not quiet and not tiles.is_empty():
+				_play("clank")
+		PowerLink.Action.RED_OFF, PowerLink.Action.RED_ON:
+			var off: bool = action == PowerLink.Action.RED_OFF
+			for t in _red_region(c):
+				if off:
+					_red_off[t] = true
+				else:
+					_red_off.erase(t)
+				var pt: PuzzleTile = _tiles.get(t)
+				if pt:
+					pt.set_live(not off)
+			if not quiet:
+				_play("powerup" if off else "shock")
+		PowerLink.Action.UNLOCK:
+			if not _main_group_of.has(c):
+				return
+			var g: Dictionary = _main_groups[_main_group_of[c]]
+			g["lit"] += 1
+			_show_main_lamps(g)
+			if g["lit"] >= g["needs"]:
+				_open_door_tiles(g["tiles"], quiet)
+				if not quiet:
+					door_unlocked.emit(_room_index_beyond(g["tiles"][0]))
+			elif not quiet:
+				_play("node")
+
+
+## Is the astronaut standing on tile c? (A closing door or rising barrier
+## never closes on top of him.)
+func _box_on(c: Vector2i) -> bool:
+	return player != null and Rect2(Vector2(c * TILE), Vector2(TILE, TILE)).grow(6).has_point(player.position)
+
+
+## Every red tile joined to c (touching sides): one red floor switches as a whole.
+func _red_region(c: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if kind_at(c) != "discharge":
+		return out
+	out.append(c)
+	var i := 0
+	while i < out.size():
+		for d in DIRS4:
+			var n := out[i] + d
+			if kind_at(n) == "discharge" and not out.has(n):
+				out.append(n)
+		i += 1
+	return out
+
+
+## The room on the far side of a door tile from the room you're in.
+func _room_index_beyond(door: Vector2i) -> int:
+	for r in _door_rooms.get(door, []):
+		if r != _current_room:
+			return r.index
+	return -1
+
+
+## A short cutscene: the camera glides to `pos`, waits so you can see what
+## changed there, and glides back to you. (Like the lights-on cutscene, it
+## sets _cutscene so the camera stops following the player.)
+func _glance_at(pos: Vector2) -> void:
+	if camera == null or _flying:
+		return
+	var back := _cam_pos
+	_cutscene = true
+	_cut_cam = back
+	var tw := create_tween()
+	tw.tween_property(self, "_cut_cam", pos, clampf(back.distance_to(pos) / 500.0, 0.3, 0.9)) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw.finished
+	if not is_inside_tree(): return
+	await get_tree().create_timer(0.9).timeout
+	if not is_inside_tree(): return
+	var tw2 := create_tween()
+	tw2.tween_property(self, "_cut_cam", back, clampf(back.distance_to(pos) / 500.0, 0.3, 0.9)) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw2.finished
+	if not is_inside_tree(): return
+	_cutscene = false
+
+
+## Walking about: pick up fuses and the clamp, and open fuse doors you bump into.
+func _check_dungeon() -> void:
+	for c in _pickups.keys():
+		if _touching(center_of(c), PICKUP_RADIUS):
+			_take_pickup(c)
+	_locked_msg_cd = maxf(0.0, _locked_msg_cd - get_physics_process_delta_time())
+	var here := cell_of(player.position)
+	for d in DIRS4:
+		var c := here + d
+		if kind_at(c) != "fuse_door" or _open_doors.has(c):
+			continue
+		if center_of(c).distance_to(player.position) > 24.0:
+			continue
+		if _fuses > 0:
+			_fuses -= 1
+			hud.set_fuses(_fuses)
+			_open_door_tiles(_door_group(c))
+			hud.show_toast(popup_fuse_used, 2.0)
+			door_unlocked.emit(_room_index_beyond(c))
+		elif _locked_msg_cd <= 0.0:
+			_locked_msg_cd = 3.0
+			hud.show_toast(popup_fuse_locked, 2.0)
+			if Game.first_time("fuse_locked"):
+				_pip_say(pip_fuse_locked)
+
+
+func _take_pickup(c: Vector2i, quiet := false) -> void:
+	var p: Pickup = _pickups[c]
+	_pickups.erase(c)
+	if p.kind == "fuse":
+		_fuses += 1
+		hud.set_fuses(_fuses)
+		if not quiet:
+			hud.show_toast(popup_fuse, 2.0)
+			if Game.first_time("fuse"):
+				_pip_say(pip_fuse)
+	else:
+		_has_clamp = true
+		hud.set_clamp(true)
+		if not quiet:
+			hud.show_toast(popup_clamp, 2.5)
+			_pip_say(pip_clamp)
+	if quiet:
+		p.queue_free()
+	else:
+		_play("pickup")
+		p.collect()
+		item_picked.emit(p.kind, room_index_at(center_of(c)))
+
+
+## E without the wire, next to a socket: drop the clamp in, or take it back out.
+## Returns true if it did something (so E doesn't also do anything else).
+func _try_clamp() -> bool:
+	if _clamp_at.x >= 0 and center_of(_clamp_at).distance_to(player.position) <= SOCKET_REACH:
+		_poles.erase(_clamp_at)
+		_clamp_at = Vector2i(-1, -1)
+		_has_clamp = true
+		hud.set_clamp(true)
+		if _clamp_post:
+			_clamp_post.queue_free()
+			_clamp_post = null
+		_play("clank")
+		return true
+	if not _has_clamp:
+		return false
+	var best := Vector2i(-1, -1)
+	for s in _sockets:
+		var d := center_of(s).distance_to(player.position)
+		if d <= SOCKET_REACH and not Rect2(Vector2(s * TILE), Vector2(TILE, TILE)).grow(4).has_point(player.position):
+			if best.x < 0 or d < center_of(best).distance_to(player.position):
+				best = s
+	if best.x < 0:
+		return false
+	_clamp_at = best
+	_poles.append(best)                  # in its socket the clamp works like a pole
+	_has_clamp = false
+	hud.set_clamp(false)
+	_clamp_post = Pickup.new()
+	_clamp_post.kind = "clamp"
+	_clamp_post.standing = true
+	_clamp_post.position = center_of(best)
+	_tile_root.add_child(_clamp_post)
+	_play("clank")
+	if Game.first_time("clamp_placed"):
+		_pip_say(pip_clamp_placed)
+	return true
+
+
+## A socket you could use with E right now (for the [E] key over it), or (-1, -1).
+func _socket_in_reach() -> Vector2i:
+	if _clamp_at.x >= 0 and center_of(_clamp_at).distance_to(player.position) <= SOCKET_REACH:
+		return _clamp_at
+	if _has_clamp:
+		for s in _sockets:
+			if center_of(s).distance_to(player.position) <= SOCKET_REACH:
+				return s
+	return Vector2i(-1, -1)
+
+
+## Everything the ship map (hud.gd) draws: rooms, doors, items, where you are.
+func map_info() -> Dictionary:
+	var rooms: Array = []
+	for r in _rooms:
+		if r.is_exit and not _visited.has(r):
+			continue
+		rooms.append({"cells": r.cells, "solved": r.solved, "visited": _visited.has(r),
+			"here": r == _current_room, "hall": is_hall(r), "cells_left": r.power_cells.filter(
+				func(c: Vector2i) -> bool: return not _cells[c].collected).size()})
+	var doors: Array = []
+	for c in _kinds:
+		if DOOR_KINDS.has(_kinds[c]) or _kinds[c] == "barrier":
+			doors.append({"cell": c, "kind": _kinds[c], "open": _open_doors.has(c)})
+	var items: Array = []
+	for c in _pickups:
+		items.append({"cell": c, "kind": _pickups[c].kind})
+	return {"rooms": rooms, "doors": doors, "items": items, "player": player.position / TILE,
+		"rect": _rect, "clamp_at": _clamp_at}
+
+
+# ===================================================================== judge mode: the autopilot
+# autopilot.gd does the walking; these are the few things it asks the level.
+
+## R in judge mode: PIP takes over and does the next room.
+func start_autopilot() -> void:
+	if _busy or _complete or autopilot_on:
+		return
+	if _autopilot == null:
+		_autopilot = Autopilot.new()
+		_autopilot.level = self
+		add_child(_autopilot)
+		_autopilot.load_routes(level_number)
+	_autopilot.run()
+
+
+func autopilot_begin() -> void:
+	autopilot_on = true
+	player.autopilot = true
+	_clear_stranded()
+	if _wire != null:
+		_fail("restart")              # holding a wire? start that room clean
+	_pip_say(pip_autopilot_start)
+
+
+func autopilot_end() -> void:
+	autopilot_on = false
+	player.autopilot = false
+	player.auto_dir = Vector2.ZERO
+	if not _complete:
+		_pip_say(pip_autopilot_done)
+
+
+## The room the autopilot should do next: the one you're in if it's unsolved,
+## otherwise the first unsolved room in `walkthrough` (or in number order).
+func autopilot_target():
+	if _current_room != null and not _current_room.solved and _current_room.start.x >= 0:
+		return _current_room
+	var order: Array = []
+	for n in walkthrough:
+		for r in _rooms:
+			if r.index == n - 1:
+				order.append(r)
+	var rest := _rooms.filter(func(r: Room) -> bool: return r.start.x >= 0)
+	rest.sort_custom(func(a: Room, b: Room) -> bool: return a.index < b.index)
+	for r in rest:
+		if not order.has(r):
+			order.append(r)
+	for r in order:
+		if not r.solved and r.start.x >= 0:
+			return r
+	return null
+
+
+func is_busy() -> bool:
+	return _busy or _cutscene
+
+
+func exit_cell() -> Vector2i:
+	for c in _kinds:
+		if _kinds[c] == "exit":
+			return c
+	return Vector2i(-1, -1)
+
+
+## Airlock pads that haven't cycled yet (the autopilot steps on one when the
+## way out into space is still shut).
+func airlock_cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for r in _rooms:
+		if r.airlock.x >= 0 and not r.cycled:
+			out.append(r.airlock)
+	return out
+
+
+## Last resort when the autopilot can't find a way to the exit: put him there.
+func autopilot_to_exit() -> void:
+	var c := exit_cell()
+	if c.x >= 0 and not _complete:
+		player.position = center_of(c)
+		player_moved()
+
+
+func has_clamp() -> bool:
+	return _has_clamp
+
+
+func clamp_socket() -> Vector2i:
+	return _clamp_at
+
+
+func item_cell(kind: String) -> Vector2i:
+	for c in _pickups:
+		if _pickups[c].kind == kind:
+			return c
+	return Vector2i(-1, -1)
+
+
+## Take the clamp out of its socket (the autopilot stands next to it first).
+func take_clamp() -> void:
+	if _clamp_at.x >= 0:
+		_try_clamp()
+
+
+## Put the clamp into socket s (the autopilot stands next to it first).
+func place_clamp_at(s: Vector2i) -> void:
+	if not _has_clamp or not _sockets.has(s):
+		return
+	var keep := _sockets.duplicate()
+	_sockets.assign([s])                 # so _try_clamp can only pick this socket
+	var saved := player.position
+	_try_clamp()
+	_sockets = keep
+	player.position = saved
+
+
+func autopilot_grab() -> void:
+	_try_grab()
+
+
+## When walking the route didn't work: PIP powers the room himself. The wire
+## jumps from the START to the goal and the room is solved as usual.
+func autopilot_force_solve(r: Room) -> void:
+	if r.solved or _busy:
+		return
+	push_warning("Autopilot couldn't walk room %d, so PIP powered it directly. If the map changed, run: python tools/solver2.py Scenes/level_%d.tscn --paths Data/routes/level_%d.json --margin 3" % [r.index + 1, level_number, level_number])
+	if _wire == null:
+		player.position = center_of(r.start)
+		_current_room = r
+		_try_grab()
+	if _wire == null:
+		return
+	if r.target().x >= 0:
+		_wire.add_anchor(center_of(r.target()))
+	_solve(r)
+
+
+## A walking path (tile by tile, sideways and up/down only) from one tile to
+## another that avoids walls, closed doors, red tiles and grates. A fuse door
+## counts as open if you carry a fuse (walking into it opens it). [] = no way.
+func walk_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var prev := {from: from}
+	var queue: Array[Vector2i] = [from]
+	var head := 0
+	while head < queue.size() and head < 6000:
+		var c := queue[head]
+		head += 1
+		if c == to:
+			break
+		for d in DIRS4:
+			var n := c + d
+			# open space next to you: you can drift straight across to the next plate
+			if kind_at(n) == "space":
+				var k := 1
+				while kind_at(c + d * k) == "space" and k < int(MAX_DRIFT / TILE):
+					k += 1
+				n = c + d * k
+				if kind_at(n) == "space":
+					continue                 # nothing to land on within reach
+			if prev.has(n):
+				continue
+			var fuse_ok := kind_at(n) == "fuse_door" and _fuses > 0
+			if (is_solid_for_walk(n) and not fuse_ok) or _is_red(n) or kind_at(n) == "blinker":
+				continue
+			prev[n] = c
+			queue.append(n)
+	var path: Array[Vector2i] = []
+	if not prev.has(to):
+		return path
+	var c := to
+	while c != from:
+		path.append(c)
+		c = prev[c]
+	path.reverse()
+	return path
 
 
 # ===================================================================== map helpers
@@ -691,22 +1279,25 @@ func _walkable(kind: String) -> bool:
 	return kind != "" and kind != "wall"
 
 
-## Doors and barriers aren't part of any room: they're what separates rooms/stages.
+## Doors (all three kinds) and barriers aren't part of any room: they're what
+## separates rooms/stages.
 func _is_room_cell(kind: String) -> bool:
-	return _walkable(kind) and kind != "door" and kind != "barrier"
+	return _walkable(kind) and not DOOR_KINDS.has(kind) and kind != "barrier"
 
 
-## Can't walk through: nothing, walls, crates, cores, poles, closed doors and barriers
-## that haven't moved yet. Open space too, unless space_blocks is false (used
-## for drifting: you float over space).
+## Can't walk through: nothing, walls, crates, cores, poles, a socket with the
+## clamp in it, closed doors and barriers that haven't moved yet. Open space too,
+## unless space_blocks is false (used for drifting: you float over space).
 func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
 	var kind := kind_at(c)
 	if kind == "" or kind == "wall" or kind == "crate" or kind == "core" or kind == "pole":
 		return true
 	if kind == "space":
 		return space_blocks
-	if kind == "door" or kind == "barrier":
+	if DOOR_KINDS.has(kind) or kind == "barrier":
 		return not _open_doors.has(c)
+	if kind == "socket":
+		return c == _clamp_at
 	return false
 
 
@@ -716,7 +1307,9 @@ func is_solid_for_wire(c: Vector2i) -> bool:
 	var kind := kind_at(c)
 	if kind == "barrier":
 		return not _open_doors.has(c)
-	return kind in ["", "wall", "crate", "core", "door", "exit", "discharge"]
+	if kind == "discharge":
+		return not _red_off.has(c)          # a red floor switched off by a power link is just floor
+	return kind in ["", "wall", "crate", "core", "exit"] or DOOR_KINDS.has(kind)
 
 
 ## True if a box (centre `pos`, half-size `half`) overlaps anything solid.
@@ -866,7 +1459,7 @@ func _build_visuals() -> void:
 		else:
 			_ground.set_cell(c, SRC_FLOOR, Vector2i(_floor_variant(c), 0))
 		if PUZZLE_FRAME.has(kind) and (Engine.is_editor_hint() or kind == "crate"):
-			var alt := 1 if (kind == "door" and _door_rotated(c)) else 0
+			var alt := 1 if (DOOR_KINDS.has(kind) and _door_rotated(c)) else 0
 			_props.set_cell(c, SRC_PUZZLE, Vector2i(PUZZLE_FRAME[kind], 0), alt)
 	_hull_edges.queue_redraw()
 	if _pillar_preview:
@@ -902,8 +1495,8 @@ func _make_tileset() -> TileSet:
 	_add_atlas(ts, SRC_WALL, WALL_TEX, Vector2i(6, 4))
 	_add_atlas(ts, SRC_FLOOR, FLOOR_TEX, Vector2i(3, 1))
 	_add_atlas(ts, SRC_ROOF, ROOF_TEX, Vector2i(16, 16))
-	var puzzle := _add_atlas(ts, SRC_PUZZLE, PUZZLE_TEX, Vector2i(14, 1))
-	for frame in [PUZZLE_FRAME["door"], GANGWAY_FRAME]:
+	var puzzle := _add_atlas(ts, SRC_PUZZLE, PUZZLE_TEX, Vector2i(17, 1))
+	for frame in [PUZZLE_FRAME["door"], GANGWAY_FRAME, PUZZLE_FRAME["fuse_door"], PUZZLE_FRAME["main_door"]]:
 		var alt := puzzle.create_alternative_tile(Vector2i(frame, 0), 1)
 		puzzle.get_tile_data(Vector2i(frame, 0), alt).transpose = true   # turned sideways
 	_add_atlas(ts, SRC_HULL, HULL_TEX, Vector2i(3, 1))
@@ -1031,7 +1624,7 @@ func _hull_variant(c: Vector2i) -> int:
 func _door_rotated(c: Vector2i) -> bool:
 	var l := kind_at(c + Vector2i.LEFT)
 	var r := kind_at(c + Vector2i.RIGHT)
-	return (_walkable(l) and l != "door" and l != "space") or (_walkable(r) and r != "door" and r != "space")
+	return (_walkable(l) and not DOOR_KINDS.has(l) and l != "space") or (_walkable(r) and not DOOR_KINDS.has(r) and r != "space")
 
 
 ## Is the hull drawn under this tile? (Used to give the plates their edges.)
@@ -1104,9 +1697,9 @@ func _build_rooms(quiet := false) -> void:
 					_room_of[n] = room
 					queue.append(n)
 		_rooms.append(room)
-	# doors (and barriers) and which rooms they join
+	# doors (all kinds, and barriers) and which rooms they join
 	for c in _kinds:
-		if _kinds[c] != "door" and _kinds[c] != "barrier":
+		if not DOOR_KINDS.has(_kinds[c]) and _kinds[c] != "barrier":
 			continue
 		var adj: Array = []
 		for d in DIRS4:
@@ -1236,7 +1829,7 @@ func _build_areas() -> void:
 ## Friendly warnings in the Output panel when the map is missing something.
 func _check_rooms() -> void:
 	for r in _rooms:
-		if r.is_exit:
+		if r.is_exit or is_hall(r):
 			continue
 		var n := r.index + 1
 		if r.airlock.x < 0:          # airlocks don't need pads
@@ -1244,7 +1837,7 @@ func _check_rooms() -> void:
 				push_warning("Room %d has no START pad." % n)
 			if r.target().x < 0:
 				push_warning("Room %d has no GOAL pad (or CORE)." % n)
-		if _exit_doors(r).is_empty() and _barrier_groups_of(r).is_empty():
+		if _exit_doors(r).is_empty() and _barrier_groups_of(r).is_empty() and _links_from(r).is_empty():
 			push_warning("Room %d has no door or barrier leading onward." % n)
 
 
@@ -1279,10 +1872,20 @@ func _spawn_runtime_tiles() -> void:
 		if kind == "door" and _is_gangway(c):
 			t.setup(PuzzleTile.Kind.GANGWAY, _door_rotated(c))
 		else:
-			t.setup(PUZZLE_FRAME[kind], kind == "door" and _door_rotated(c))
+			t.setup(PUZZLE_FRAME[kind], DOOR_KINDS.has(kind) and _door_rotated(c))
 		_tiles[c] = t
 		if kind == "blinker":
 			_blinkers.append(c)
+		if kind == "socket":
+			_sockets.append(c)
+	# fuses and the clamp lying on the floor draw themselves (pickup.gd)
+	for c in _kinds:
+		if _kinds[c] == "fuse" or _kinds[c] == "clamp":
+			var p := Pickup.new()
+			p.kind = _kinds[c]
+			p.position = center_of(c)
+			_tile_root.add_child(p)
+			_pickups[c] = p
 
 
 ## Every "cell" tile becomes a PowerCell you can charge with the live wire.
@@ -1649,14 +2252,17 @@ func _physics_process(delta: float) -> void:
 	if _busy or _dialogue_lock:
 		_update_prompts()
 		return
-	if _input_cooldown <= 0.0:
+	if _input_cooldown <= 0.0 and not autopilot_on:
 		if Input.is_action_just_pressed("restart"):
-			_fail("restart")
+			if Game.judge_mode:
+				start_autopilot()       # judge mode: R = PIP walks this room for you
+			else:
+				_fail("restart")
 			return
 		if Input.is_action_just_pressed("hint"):
 			_try_hint()
-	# a blinking grate can light up under you while you stand still
-	if player.state != Astronaut.State.LOCKED and _is_live_tile(cell_of(player.position)):
+	# a blinking grate can light up under you while you stand still (not on autopilot)
+	if player.state != Astronaut.State.LOCKED and _is_live_tile(cell_of(player.position)) and not autopilot_on:
 		_shock()
 		return
 	if _tick_o2(delta):
@@ -1664,7 +2270,7 @@ func _physics_process(delta: float) -> void:
 	if _wire != null and player.is_wired():
 		# E while walking with the wire = reel back to the last pad it's wrapped round
 		var walking := player.state == Astronaut.State.WIRED
-		if walking and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact"):
+		if walking and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact") and not autopilot_on:
 			_reel_back()
 		# stood still a moment away from the last pad? remind them they can reel back
 		_still_time = _still_time + delta if walking and not player.is_moving() else 0.0
@@ -1673,8 +2279,11 @@ func _physics_process(delta: float) -> void:
 	else:
 		hud.set_timer(false, 0.0, 0.0)
 		hud.set_reel_prompt(false)
-		if player.state == Astronaut.State.FREE and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact"):
+		if player.state == Astronaut.State.FREE and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact") \
+				and not autopilot_on:
 			_try_grab()
+			if _wire == null:
+				_try_clamp()                # not on a START: maybe next to a clamp socket
 		# stranded? keep checking: if you find a safe way back, the [R] goes away
 		if _stranded:
 			_stranded_check -= delta
@@ -1689,7 +2298,7 @@ func _timer_paused() -> bool:
 
 
 func _tick_timer(delta: float) -> void:
-	var paused := _timer_paused()
+	var paused := _timer_paused() or autopilot_on    # PIP's autopilot never runs out of time
 	if paused:
 		_node_hold_left -= delta        # a node only holds the timer for so long
 	else:
@@ -1708,7 +2317,7 @@ func _tick_timer(delta: float) -> void:
 
 ## Oxygen drains while you're outside the ship. Returns true if it just ran out.
 func _tick_o2(delta: float) -> bool:
-	if not _o2_on or _current_room == null or not _current_room.outside:
+	if not _o2_on or _current_room == null or not _current_room.outside or autopilot_on:
 		return false
 	_o2 -= delta
 	hud.set_o2(true, _o2 / _o2_max)
@@ -1766,10 +2375,11 @@ func player_moved() -> void:
 	if _safe_to_stand(player.position):
 		_last_safe = player.position      # remembered, so a zap sends you back the way you came
 	var c := cell_of(player.position)
-	if _is_live_tile(c):
+	if _is_live_tile(c) and not autopilot_on:
 		_shock()
 		return
 	_check_cells()
+	_check_dungeon()                    # fuses, the clamp, fuse doors
 	if player.state == Astronaut.State.FREE:
 		var r: Room = _room_of.get(c)
 		if r != null and r != _current_room:
@@ -2197,11 +2807,19 @@ func _update_prompts() -> void:
 		if t:
 			t.prompt = (not _busy and not _dialogue_lock and player.state == Astronaut.State.FREE and not r.solved
 				and r == _current_room and player.position.distance_to(center_of(r.start)) <= START_RADIUS)
+	# the [E] key over a clamp socket you could use right now
+	var free := not _busy and not _dialogue_lock and player.state == Astronaut.State.FREE
+	var reach := _socket_in_reach() if free else Vector2i(-1, -1)
+	for s in _sockets:
+		var t: PuzzleTile = _tiles.get(s)
+		if t:
+			t.prompt = s == reach
 
 
 func _enter_room(r: Room) -> void:
 	var new_area := _current_room == null or _current_room.area_id != r.area_id
 	_current_room = r
+	_visited[r] = true
 	if r.is_exit:
 		_finish_level()
 		return
@@ -2326,7 +2944,7 @@ func _on_dialogue_blocking(on: bool) -> void:
 
 ## Story beats ask this before freezing the player: never while he carries the wire.
 func can_pause_for_dialogue() -> bool:
-	return _wire == null and not _complete
+	return _wire == null and not _complete and not autopilot_on
 
 
 ## Give control back, unless PIP is still talking (then he's released when PIP stops).
@@ -2383,6 +3001,8 @@ func _solve(r: Room) -> void:
 	await _wait_for_holds()         # e.g. PIP glitching (rogue_pip.gd called hold())
 	if not is_inside_tree(): return
 	_open_exit_doors(r)
+	await _apply_links(r)           # power links: things change elsewhere (the camera glances over)
+	if not is_inside_tree(): return
 	if _rooms_powered >= _rooms_with_goal:
 		await _all_powered()        # the lights-on cutscene: wait here until it's over
 		if not is_inside_tree(): return
@@ -2735,9 +3355,13 @@ func _fail(kind: String) -> void:
 	if lost_cells and Game.first_time("cell_lost"):
 		_pip_say(pip_cell_lost)
 	# Failed twice here? PIP offers a hint (once per room).
-	if counts and r != null and not r.solved and r.fails >= 2 and _room_has_hint(r) and not _hint_offered.has(r):
-		_hint_offered[r] = true
-		_pip_say(pip_hint)
+	if counts and r != null and not r.solved and r.fails >= 2 and not _hint_offered.has(r):
+		if Game.judge_mode:
+			_hint_offered[r] = true
+			_pip_say(pip_hint_judge)        # judge mode: R and PIP walks it
+		elif _room_has_hint(r):
+			_hint_offered[r] = true
+			_pip_say(pip_hint)
 
 
 ## Cells charged on a failed try come back, uncharged.
@@ -2833,7 +3457,7 @@ func _can_walk_to(from: Vector2i, to: Vector2i) -> bool:
 			var n := c + d
 			if seen.has(n) or is_solid_for_walk(n):
 				continue
-			if kind_at(n) == "discharge" or kind_at(n) == "blinker":
+			if _is_red(n) or kind_at(n) == "blinker":
 				continue
 			seen[n] = true
 			queue.append(n)
@@ -2848,7 +3472,7 @@ func _clear_stranded() -> void:
 
 func _safe_to_stand(pos: Vector2) -> bool:
 	var k := kind_at(cell_of(pos))
-	return k != "discharge" and k != "blinker" and not box_blocked(pos, Astronaut.FEET_HALF)
+	return not _is_red(cell_of(pos)) and k != "blinker" and not box_blocked(pos, Astronaut.FEET_HALF)
 
 
 ## The pads the wire from room r can use: its own, plus the nodes of
@@ -2882,7 +3506,12 @@ func _blinker_phase(c: Vector2i) -> float:
 ## Would standing on tile c zap you right now? (red grates always, blinking ones when lit)
 func _is_live_tile(c: Vector2i) -> bool:
 	var k := kind_at(c)
-	return k == "discharge" or (k == "blinker" and blinker_live(c))
+	return _is_red(c) or (k == "blinker" and blinker_live(c))
+
+
+## A red tile that's live (not switched off by a power link).
+func _is_red(c: Vector2i) -> bool:
+	return kind_at(c) == "discharge" and not _red_off.has(c)
 
 
 ## Every frame: switch each blinking grate's picture on or off. Just before it

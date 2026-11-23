@@ -200,8 +200,8 @@ func _update_meter(delta: float) -> void:
 	if mood != Mood.ROGUE or _phase < 0:
 		_charge = 0.0
 		return
-	if _level.wire_room_index() != _spots[_phase][0]:
-		_charge = move_toward(_charge, 0.0, delta * 10.0)
+	if _level.wire_room_index() != _spots[_phase][0] or _level.autopilot_on:
+		_charge = move_toward(_charge, 0.0, delta * 10.0)   # (judge mode's autopilot: no cutting)
 		return
 	_charge += delta
 	var limit := _limit()

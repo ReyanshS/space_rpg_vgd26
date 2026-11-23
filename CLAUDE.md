@@ -4,8 +4,9 @@ Godot 4.7 top-down puzzle game for the TSA Video Game Design event (2026-27; AI 
 must be documented). Title **STAR CIRCUIT** (the team's name). The player is an astronaut restoring
 power to a dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship's
 maintenance AI. `Scenes/title.tscn` is the main scene (logo: `Assets/images/ui/logo.png`) ->
-`level_1.tscn` (Engineering Deck: the team's 4 rooms joined by doors, then the Generator Room: 3
-stages split by cargo barriers, ending in blinking grates) -> `level_2.tscn` (Main Deck: bridge,
+`level_1.tscn` (Engineering Deck: the team's 3 tutorial rooms, then a small dungeon: the Reactor
+Hall hub with 3 wings and a main door, then the Generator Room: 3 stages split by cargo
+barriers, ending in blinking grates; see "Dungeon parts") -> `level_2.tscn` (Main Deck: bridge,
 airlock, spacewalk across one open hull) -> `level_3.tscn` (The Core: PIP malfunctions and you
 reboot him by looping the wire round his core three times; the team's idea, see "The core" below).
 - The team works in `D:\Godot\tsa-project\space_rpg_vgd26` (GitHub `ReyanshS/space_rpg_vgd26`,
@@ -127,6 +128,42 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   has SKILLS (opens the tree, shows "+n" when you have points) and MENU (pause); they have
   `focus_mode` none so Space never presses them while you play. Unpausing is deferred to the
   end of the frame so the E that pressed RESUME doesn't also grab the wire.
+
+## Dungeon parts (Nov 2026: "make it less linear, like a Zelda dungeon")
+- Level 1 is a dungeon: tutorial rooms 1-3 (the team's), then the REACTOR HALL hub with three
+  wings: CABLE STORE (open; its cargo hides the clamp and a fuse), COOLANT PUMPS (open, needs the
+  clamp: `needs the clamp` in the solver), REACTOR ACCESS (the team's old room 4, behind a fuse
+  door). Each wing's goal has a PowerLink UNLOCK to the MAIN DOOR, which opens onto the
+  Generator Room finale. Built by `tools/maps/build_level1_dungeon.py`. Order: B, then A and C in
+  any order. Room numbers changed (halls count): room_titles / room_wire_time are 14 long.
+- A **hall** = a room with no START and no goal/core (`is_hall()`): never a puzzle, its doors open
+  at the start (`_setup_dungeon`), it never sinks barriers.
+- Tiles (map char): `fuse` f (pickup), `fuse_door` F (opens if you carry a fuse), `main_door` M
+  (lamps = UNLOCK links pointing at it), `socket` o, `clamp` k (pickup, one per level). Art:
+  `tools/art_dungeon.py` (puzzle frames 14-16, palette 18-22). Pickups draw themselves
+  (`Scripts/pickup.gd`).
+- **PowerLink** (`Scripts/power_link.gd`, @tool Marker2D under a "Links" node): sits on a goal,
+  child markers = targets, `action` OPEN / CLOSE / RED_OFF / RED_ON / UNLOCK, `message`,
+  `show_camera` (`_glance_at`). Applied in `_solve()` after `_open_exit_doors` (`_apply_links`),
+  and quietly by `_power_quietly`. Red floors switched off live in `_red_off`; use `_is_red(c)`.
+- **Clamp**: E next to a socket (no wire) drops / takes it (`_try_clamp`); in a socket it's added
+  to `_poles`, so the wrap rule is the pole rule. The solver tries every socket.
+- **Ship map** (M): `Scripts/ship_map.gd`, drawn from `level.map_info()`; only in levels with
+  halls / fuse doors / main doors / links (`hud.set_map_available`).
+- Console: fuse count and clamp icon (hud.gd `set_fuses`, `set_clamp`).
+
+## Judge mode and PIP's autopilot
+- Title, top left: JUDGE MODE toggle (`Game.judge_mode`, saved) + LEVEL n buttons. In a level,
+  R = `start_autopilot()` instead of restart; after 2 fails PIP says `pip_hint_judge`.
+- `Scripts/autopilot.gd`: walks to the next room (`autopilot_target()`: current unsolved room,
+  then the level's `walkthrough` export, then number order), fetches / places the clamp,
+  collects fuses, steps on airlock pads, drifts across space (`walk_path()` has drift edges),
+  grabs the wire and steers along the solver's route (`player.autopilot` + `auto_dir`, so the
+  normal rules run). While `autopilot_on`: timer frozen, no zaps, no O2 drain, no PIP shutdown
+  meter, blocking beats don't block. Falls back to `autopilot_force_solve()` (+ a warning).
+- Routes: `Data/routes/level_N.json` from `python tools/solver2.py Scenes/level_N.tscn --paths
+  Data/routes/level_N.json --margin 3` (keyed by START tile; `clamp` = the socket used).
+  **Regenerate after any map change.** Test: a bot that only presses R (see Verification below).
 
 ## Spacewalk rules (Level 2)
 - `hull` = floor outside the ship, `space` = open space (nothing drawn: the Starfield shows). A room
@@ -352,7 +389,12 @@ team chose the branches, the points per level and where it opens. Claude also ma
 buttons (art drawn in `tools/art_ui.py`, styled in the theme) and the SKILLS / MENU corner
 buttons, at the team's request.
 Nov 22 2026 (Claude): the support pillar art for the poles (`tools/art_pillar.py`, drawn pixel by
-pixel in Python), the slideshow cutscene script, and PIP's new Level 3 shutdown times. The three
+pixel in Python, octagon design), the slideshow cutscene script and its per-picture sounds
+(`tools/sfx_intro.py`, synthesized), PIP's new Level 3 shutdown times, the fly-away ending, the
+dungeon systems (halls, fuses, fuse doors, main door, power links, clamp and sockets, ship map;
+art in `tools/art_dungeon.py`), Level 1's dungeon layout and its new wing puzzles (Cable Store,
+Coolant Pumps; solver-checked; Reactor Access is the team's old room 4, moved), and judge mode
+with PIP's autopilot. The three
 intro cutscene PICTURES were provided by the team (record who made them, and the tool if they
 were AI-generated, for the copyright checklist); Claude only cropped them to 16:9 and shrank them
 to 480x270 with Python.

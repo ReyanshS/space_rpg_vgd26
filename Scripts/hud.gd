@@ -110,6 +110,14 @@ var _o2_frac := 1.0
 var _cells := 0
 var _cells_total := 0
 var _cell_bump := 0.0
+var _fuses := 0                     # fuses you carry (dungeon levels)
+var _clamp := false                 # you carry the cable clamp
+var _map_ok := false                # this level has a map worth looking at (M)
+var _judge := false                 # judge mode: R makes PIP walk the room
+
+# the ship map (ship_map.gd, made in _ready)
+var ship_map: ShipMap
+var _map_paused_before := false
 
 # speech
 var _queue: Array = []            # waiting speeches: [lines, speaker, blocking, point_at]
@@ -155,6 +163,9 @@ func _ready() -> void:
 	bar_top.visible = false
 	bar_top.position.y = -bar_top.size.y        # the film bar waits just above the screen
 	skill_tree.closed.connect(_on_skill_tree_closed)
+	ship_map = ShipMap.new()
+	add_child(ship_map)
+	ship_map.closed.connect(_on_map_closed)
 	# what each button does
 	$Pause/VBox/Buttons/Resume.pressed.connect(_set_paused.bind(false))
 	$Pause/VBox/Buttons/Skills.pressed.connect(open_skill_tree)
@@ -199,7 +210,8 @@ func _process(delta: float) -> void:
 	corner_menu.visible = allow_pause
 	# (not while the skill tree is open, or on the frame its Esc closed it)
 	var tree_busy := skill_tree.visible or skill_tree.closed_frame == Engine.get_process_frames()
-	if Input.is_action_just_pressed("pause") and allow_pause and not tree_busy:
+	var map_busy := ship_map.visible or ship_map.closed_frame == Engine.get_process_frames()
+	if Input.is_action_just_pressed("pause") and allow_pause and not tree_busy and not map_busy:
 		_set_paused(not get_tree().paused)
 
 
@@ -209,6 +221,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key := (event as InputEventKey).physical_keycode
 	if key == KEY_T:
 		open_skill_tree()               # any time at all
+	elif key == KEY_M and _map_ok:
+		open_map()
 	elif key == KEY_Q and pause_panel.visible:
 		Game.go_to_title()
 
@@ -250,6 +264,46 @@ func open_skill_tree() -> void:
 
 func is_skill_tree_open() -> bool:
 	return skill_tree.visible
+
+
+# ------------------------------------------------------------------ ship map
+
+## The level has a map worth opening (halls, fuse doors...): M works, and the
+## console's key reminders show it.
+func set_map_available(on: bool) -> void:
+	_map_ok = on
+	_update_keys()
+
+
+## Opens PIP's deck map (ship_map.gd) and pauses the game until it closes.
+func open_map() -> void:
+	if ship_map.visible or skill_tree.visible or pause_panel.visible or fade_rect.color.a > 0.5 or _cinematic:
+		return
+	var lv := get_tree().get_first_node_in_group("level")
+	if lv == null or not lv.has_method("map_info"):
+		return
+	_map_paused_before = get_tree().paused
+	get_tree().paused = true
+	ship_map.open(lv.map_info())
+
+
+func _on_map_closed() -> void:
+	if not _map_paused_before:
+		get_tree().set_deferred("paused", false)    # (deferred: see _set_paused)
+
+
+## Judge mode on: the console shows R as "PIP does it" (autopilot.gd).
+func set_judge(on: bool) -> void:
+	_judge = on
+	_update_keys()
+
+
+func set_fuses(n: int) -> void:
+	_fuses = n
+
+
+func set_clamp(on: bool) -> void:
+	_clamp = on
 
 
 func _on_skill_tree_closed() -> void:
@@ -714,10 +768,12 @@ func _update_keys() -> void:
 		want = [["R", "back to start"]]
 	elif _reel_prompt:
 		want = [["E", "reel back"]]
+	elif _judge:
+		want = [["R", "PIP does it"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
 	elif _hint_on:
-		want = [["H", "hint"], ["Esc", "menu"]]
+		want = [["H", "hint"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
 	else:
-		want = [["R", "restart"], ["Esc", "menu"]]
+		want = [["R", "restart"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
 	keys_box.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key
 	if want == _keys_shown:
 		return
@@ -744,6 +800,19 @@ func _draw_status() -> void:
 		PowerCell.draw_battery(status_box, o, AMBER.lerp(Color.WHITE, _cell_bump), Color(0.4, 0.25, 0.02))
 		var ink2 := PHOSPHOR if _cells < _cells_total else AMBER
 		status_box.draw_string(font, Vector2(88, 14), "%d/%d" % [_cells, _cells_total], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink2)
+	# dungeon things you carry: fuses (with a count) and the cable clamp
+	if _fuses > 0:
+		var f := Vector2(128, 2)
+		status_box.draw_rect(Rect2(f, Vector2(5, 11)), Color(0.02, 0.035, 0.13))
+		status_box.draw_rect(Rect2(f + Vector2(1, 1), Vector2(3, 2)), Color(0.77, 0.8, 0.86))
+		status_box.draw_rect(Rect2(f + Vector2(1, 8), Vector2(3, 2)), Color(0.77, 0.8, 0.86))
+		status_box.draw_rect(Rect2(f + Vector2(2, 3), Vector2(1, 5)), AMBER)
+		status_box.draw_string(font, Vector2(135, 14), str(_fuses), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, AMBER)
+	if _clamp:
+		var k := Vector2(148, 2)
+		status_box.draw_rect(Rect2(k, Vector2(7, 11)), Color(0.02, 0.035, 0.13))
+		status_box.draw_rect(Rect2(k + Vector2(1, 2), Vector2(5, 8)), Color(0.75, 0.47, 1.0))
+		status_box.draw_rect(Rect2(k + Vector2(-1, 0), Vector2(9, 2)), Color(0.92, 0.85, 1.0))
 	if _o2_on and not _reel_prompt and not _restart_prompt and not _waiting_key:
 		var col := Color(0.5, 0.85, 1.0)
 		if _o2_frac < 0.3:

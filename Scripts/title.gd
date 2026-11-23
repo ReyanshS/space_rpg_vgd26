@@ -10,6 +10,7 @@
 # CONTINUE instead and goes to the next level, with your skills. NEW GAME
 # appears next to it and starts over (it deletes the save).
 # Click a button, or pick one with the arrow keys and press E, Space or Enter.
+# Top left: JUDGE MODE (see _make_judge_buttons) for the TSA judges.
 # Edit the texts in title.tscn: select a Label or Button and change its Text.
 # ---------------------------------------------------------------------------
 extends Node2D
@@ -49,11 +50,40 @@ func _ready() -> void:
 	add_child(_music)
 	_music.play()
 	_grab = _make_player("res://Assets/audio/grab.wav", -4.0)
+	_make_judge_buttons()
 	# select the first button after a moment, so a key still held from the last
 	# screen doesn't press it straight away
 	await get_tree().create_timer(0.5).timeout
 	if is_inside_tree() and not _starting:
 		play_button.grab_focus()
+
+
+## Judge mode, for the TSA judges: a switch in the top left corner. When it's
+## on, a button for each level appears under it (jump straight to Level 3), and
+## in a level R makes PIP walk the room for you (autopilot.gd). Made in code so
+## they always match the levels in Game.LEVELS.
+func _make_judge_buttons() -> void:
+	var box := VBoxContainer.new()
+	box.position = Vector2(6, 22)
+	box.add_theme_constant_override("separation", 3)
+	$UI.add_child(box)
+	var toggle := Button.new()
+	box.add_child(toggle)
+	var levels: Array[Button] = []
+	for n in Game.LEVELS.size():
+		var b := Button.new()
+		b.text = "LEVEL %d" % (n + 1)
+		b.pressed.connect(_start.bind(n + 1))
+		box.add_child(b)
+		levels.append(b)
+	var refresh := func() -> void:
+		toggle.text = "JUDGE MODE: " + ("ON" if Game.judge_mode else "OFF")
+		for b in levels:
+			b.visible = Game.judge_mode
+	toggle.pressed.connect(func() -> void:
+		Game.judge_mode = not Game.judge_mode
+		refresh.call())
+	refresh.call()
 
 
 func _make_player(path: String, volume: float) -> AudioStreamPlayer:

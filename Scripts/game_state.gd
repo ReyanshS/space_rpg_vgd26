@@ -55,6 +55,10 @@ var results := {}
 ## Stays false when you run one level scene straight from the editor with F6:
 ## that's the only time a level's TestStart marker is used.
 var playing_through := false
+## Judge mode (switched on at the title screen): every level can be picked from
+## the title, and in a level R makes PIP walk the room for you (autopilot.gd).
+## It's for the TSA judges, who must be able to see all three levels.
+var judge_mode := false
 ## The dev menu (dev_menu.gd) sets this to the room to start in when the next
 ## level loads (-1 = the normal start). The level reads it once and resets it.
 var dev_room := -1
@@ -181,6 +185,7 @@ func save_game() -> void:
 	var skills := SkillManager.to_save()
 	cfg.set_value("skills", "points", skills["points"])
 	cfg.set_value("skills", "unlocked", skills["unlocked"])
+	cfg.set_value("settings", "judge_mode", judge_mode)
 	var err := cfg.save(SAVE_PATH)
 	if err != OK:
 		push_warning("Couldn't save the game (error %d)" % err)
@@ -192,6 +197,7 @@ func load_game() -> bool:
 	if cfg.load(SAVE_PATH) != OK:
 		return false
 	results = cfg.get_value("progress", "results", {})
+	judge_mode = cfg.get_value("settings", "judge_mode", false)
 	SkillManager.from_save({
 		"points": cfg.get_value("skills", "points", 0),
 		"unlocked": cfg.get_value("skills", "unlocked", []),

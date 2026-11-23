@@ -31,9 +31,11 @@ def near(x, y, pc, r):
 STEP = 4
 HANDS_UP = 9.0          # the wire ends at his hands, 9 px above his feet (player.gd hand_position)
 CORE_MAX_TIME = 30.0    # core rooms: routes slower than this (seconds) aren't worth listing
-WALK_SOLID = '# CD=~@B' # your feet can't go here (open space too: mag boots need hull)
-HARD_SOLID = '# CD=@B'  # you can't pass here at all, not even drifting
-WIRE_SOLID = '# CD=EX@' # the wire can't cross these (it CAN cross open space)
+WALK_SOLID = '# CDFM=~@B' # your feet can't go here (open space too: mag boots need hull)
+HARD_SOLID = '# CDFM=@B'  # you can't pass here at all, not even drifting
+WIRE_SOLID = '# CDFM=EX@' # the wire can't cross these (it CAN cross open space)
+# F fuse door and M main door are doors; f fuse, k clamp and o socket are floor. A room with
+# sockets is also tried with the clamp in each socket (it then works like a pole, B).
 # 'B' is a POLE: solid for your feet, but the wire crosses it and wraps round its centre.
 # '@' is a CORE (Level 3): its room is solved by wrapping the wire all the way
 # round it (the wire's angle round the core adds up to a full turn) - no goal pad.
@@ -309,13 +311,13 @@ def rooms(g):
     H = len(g); W = len(g[0]); seen = {}; out = []
     for r in range(H):
         for c in range(W):
-            if (c, r) in seen or g[r][c] in '# D=': continue
+            if (c, r) in seen or g[r][c] in '# DFM=': continue
             stack = [(c, r)]; seen[(c, r)] = len(out); cells = []
             while stack:
                 cc, rr = stack.pop(); cells.append((cc, rr))
                 for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                     n = (cc + dc, rr + dr)
-                    if 0 <= n[1] < H and 0 <= n[0] < W and n not in seen and g[n[1]][n[0]] not in '# D=':
+                    if 0 <= n[1] < H and 0 <= n[0] < W and n not in seen and g[n[1]][n[0]] not in '# DFM=':
                         seen[n] = len(out); stack.append(n)
             out.append(cells)
     return out
@@ -350,7 +352,7 @@ def walking_order(g, rms):
     links = {i: set() for i in range(len(rms))}
     for r, row in enumerate(g):
         for c, ch in enumerate(row):
-            if ch != 'D': continue
+            if ch not in 'DFM': continue
             adj = {room_of[n] for n in near4(c, r) if n in room_of}
             for a in adj: links[a] |= adj - {a}
     groups = barrier_groups(g, room_of)
@@ -420,7 +422,8 @@ if __name__ == '__main__':
     for k, ri in enumerate(order):
         if only and k + 1 not in only: continue
         cells_of_room = rms[ri]
-        done = set(order[:k])
+        # only rooms with a START get powered (halls don't move barriers)
+        done = set(o for o in order[:k] if any(g[r][c] == 'S' for (c, r) in rms[o]))
         M = Map(open_barriers(g, groups, done))
         pads = {}; cells = {}
         for (c, r) in cells_of_room:
@@ -436,14 +439,32 @@ if __name__ == '__main__':
         if not st: continue
         cores = [(c, r) for (c, r) in cells_of_room if g[r][c] == '@']
         core = center(*cores[0]) if cores else None
-        sols = solve_room(M, pads, poles, cells, st[0], max_depth=6 if core else 12, core=core,
-                          start_time=ROOM_TIME.get(k + 1))
+        # sockets: try the room with no clamp, and with the clamp in each socket
+        # (the clamp is solid and the wire wraps round it, exactly like a pole)
+        sockets = [(c, r) for (c, r) in cells_of_room if g[r][c] == 'o']
+        sols = []
+        clamp_of = {}                  # id(solution) -> socket used
+        for sock in [None] + sockets:
+            Mx, px = M, poles
+            if sock is not None:
+                gg = [list(row) for row in M.g]
+                gg[sock[1]][sock[0]] = 'B'
+                Mx, px = Map([''.join(row) for row in gg]), poles + [center(*sock)]
+            for s in solve_room(Mx, pads, px, cells, st[0], max_depth=6 if core else 12, core=core,
+                                start_time=ROOM_TIME.get(k + 1)):
+                if sock is not None:
+                    s = (s[0] + [f'(clamp in {sock})'],) + tuple(s[1:])
+                clamp_of[id(s)] = sock
+                sols.append(s)
         kind = f'CORE {cores[0]}: wrap the wire round it' if cores else 'goal'
         print(f'Stage {k + 1} (start {st[0]}, {kind}, START {min(ROOM_TIME.get(k + 1, TIME), MAX_TIME)} s): {len(sols)} solutions')
+        if sockets and not any(clamp_of[id(s)] is None for s in sols) and sols:
+            print('    needs the clamp: no route without it')
         if sols:
             top = max(sols, key=lambda x: (x[1], -x[3]))
             print(f'    most forgiving route: lowest timer {top[1]:.2f} s')
-            paths[k + 1] = {'labels': top[0], 'lowest': top[1], 'points': top[4]}
+            paths[k + 1] = {'labels': top[0], 'lowest': top[1], 'points': top[4], 'start': list(st[0]),
+                            'clamp': list(clamp_of[id(top)]) if clamp_of[id(top)] else None}
         best = {}
         for labels, spare, got, total, _trail in sols:
             key = ' -> '.join(labels)

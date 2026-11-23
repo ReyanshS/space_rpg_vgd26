@@ -40,6 +40,11 @@ const FEET_HALF := Vector2(6, 4)
 var level: WireLevel = null   # set by the level when the game starts
 ## Walking speed is multiplied by this (the LEG SERVOS skills raise it).
 var speed_mult := 1.0
+## PIP's autopilot (judge mode, autopilot.gd) is walking for you: the keys are
+## ignored and `auto_dir` is used instead, like a stick held in that direction.
+## Everything else (walls, the wire, wrapping) works exactly as when you walk.
+var autopilot := false
+var auto_dir := Vector2.ZERO
 var state: State = State.FREE
 var facing := Vector2i(0, 1)  # which way he looks: (0,1) = down, towards the camera
 var _last_x := 1              # last left/right he faced (for sprites with no "walk_up")
@@ -147,7 +152,7 @@ func hand_position() -> Vector2:
 
 func _walk(delta: float) -> void:
 	# get_vector turns the 4 arrow/WASD actions into one direction (length 0..1)
-	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	var input := auto_dir if autopilot else Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	_moving = input.length() > 0.1
 	if _moving:
 		_face(input)
