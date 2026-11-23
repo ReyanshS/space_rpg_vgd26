@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://tnqqsysolp2i"]
 
 [ext_resource type="Script" uid="uid://o63n0qqpel36" path="res://Scripts/player.gd" id="1_player"]
-[ext_resource type="SpriteFrames" path="res://Assets/images/astronaut/astronaut_frames.tres" id="2_frames"]
+[ext_resource type="SpriteFrames" uid="uid://de1pypgu4xh2n" path="res://Assets/images/astronaut/astronaut_frames.tres" id="2_frames"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_feet"]
 size = Vector2(12, 8)
@@ -12,7 +12,8 @@ script = ExtResource("1_player")
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=163123214]
 position = Vector2(0, -18)
 sprite_frames = ExtResource("2_frames")
-animation = &"idle"
+animation = &"walk_left"
+frame_progress = 0.46594715
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=925976095]
 shape = SubResource("RectangleShape2D_feet")
