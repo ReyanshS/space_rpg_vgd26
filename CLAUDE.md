@@ -158,12 +158,21 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - `Scripts/autopilot.gd`: walks to the next room (`autopilot_target()`: current unsolved room,
   then the level's `walkthrough` export, then number order), fetches / places the clamp,
   collects fuses, steps on airlock pads, drifts across space (`walk_path()` has drift edges),
-  grabs the wire and steers along the solver's route (`player.autopilot` + `auto_dir`, so the
-  normal rules run). While `autopilot_on`: timer frozen, no zaps, no O2 drain, no PIP shutdown
-  meter, blocking beats don't block. Falls back to `autopilot_force_solve()` (+ a warning).
+  grabs the wire and steers to every point of the solver's route (`player.autopilot` +
+  `auto_dir`, so the normal rules run). A jump between route points = a drift (`_drift`: line
+  up, straight push). Blocked diagonally by a corner = one axis at a time (`_free_axis`).
+  While `autopilot_on`: timer frozen, no zaps, no O2 drain, no PIP shutdown meter, blocking
+  beats don't block. Falls back to `autopilot_force_solve()` (+ a warning: treat it as a bug).
+- While walking a route, `autopilot_wraps` switches off `_update_wraps` and the route's `wraps`
+  list decides the pillar wraps (`autopilot_sync_wraps`). Some solver routes only graze a
+  pillar's centre (cross product exactly 0 on the 4 px lattice); steering a pixel off misses it.
+- `autopilot.debug = true` prints each step and where he got stuck.
 - Routes: `Data/routes/level_N.json` from `python tools/solver2.py Scenes/level_N.tscn --paths
-  Data/routes/level_N.json --margin 3` (keyed by START tile; `clamp` = the socket used).
-  **Regenerate after any map change.** Test: a bot that only presses R (see Verification below).
+  Data/routes/level_N.json --margin 3` (keyed by START tile; `clamp` = the socket used; `wraps`
+  = [point index, pads touched, [[pole x, pole y, side]...]] where the wraps change). Godot
+  lists `.json` as a resource, so exports include them without a filter.
+  **Regenerate after any map change.** Test: a bot that only presses R (see Verification below);
+  it must print no "Autopilot couldn't walk room" warnings.
 
 ## Spacewalk rules (Level 2)
 - `hull` = floor outside the ship, `space` = open space (nothing drawn: the Starfield shows). A room

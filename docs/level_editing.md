@@ -220,6 +220,8 @@ On the title screen, top left: **JUDGE MODE**. When it's on:
   down if it's needed, grabs the wire and walks the route (no timer, no zaps). Then
   you get the controls back. R again for the next room. After two fails PIP says
   "Press R and I'll walk you through it" instead of offering a hint.
+- If the Output panel says **"Autopilot couldn't walk room N"**, PIP gave up and just
+  powered the room. Almost always the map changed: make the routes again (section 8).
 
 ## Common mistakes
 

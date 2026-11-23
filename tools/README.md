@@ -61,7 +61,8 @@ node adds Node Time, never above Max Wire Time); "lowest timer" is the least tim
 left on that route, so it's how tight the room is. Poles (`B`) are modelled exactly like the game
 (`rewrap()` = level.gd `_update_wraps()`). Drifting across open space is part of the walking
 between pads. `--paths out.json --margin 3` writes the most forgiving route of each room (feet
-positions) so a bot can walk it in the game. Then one line per power cell: `collectible` or
+positions, plus `wraps`: the points where the wire wraps or unwraps a pole) so a bot can walk it
+in the game. Judge mode's autopilot reads these from `Data/routes/level_N.json`. Then one line per power cell: `collectible` or
 `NOT collectible on any route`. The solver's speeds/radii (top of `solver2.py`) must match
 `player.gd` and `level.gd`.
 

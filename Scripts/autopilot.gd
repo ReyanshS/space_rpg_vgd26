@@ -6,12 +6,19 @@
 #
 # Where the routes come from: tools/solver2.py works out the most forgiving
 # route of every room and writes it to Data/routes/level_N.json (feet positions
-# every 4 px). This script just steers the astronaut along those points, like
-# a player holding the stick, so walls, the wire, wrapping round pillars and
-# touching pads all work exactly as when a person plays. While it runs, the
-# timer doesn't tick and nothing zaps him (level.gd checks autopilot_on), so it
-# can't fail. If a room has no route (someone changed the map and didn't run
-# the solver again) or he gets stuck, PIP powers the room straight away.
+# every 4 px). This script steers the astronaut to every one of those points,
+# like a player holding the stick, so walls, the wire and touching pads all
+# work exactly as when a person plays. Three things need a little help:
+#   - a jump in the route is a drift across open space: he walks straight off
+#     the edge (only a straight push starts a drift, see player.gd _slide)
+#   - a corner can block a diagonal step (the game moves sideways first, then
+#     up/down), so when he's stuck he tries one direction at a time
+#   - the pillar wraps follow the route's "wraps" list (level.gd
+#     autopilot_sync_wraps), because some routes only just graze a pillar
+# While it runs, the timer doesn't tick and nothing zaps him (level.gd checks
+# autopilot_on), so it can't fail. If a room has no route (someone changed the
+# map and didn't run the solver again) or he gets stuck, PIP powers the room
+# straight away.
 #
 # The level owns this node (level.gd, start_autopilot). It's all one coroutine
 # (run): every await waits a physics frame, a walk or a cutscene.
@@ -20,11 +27,17 @@ class_name Autopilot
 extends Node
 
 const ROUTES := "res://Data/routes/level_%d.json"
-const STEP_EVERY := 3        # follow every 3rd route point (they're 4 px apart)
+const DRIFT_GAP := 8.0       # route points further apart than this = a drift across space
 
 var level: WireLevel
 var running := false
-var _routes := {}            # START tile -> {"points": Array[Vector2], "clamp": Vector2i}
+var debug := false           # true: print each step PIP takes (for finding where he gets stuck)
+var _routes := {}            # START tile -> {"points": Array[Vector2], "clamp": Vector2i, "wraps": {index: [pads, poles]}}
+
+
+func _note(s: String) -> void:
+	if debug:
+		print("[autopilot] %s  (at %s, state %d)" % [s, level.player.position.round(), level.player.state])
 
 
 ## Reads this level's routes (made by the solver).
@@ -44,7 +57,10 @@ func load_routes(number: int) -> void:
 		var clamp := Vector2i(-1, -1)
 		if r.get("clamp") != null:
 			clamp = Vector2i(int(r["clamp"][0]), int(r["clamp"][1]))
-		_routes[Vector2i(int(r["start"][0]), int(r["start"][1]))] = {"points": pts, "clamp": clamp}
+		var wraps := {}          # point index -> [pads touched, the pillars wrapped after the last pad]
+		for e in r.get("wraps", []):
+			wraps[int(e[0])] = [int(e[1]), e[2]]
+		_routes[Vector2i(int(r["start"][0]), int(r["start"][1]))] = {"points": pts, "clamp": clamp, "wraps": wraps}
 
 
 ## One press of R: do the next room.
@@ -66,16 +82,19 @@ func _do_next_room() -> void:
 		if not await _walk_to_cell(level.exit_cell()):    # everything's done: off to the exit
 			level.autopilot_to_exit()
 		return
+	_note("room %d, START %s" % [r.index + 1, r.start])
 	await _open_the_way(r.start)
 	var route: Dictionary = _routes.get(r.start, {})
 	# 1. the clamp, if this room's route needs it in a socket
 	var sock: Vector2i = route.get("clamp", Vector2i(-1, -1))
 	if sock.x >= 0 and level.clamp_socket() != sock:
 		if not await _fetch_clamp():
+			_note("couldn't get the clamp")
 			level.autopilot_force_solve(r)
 			await _wait_quiet()
 			return
 		if not await _walk_next_to(sock):
+			_note("couldn't reach socket %s" % sock)
 			level.autopilot_force_solve(r)
 			await _wait_quiet()
 			return
@@ -84,20 +103,35 @@ func _do_next_room() -> void:
 	await _collect_reachable_items()
 	# 3. to the START, grab the wire, and walk the route
 	if not await _walk_to_cell(r.start):
+		_note("couldn't walk to the START")
 		level.autopilot_force_solve(r)
 		await _wait_quiet()
 		return
 	level.autopilot_grab()
 	var pts: Array = route.get("points", [])
 	if pts.is_empty():
+		_note("no route for this room")
 		level.autopilot_force_solve(r)
 		await _wait_quiet()
 		return
-	for i in range(0, pts.size(), STEP_EVERY):
+	var wraps: Dictionary = route.get("wraps", {})
+	var want: Array = [1, []]                # [pads touched, pillars wrapped] where the route is now
+	level.autopilot_wraps = true
+	for i in pts.size():
 		if r.solved or not is_inside_tree():
 			break
-		if not await _steer_to(pts[i], 2.0):
+		want = wraps.get(i, want)
+		var ok: bool
+		if i > 0 and pts[i].distance_to(pts[i - 1]) > DRIFT_GAP:
+			ok = await _drift(pts[i - 1], pts[i])
+		else:
+			ok = await _steer_to(pts[i], 2.0)
+		if not ok:
+			_note("stuck on the route at point %d of %d, wanted %s" % [i, pts.size(), pts[i]])
 			break
+		level.autopilot_sync_wraps(want[0], want[1])
+	if is_inside_tree():
+		level.autopilot_wraps = false
 	if not r.solved and is_inside_tree():
 		await _steer_to(pts[-1], 1.5)
 	# the room should be powering up now; if not, PIP does it
@@ -106,6 +140,7 @@ func _do_next_room() -> void:
 		await get_tree().physics_frame
 		wait -= get_physics_process_delta_time()
 	if not r.solved and is_inside_tree():
+		_note("route walked but the room didn't power")
 		level.autopilot_force_solve(r)
 	await _wait_quiet()
 
@@ -136,11 +171,14 @@ func _wait_quiet() -> void:
 
 ## Steer towards a point, like holding the stick that way. Returns false if he
 ## stops getting closer (stuck against something) for a while.
-func _steer_to(target: Vector2, close_enough: float) -> bool:
+func _steer_to(target: Vector2, close_enough: float, stop_on_drift := false) -> bool:
 	var p := level.player
 	var best := p.position.distance_to(target)
 	var stuck := 0.0
 	while is_inside_tree():
+		if stop_on_drift and p.state == Astronaut.State.DRIFT:
+			p.auto_dir = Vector2.ZERO
+			return true                                # already pushed off the edge: that's the drift
 		if p.state == Astronaut.State.DRIFT or level.is_busy():
 			p.auto_dir = Vector2.ZERO
 			await get_tree().physics_frame             # floating across space, or a cutscene
@@ -149,6 +187,10 @@ func _steer_to(target: Vector2, close_enough: float) -> bool:
 		if d.length() <= close_enough:
 			return true
 		p.auto_dir = d.normalized()
+		if stuck > 0.15:
+			var axis := _free_axis(d)                  # a corner in the way: one direction at a time
+			if axis != Vector2.ZERO:
+				p.auto_dir = axis
 		await get_tree().physics_frame
 		var now := p.position.distance_to(target)
 		if now < best - 0.05:
@@ -162,11 +204,56 @@ func _steer_to(target: Vector2, close_enough: float) -> bool:
 	return false
 
 
+## Stuck going diagonally? The game moves you sideways first and then up or
+## down, so the corner of a wall (or of open space) can stop a diagonal step.
+## A player would then press one direction at a time: so do we. Tries the
+## bigger direction first, and only one he can really step into (not open
+## space, which would start a drift).
+func _free_axis(d: Vector2) -> Vector2:
+	var pos := level.player.position
+	var axes := [Vector2(signf(d.x), 0.0), Vector2(0.0, signf(d.y))]
+	if absf(d.y) > absf(d.x):
+		axes.reverse()
+	for axis in axes:
+		if axis == Vector2.ZERO:
+			continue
+		var next: Vector2 = pos + axis * 2.0
+		if level.box_blocked(next, Astronaut.FEET_HALF):
+			continue
+		if level.player.is_wired() and not level.wire_reaches(next):
+			continue
+		return axis
+	return Vector2.ZERO
+
+
+## Two route points far apart = the route drifts across open space there.
+## Get exactly onto the edge spot, push straight towards the gap (a straight
+## push is what starts a drift), then float until he lands.
+func _drift(from: Vector2, to: Vector2) -> bool:
+	var p := level.player
+	var d := to - from
+	var dir := Vector2(signf(d.x), 0.0) if absf(d.x) > absf(d.y) else Vector2(0.0, signf(d.y))
+	if not await _steer_to(from, 1.0, true):
+		return false
+	var t := 0.0
+	while is_inside_tree() and p.state != Astronaut.State.DRIFT and t < 1.0:
+		p.auto_dir = dir
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+	p.auto_dir = Vector2.ZERO
+	while is_inside_tree() and p.state == Astronaut.State.DRIFT:
+		await get_tree().physics_frame
+	return is_inside_tree() and p.position.distance_to(to) < 12.0
+
+
 ## Walks (no wire) to a tile, along a path round walls and red tiles.
 func _walk_to_cell(goal: Vector2i) -> bool:
 	if goal.x < 0:
 		return false
-	var path: Array[Vector2i] = level.walk_path(level.cell_of(level.player.position), goal)
+	var here := level.cell_of(level.player.position)
+	if here == goal:                                   # already on it: just step to its middle
+		return await _steer_to(level.center_of(goal), 3.0)
+	var path: Array[Vector2i] = level.walk_path(here, goal)
 	if path.is_empty():
 		return false
 	for c in path:

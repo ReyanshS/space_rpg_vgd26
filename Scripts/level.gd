@@ -430,6 +430,7 @@ var _locked_msg_cd := 0.0      # don't repeat "it's locked" every frame
 # --- judge mode: PIP walks the room for you (autopilot.gd)
 ## True while the autopilot has the controls: no timer, no zaps, keys ignored.
 var autopilot_on := false
+var autopilot_wraps := false    # PIP is walking a solver route: the route decides the pillar wraps
 var _autopilot: Autopilot
 
 # --- playtesting (TestStart marker + F6, or the dev menu)
@@ -986,14 +987,7 @@ func _take_pickup(c: Vector2i, quiet := false) -> void:
 ## Returns true if it did something (so E doesn't also do anything else).
 func _try_clamp() -> bool:
 	if _clamp_at.x >= 0 and center_of(_clamp_at).distance_to(player.position) <= SOCKET_REACH:
-		_poles.erase(_clamp_at)
-		_clamp_at = Vector2i(-1, -1)
-		_has_clamp = true
-		hud.set_clamp(true)
-		if _clamp_post:
-			_clamp_post.queue_free()
-			_clamp_post = null
-		_play("clank")
+		_lift_clamp()
 		return true
 	if not _has_clamp:
 		return false
@@ -1005,19 +999,36 @@ func _try_clamp() -> bool:
 				best = s
 	if best.x < 0:
 		return false
-	_clamp_at = best
-	_poles.append(best)                  # in its socket the clamp works like a pole
+	_put_clamp(best)
+	return true
+
+
+## Takes the clamp out of its socket, into your hands.
+func _lift_clamp() -> void:
+	_poles.erase(_clamp_at)
+	_clamp_at = Vector2i(-1, -1)
+	_has_clamp = true
+	hud.set_clamp(true)
+	if _clamp_post:
+		_clamp_post.queue_free()
+		_clamp_post = null
+	_play("clank")
+
+
+## Stands the clamp up in socket s.
+func _put_clamp(s: Vector2i) -> void:
+	_clamp_at = s
+	_poles.append(s)                     # in its socket the clamp works like a pole
 	_has_clamp = false
 	hud.set_clamp(false)
 	_clamp_post = Pickup.new()
 	_clamp_post.kind = "clamp"
 	_clamp_post.standing = true
-	_clamp_post.position = center_of(best)
+	_clamp_post.position = center_of(s)
 	_tile_root.add_child(_clamp_post)
 	_play("clank")
 	if Game.first_time("clamp_placed"):
 		_pip_say(pip_clamp_placed)
-	return true
 
 
 ## A socket you could use with E right now (for the [E] key over it), or (-1, -1).
@@ -1077,6 +1088,7 @@ func autopilot_begin() -> void:
 
 func autopilot_end() -> void:
 	autopilot_on = false
+	autopilot_wraps = false
 	player.autopilot = false
 	player.auto_dir = Vector2.ZERO
 	if not _complete:
@@ -1151,23 +1163,56 @@ func item_cell(kind: String) -> Vector2i:
 ## Take the clamp out of its socket (the autopilot stands next to it first).
 func take_clamp() -> void:
 	if _clamp_at.x >= 0:
-		_try_clamp()
+		_lift_clamp()
 
 
 ## Put the clamp into socket s (the autopilot stands next to it first).
 func place_clamp_at(s: Vector2i) -> void:
-	if not _has_clamp or not _sockets.has(s):
-		return
-	var keep := _sockets.duplicate()
-	_sockets.assign([s])                 # so _try_clamp can only pick this socket
-	var saved := player.position
-	_try_clamp()
-	_sockets = keep
-	player.position = saved
+	if _has_clamp and _sockets.has(s):
+		_put_clamp(s)
 
 
 func autopilot_grab() -> void:
 	_try_grab()
+
+
+## While PIP walks a solver route, the route says which pillars the wire is
+## wrapped round (autopilot_wraps switches off _update_wraps). The maths is the
+## same; the solver just did it on exact 4 px steps. Some routes only graze a
+## pillar's centre, and PIP's steering is a pixel or two off, so without this
+## the wire could miss the pillar and the route would get stuck.
+## `pads` = how many pads the route has tied the wire to by now (START = 1).
+## `want` = [[x, y, side], ...], the pillars after the last pad, in order.
+func autopilot_sync_wraps(pads: int, want: Array) -> void:
+	if _wire == null:
+		return
+	var pads_now := 0
+	for c in _anchor_cells:
+		if not _poles.has(c):
+			pads_now += 1
+	if pads_now != pads:
+		return                  # he reached a pad a step before or after the route did: leave it
+	var first := _anchor_cells.size()      # where the pillars after the last pad begin
+	while first > 0 and _poles.has(_anchor_cells[first - 1]):
+		first -= 1
+	var keep := 0                          # how many of them already match the route
+	while keep < want.size() and first + keep < _anchor_cells.size() \
+			and _anchor_cells[first + keep] == Vector2i(int(want[keep][0]), int(want[keep][1])) \
+			and _anchor_signs[first + keep] == float(want[keep][2]):
+		keep += 1
+	while _anchor_cells.size() > first + keep:     # off: the ones the route doesn't have
+		_anchor_cells.pop_back()
+		_anchor_signs.pop_back()
+		_wire.remove_last_anchor()
+	for k in range(keep, want.size()):             # on: the ones it does
+		var c := Vector2i(int(want[k][0]), int(want[k][1]))
+		_anchor_cells.append(c)
+		_anchor_signs.append(float(want[k][2]))
+		_wire.add_anchor(center_of(c))
+		_tile_hit(c)
+		_play("bend")
+		pad_touched.emit("pole", _wire_room.index)
+	_last_anchor = center_of(_anchor_cells[-1])
 
 
 ## When walking the route didn't work: PIP powers the room himself. The wire
@@ -1188,9 +1233,19 @@ func autopilot_force_solve(r: Room) -> void:
 
 
 ## A walking path (tile by tile, sideways and up/down only) from one tile to
-## another that avoids walls, closed doors, red tiles and grates. A fuse door
-## counts as open if you carry a fuse (walking into it opens it). [] = no way.
+## another that avoids walls, closed doors and red tiles. A fuse door counts as
+## open if you carry a fuse (walking into it opens it). [] = no way.
+## Blinking grates are avoided if there's another way; if there isn't (Level 3
+## has a START behind a row of them) the path crosses them. Only the autopilot
+## uses this, and nothing zaps him while it runs.
 func walk_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var path := _walk_bfs(from, to, false)
+	if path.is_empty() and from != to:
+		path = _walk_bfs(from, to, true)
+	return path
+
+
+func _walk_bfs(from: Vector2i, to: Vector2i, grates_ok: bool) -> Array[Vector2i]:
 	var prev := {from: from}
 	var queue: Array[Vector2i] = [from]
 	var head := 0
@@ -1212,7 +1267,7 @@ func walk_path(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 			if prev.has(n):
 				continue
 			var fuse_ok := kind_at(n) == "fuse_door" and _fuses > 0
-			if (is_solid_for_walk(n) and not fuse_ok) or _is_red(n) or kind_at(n) == "blinker":
+			if (is_solid_for_walk(n) and not fuse_ok) or _is_red(n) or (kind_at(n) == "blinker" and not grates_ok):
 				continue
 			prev[n] = c
 			queue.append(n)
@@ -2551,10 +2606,11 @@ func _touching_at(feet: Vector2, pc: Vector2, radius: float) -> bool:
 
 ## Called from player_moved() while you carry the wire.
 func _update_wraps(from: Vector2, to: Vector2) -> void:
-	if from.is_equal_approx(to):
+	if from.is_equal_approx(to) or autopilot_wraps:
 		return
-	# unwrap first (maybe several poles in a row came free)
-	while _anchor_cells.size() >= 2 and kind_at(_anchor_cells[-1]) == "pole":
+	# unwrap first (maybe several poles in a row came free). _poles also has
+	# the clamp while it stands in a socket, so it comes off the same way.
+	while _anchor_cells.size() >= 2 and _poles.has(_anchor_cells[-1]):
 		var p := center_of(_anchor_cells[-1])
 		var q := center_of(_anchor_cells[-2])
 		var side := signf((p - q).cross(to - p))
@@ -2614,7 +2670,7 @@ func _reel_back() -> void:
 	var path: Array[Vector2] = []
 	var hand := player.position
 	var i := _anchor_cells.size() - 1
-	while i > 0 and kind_at(_anchor_cells[i]) == "pole":
+	while i > 0 and _poles.has(_anchor_cells[i]):
 		var p := center_of(_anchor_cells[i])
 		var q := center_of(_anchor_cells[i - 1])
 		var out := -((q - p).normalized() + (hand - p).normalized())

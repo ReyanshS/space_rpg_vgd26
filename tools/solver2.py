@@ -219,12 +219,27 @@ def explore(M, pads, poles, cells, anchor, start, budget_px, used):
     return events, hits, dist, parent
 
 
-def path_to(parent, key):
-    """The feet positions walked to reach state `key`, first to last."""
+def path_to(parent, key, pads):
+    """The feet positions walked to reach state `key`, first to last. Each one
+    also keeps the poles the wire is wrapped round there and `pads` (how many
+    pads it's tied to so far, START = 1), for the autopilot (wrap_events)."""
     pts = []
     while key is not None:
-        pts.append((key[0], key[1])); key = parent[key]
+        pts.append((key[0], key[1], key[2], pads)); key = parent[key]
     return pts[::-1]
+
+
+def wrap_events(trail):
+    """The points of a route where its pole wraps change:
+    [[point index, pads touched, [[pole x, pole y, side], ...]], ...].
+    autopilot.gd uses them to keep the game's wire wrapped exactly like the
+    route, even where it only just grazes a pole's centre."""
+    ev = []; last = None
+    for i, (_x, _y, wraps, pads) in enumerate(trail):
+        w = [[int(pc[0] // TILE), int(pc[1] // TILE), sd] for pc, sd in wraps]
+        if (pads, w) != last:
+            ev.append([i, pads, w]); last = (pads, w)
+    return ev
 
 
 def sweep(core, a, b):
@@ -268,7 +283,7 @@ def solve_room(M, pads, poles, cells, start_key, max_depth=12, core=None, start_
             if best is not None:
                 poles_lab = [f'pole({int(pc[0] // TILE)},{int(pc[1] // TILE)})' for pc, _ in best[2]]
                 sols.append((labels + poles_lab + [f'loop@({best[1][0]},{best[1][1]})'], min(ms, time_left - best[0] / WALK),
-                             got, el + best[0] / WALK, trail + path_to(parent, (best[1][0], best[1][1], best[2]))))
+                             got, el + best[0] / WALK, trail + path_to(parent, (best[1][0], best[1][1], best[2]), len(used))))
                 return    # the loop can close from here: going on to more pads isn't needed
             if abs(wind) > 2.5 * math.pi:
                 return    # wound round more than once without closing: a dead end
@@ -283,7 +298,7 @@ def solve_room(M, pads, poles, cells, start_key, max_depth=12, core=None, start_
                 ev2, _, _, _ = explore(M, pads, poles, {}, anchor, cont, time_left * WALK - hc, used)
                 if any(k == key for (k, _w) in ev2): extra.add(c)
             arrive(key, wraps, p, tl, used, labels, got | extra, depth, anchor, min(ms, tl), wind, el + g / WALK,
-                   trail + path_to(parent, sk))
+                   trail + path_to(parent, sk, len(used)))
 
     def arrive(key, wraps, p, tl, used, labels, got, depth, prev_anchor, ms, wind, el, trail):
         kind, pc = pads[key]
@@ -463,7 +478,8 @@ if __name__ == '__main__':
         if sols:
             top = max(sols, key=lambda x: (x[1], -x[3]))
             print(f'    most forgiving route: lowest timer {top[1]:.2f} s')
-            paths[k + 1] = {'labels': top[0], 'lowest': top[1], 'points': top[4], 'start': list(st[0]),
+            paths[k + 1] = {'labels': top[0], 'lowest': top[1], 'points': [[p[0], p[1]] for p in top[4]],
+                            'wraps': wrap_events(top[4]), 'start': list(st[0]),
                             'clamp': list(clamp_of[id(top)]) if clamp_of[id(top)] else None}
         best = {}
         for labels, spare, got, total, _trail in sols:
