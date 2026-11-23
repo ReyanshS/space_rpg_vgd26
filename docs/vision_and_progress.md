@@ -8,7 +8,7 @@
 
 **The game.** A top-down pixel-art game set on a spaceship that has lost all power. You play an
 astronaut who restores power room by room by **carrying a live wire** from pad to pad, racing a
-5-second timer. It's an electricity puzzle game: sparks, crackling wires, lights flickering back
+short timer. It's an electricity puzzle game: sparks, crackling wires, lights flickering back
 on. It fits the 2026-27 TSA theme: *a deep space-themed RPG where progression comes from
 puzzle-solving rather than combat.* Title: **STAR CIRCUIT** (the team's choice).
 
@@ -27,19 +27,19 @@ do a **spacewalk** to rewire it, then come back in through a hatch.
 | Room | Teaches | What happens |
 | - | - | - |
 | 1 | Grabbing the wire | Spawn in the bottom-left room, grab the wire at the yellow START, run it to the blue GOAL. The door opens. |
-| 2 | Nodes | Start at the lightning bolt; crates block the direct path. Touch the orange heart NODE (it gives you another 5 seconds), then reach the goal. |
-| 3 | Bends | The purple BEND turns the wire 90°. START → bend → node → bend → GOAL. |
+| 2 | Nodes | Start at the lightning bolt; crates block the direct path. Touch the orange heart NODE (it gives you another 4 seconds), then reach the goal. |
+| 3 | Poles | Walk round the purple POLES so the wire wraps round them. START → pole → node → pole → GOAL. |
 | 4 | Red tiles | Red tiles are a barrier: walk on one and you get shocked and the room restarts. Go to the left node first and follow the route to the goal. |
 
 **Level 2 — Main Deck (the spacewalk).**
 
 | Area | Teaches | What happens |
 | - | - | - |
-| The Bridge | Review | Node + bend + red tiles together. Powering it triggers PIP's diagnostic. |
+| The Bridge | Review | Node + pole + red tiles together. Powering it triggers PIP's diagnostic. |
 | Airlock | Story moment | Stand on the pad: the door seals, the air hisses out, the outer door opens. |
 | Hull Section A | **Drifting** | No floor between hull plates: walk off an edge and you drift straight across to the next plate. Two drifts reach the relay. |
 | Solar Array | Wire angles | Floating debris blocks the wire. Hook the wire round a node first so it lines up with the gap. |
-| Main Coupling | Everything | Drift up to a bend, fling right (left = sparks!), drift across to the node, drift down to the coupling. Then back inside through the hatch. |
+| Main Coupling | Everything | Drift up, wrap the wire round the pole (the right way!), drift across to the node, hop the stepping stone, drift down to the coupling. Then back inside through the hatch. |
 
 **How it should feel and work:**
 - **Free movement**: walk anywhere, as long as the wire stays a straight, tight line from the
@@ -68,11 +68,12 @@ the game. Every change gets explained, with "check yourself" tasks.
 | Small node hitbox | Node touch radius 22 px (bigger) | Nodes were hard to hit |
 | Bend = sling around a pole, direction from your approach | Bend stops you, shows **two arrows**, you press one and get flung 90° (timer paused while choosing) | The automatic fling was hard to control ("option B") |
 | Map written as text in code | Map **painted** on a Godot TileMapLayer; walls/floors build themselves live | Teammates can edit levels |
+| Bend: stop, pick an arrow, get flung (Nov 2026) | **Pole**: a post the wire wraps round as you walk past; nodes add time instead of a full refill, a max on the timer, nodes hold the clock only briefly; per-room START times | The team said it was too easy; poles feel like real rope, and the timer rules give real levers to tune with the solver |
 | Hover/holo hint bubbles | **Guided tutorial**: one instruction at a time + arrow | Bubbles covered the pads; a guided flow fits a tutorial better |
 | Fully lit rooms | Dark ship, red emergency lights; power restores the lights | Matches "a ship with no electricity" |
 | New v2 astronaut sprite | **Original sprite restored**; v2 kept as a swappable option | Team preferred the original |
 | Level 1 ended with "press R to play again" | Results screen with stars, then **on to Level 2** | Judges must get from Level 1 into Level 2; stars make finishing feel rewarding |
-| No story or RPG elements | PIP (ship AI) dialogue, power cells that upgrade your suit's oxygen | The theme requires RPG elements; story ties the levels together |
+| No story or RPG elements | PIP (ship AI) dialogue, power cells that upgrade your suit's oxygen, a **skill tree** paid for with points from finishing levels | The theme requires RPG elements; story ties the levels together |
 | Spacewalk = "fix something outside" | Zero-G **drift** across gaps + oxygen meter, rewiring three relays | A new mechanic that still uses the wire rules, so it's a puzzle, not a reflex test |
 | Stuck players had no help | **H** shows the route in the harder rooms; PIP offers it after 2 fails | Judges must be able to finish; nobody should quit on one room |
 
@@ -81,10 +82,11 @@ the game. Every change gets explained, with "check yourself" tasks.
 ## 3. What's built
 
 ### Gameplay
-- Wire carrying with taut-wire line-of-sight, 5 s timer, node refill and pause, bend arrow choice
-  and fling, goals that power rooms and open doors, red tiles that shock (with or without the
+- Wire carrying with taut-wire line-of-sight, per-room START time, nodes that add time (capped)
+  and briefly hold the clock, poles the wire wraps round, goals that power rooms and open doors,
+  red tiles that shock (with or without the
   wire), timer-out wire snap, **R** to restart a room, respawn at the room's START.
-- **Power cells**: charge them by touching them with the live wire (also mid-fling and mid-drift);
+- **Power cells**: charge them by touching them with the live wire (also mid-drift);
   kept once the room is powered, returned if you fail. 9 in Level 1, 10 in Level 2 — some on the
   route, some needing a small detour, a few only reachable by a sharp player. Drawn as a battery
   with a lightning bolt. PIP points at the first one and explains it at the start of Level 1; the
@@ -100,7 +102,7 @@ the game. Every change gets explained, with "check yourself" tasks.
 - Level 1 (4 rooms) and Level 2 (bridge, airlock, 3 hull sections, exit hatch).
 
 ### Level editing
-- Paint the map on the `Layout` layer (tiles: floor, wall, start, goal, node, bend, red, red-off,
+- Paint the map on the `Layout` layer (tiles: floor, wall, start, goal, node, pole, red, red-off,
   crate, door, spawn, exit, **cell, hull, space, airlock**). Rooms, doors, wall panels, roof edges,
   floor variety and hull plates all build automatically. The Output panel warns about mistakes.
 - Story lines are **StoryBeat** markers under the `Story` node (pick a trigger, type the lines).
@@ -163,7 +165,21 @@ to the next section). Steps only appear once you're in their room.
 
 ---
 
+- **Nov 20**: the team found it too easy. Bends became **poles** the wire wraps round; nodes add
+  time instead of refilling, the timer has a max, nodes only hold the clock briefly, and each
+  room can have its own START time. Level 1 stays a gentle tutorial for its first 3 rooms; Levels
+  2 and 3 are hard but fair (about 1 s to spare on a perfect route; PIP's meter is tighter).
+  Level 1 room 4 and Level 2 room 5 were reworked for poles. Skills got stronger and new kinds
+  (node time, timer max, node hold). Menus got real buttons and keycap hints. Quitting
+  mid-level no longer throws errors.
+
 ## 4. What's verified — and what isn't
+
+- **Nov 20 (latest):** the solver models poles and the new timer exactly like the game, and a bot
+  walked the solver's route in every one of the 15 rooms in the real game: all solved, with the
+  lowest timer within about 0.1 s of the solver's number. Bots also quit to the title at 54
+  moments per level (3 ways), mashed random keys for 30 sessions, and started from TestStart in
+  every room: no errors. Older notes below are from before the poles.
 
 - **Solver** (`tools/solver2.py`, now understands drifting and power cells): every room in both
   levels has one intended route. Level 1's tightest segments keep >= 1.55 s spare (unchanged);

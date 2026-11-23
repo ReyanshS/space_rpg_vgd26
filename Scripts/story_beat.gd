@@ -27,6 +27,8 @@ enum Trigger {
 	FIRST_DRIFT,        ## you first drift across open space in this room
 	TOUCH_EMPTY_CELL,   ## you touch a power cell without the wire (room doesn't matter)
 	SHIP_LIGHTS_UP,     ## every room has power: plays during the lights-on cutscene (room doesn't matter)
+	PUSH_CRATE,         ## you first push a movable crate in this room
+	GROUND_CRATE,       ## a crate first shorts out a red tile in this room
 }
 
 @export var trigger: Trigger = Trigger.ENTER_ROOM:
@@ -56,21 +58,19 @@ enum Trigger {
 		queue_redraw()
 
 
-const CONSOLE_FONT := "res://Assets/fonts/m6x11.ttf"
+const CONSOLE_SIZE := 9           # the console's text size (hud.tscn, Dialogue/Row/Text)
 const CONSOLE_WIDTH := 254.0      # pixels of text per row in PIP's console (hud.tscn)
-static var _font: Font
 
 
 ## Editor only: how many rows `line` takes in PIP's console at font size `size`
 ## (wrapping word by word, like the console does).
 func _rows(line: String, size: int) -> int:
-	if _font == null:
-		_font = load(CONSOLE_FONT)
+	var font := ThemeDB.fallback_font       # the game's font (see ui_style.gd)
 	var rows := 1
-	var row := speaker + "> "
+	var row := speaker + ": "
 	for word in line.split(" ", false):
 		var trial := row + word
-		if _font.get_string_size(trial, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > CONSOLE_WIDTH:
+		if font.get_string_size(trial, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > CONSOLE_WIDTH:
 			rows += 1
 			row = word + " "
 		else:
@@ -114,7 +114,7 @@ func _draw() -> void:
 	# Will every line fit in the two rows of PIP's console? Too long = it gets
 	# split in two in the game, and people miss half of it.
 	for i in lines.size():
-		if _rows(lines[i], 16) > 2:
+		if _rows(lines[i], CONSOLE_SIZE) > 2:
 			draw_string(font, Vector2(9, y), "line %d TOO LONG: shorten it" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.3, 0.25))
 			y += 11.0
 	if point_here:

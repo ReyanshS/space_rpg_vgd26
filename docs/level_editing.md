@@ -22,8 +22,8 @@ paint. Untick **Show Layout In Editor** on the level node to see it without the 
 | floor / wall | `.` / `#` | walls (and doors, barriers) split the map into rooms |
 | start | `S` | yellow pad: press E here to grab the wire. **One per room.** |
 | goal | `G` | blue pad: touch it with the wire to power the room |
-| node | `N` | orange: wraps the wire, refills and pauses the timer |
-| bend | `B` | purple: flings you 90 degrees |
+| node | `N` | orange: wraps the wire, adds Node Time, holds the clock for Node Hold seconds |
+| pole | `B` | support pillar (steel column with a purple ring): solid; the wire wraps round it when you walk past it. The column covers the tile above it, so don't put anything there players must see |
 | discharge | `X` | red: zaps you, and the wire can't cross it |
 | blinker | `x` | blinking grate: zaps only while lit |
 | crate | `C` | blocks you and the wire |
@@ -33,10 +33,61 @@ paint. Untick **Show Layout In Editor** on the level node to see it without the 
 | spawn / exit | `P` / `E` | where you start / walking onto it finishes the level |
 | hull / space / airlock | `,` / `~` / `A` | spacewalk tiles (Level 2) |
 | core | `@` | Level 3: power the room by looping the wire all the way round it |
+| fuse | `f` | pickup: walk over it. The console counts your fuses |
+| fuse door | `F` | amber door: walk into it with a fuse and it opens (uses the fuse) |
+| main door | `M` | big red door: opens when every power link pointing at it has lit its lamp |
+| socket | `o` | where the cable clamp can be set down (E next to it). In a socket the clamp works like a pole |
+| clamp | `k` | the cable clamp lying on the floor: walk over it to pick it up (one per level) |
+| movable crate | `c` | steel crate with yellow stripes (the last tile in the palette): walk into it and it rolls one tile. Blocks you and the wire. Rolled onto a red tile, it shorts it out: that tile becomes safe for you and the wire |
 
 Rules the game checks:
-- Every room needs exactly **one START** and **one GOAL or CORE**. The Output panel
-  warns you if one is missing.
+- Every room needs exactly **one START** and **one GOAL or CORE**, except a **hall**: a
+  room with neither (a corridor, a hub). Halls never lock anything: their doors are open
+  from the start.
+
+**Room labels.** While you paint, every room shows a small label in the top left corner:
+its number (the order you walk to it from the spawn), its name, its START time and how
+many movable crates it has. Anything missing shows in red ("needs a START pad", "needs a
+GOAL"). Paint a new room and the Room Titles and Room Wire Time lists (level node,
+Inspector) get a new entry by themselves: rename "ROOM n" to what it should be called.
+Don't want the labels? Untick **Show Room Info** on the level node.
+
+## 1a. Movable crates
+
+Paint them with the crate tile (`c`, the last one in the palette). In the game:
+- Walk straight into a crate and keep walking: after a moment it rolls one tile.
+- It only rolls onto floor or a red tile, never onto a pad, a battery, a socket, an item,
+  another crate, or across the wire you're carrying.
+- Onto a **live red tile** it shorts it out and sinks: that tile is now safe for you, and
+  the wire can cross it. That's the best trick: a red strip that blocks the wire, and
+  crates to open the one tile the wire needs (see the Cable Store in Level 1).
+- **R** puts the crates of the room back where they started (not once the room has
+  power). In a hall, R puts its crates back and you at the door you came in by.
+
+Good crate puzzles: few crates (1 to 3), and a clear job for them (open a line for the
+wire, short out the right red tile, clear the way to a node). Keep the doors of a room
+clear: a crate pushed in front of a door you need is a dead end (R fixes it, but it
+isn't fun). The solver tries the crates in every place you can push them, so it can
+take a minute on a room with crates.
+
+## 1b. Dungeon parts: halls, fuses, the main door, the clamp, power links
+
+Level 1 is built like a small dungeon: the Reactor Hall is a hub with three wings you
+can do in different orders, and the main door only opens when all three are powered.
+- **Power links** are the switches. Add a **PowerLink** (right-click Links > Add Child
+  Node > PowerLink), drag it onto a room's goal, give it Marker2D children and drag
+  each onto a tile it should change. **Action**: OPEN or CLOSE a door or barrier,
+  RED_OFF or RED_ON a red floor (the whole patch touching the marker), or UNLOCK
+  (lights one lamp of a main door). **Show Camera** glides the camera over so the
+  player sees what changed. The editor draws a dotted line from the link to each target.
+- A **main door** has one lamp per UNLOCK link pointing at it.
+- **Fuses** open fuse doors. Make sure there are never more fuse doors on the way than
+  fuses the player can reach (or they get stuck).
+- The **clamp**: put a few **sockets** in a room, only one in the right place. That's a
+  "think first" puzzle: the solver says "needs the clamp" when there's no route without it.
+- **Walkthrough** (level node, Inspector > Level): the room numbers in the order PIP's
+  autopilot does them (judge mode). Halls are skipped.
+- Press **M** in the game for the deck map.
 - Rooms are numbered in the order you walk to them from the spawn. That number is
   what "room" means everywhere else (room names, PIP's beats, `malfunction_room`...).
 
@@ -82,9 +133,18 @@ and open the Inspector groups:
 - **PIP's rule lines**: change the text. Leave one empty and PIP stays quiet there.
 - **Popup texts**: the short messages at the top ("POWER ON", "ZAP!"...).
 
-The same level node also has **Level** (name, results message), **Rules** (wire
-time, battery bonus), **Lighting**, **Blinking grates**, **Spacewalk** (oxygen) and
-**Room names**.
+The same level node also has **Level** (name, results message), **Rules**,
+**Lighting**, **Blinking grates**, **Spacewalk** (oxygen) and **Room names**.
+
+**Rules** is where the difficulty lives:
+- **Wire Time**: seconds from the START. **Room Wire Time**: one number per room (in
+  walking order, like Room Names) to give a room its own START time; 0 = use Wire Time.
+- **Node Time**: seconds a node adds. **Max Wire Time**: the timer never goes above this.
+- **Node Hold**: how long standing on a node holds the clock.
+- **Cell Bonus**: seconds a battery adds.
+After changing any of them (or the map), check every room still works:
+`python tools/solver2.py Scenes/level_2.tscn`. Look at "most forgiving route: lowest
+timer": the least time a perfect player has left. About 1 s is hard, 2 s+ is easy.
 
 ## 4. The tutorial
 
@@ -118,14 +178,24 @@ its number, his shutdown time and a dotted flight path. On the **RoguePip** node
 - **Lines**: what he says when the surge hits, right after turning, when he escapes
   each socket, after the reboot, and when he cuts your wire.
 
-## 6b. The RPG side: XP, level ups, suit upgrades
+## 6b. The RPG side: skill points and the skill tree
 
-The numbers live in `Scripts/game_state.gd` (top of the file):
-- **XP_ROOM, XP_CLEAN, XP_CELL, XP_FINISH**: XP for powering a room, for doing it
-  without failing first, for each battery kept, for reaching the exit.
-- **XP_FIRST_LEVEL, XP_MORE_PER_LEVEL**: how much XP each level up needs.
-- **UPGRADES**: the cards on the LEVEL UP screen (name, text, how many times you can take it).
-  To add a new upgrade you also need code that uses it (see `wire_bonus()` and friends).
+- **Points per level**: select the level's root node, Inspector > Level > **Skill Points**.
+  You only get them the first time you finish that level.
+- **Skills** are files in `Data/skills/` (one `.tres` each). Double-click one to edit it in
+  the Inspector:
+  - **Cost**: points to unlock it. **Amount**: how strong it is.
+  - **Parent Id**: the `id` of the skill you need first (empty = top of its branch).
+  - **Branch**: which column (Wire, Suit, Life Support).
+  - **Short Name**: the word under its box on the tree. **Description**: shown when selected.
+  - **Effect**: what it changes (`wire_time`, `cell_bonus`, `walk_speed`, `boots`, `o2`,
+    `o2_per_cell`). Skills with the same effect add up.
+- **New skill**: right-click a skill file > **Duplicate**, then give it a new **Id** and a
+  Parent Id. The tree places it by itself. A brand new kind of effect needs code
+  (search for `SkillManager.bonus`).
+- Never make a puzzle that NEEDS a skill: run the solver, which uses no skills.
+- The save file is `user://save.cfg`. To start clean while testing, press **N** on the title
+  screen (or delete it: Project > Open User Data Folder).
 
 ## 7. Test it straight away: TestStart + F6
 
@@ -142,6 +212,13 @@ cargo sunk, PIP already turned and on the right socket. Options:
 It only works with F6 from the editor. **F5** (the whole game from the title) and
 the exported web game ignore it, so a forgotten flag can't break the real game.
 
+**Quicker: the dev menu.** While the game runs from the editor (F5 or F6), press
+**`** (the key left of 1) or **F1** at any time, even on the title screen. It lists
+every room of every level: pick one and that level loads with you on the room's
+START pad and every room before it powered (the same as a TestStart flag, nothing
+to drag). Room 1 is the normal start with PIP's intro. **Esc** or **`** closes it.
+New rooms show up in the list by themselves. Exported and web builds don't have it.
+
 ## 8. Check the puzzle with the solver
 
 After changing a room's map:
@@ -152,7 +229,27 @@ python tools/solver2.py tools/out/level1.txt
 ```
 
 It lists every route that works in time, and whether each battery can be reached.
-"0 solutions" = nobody can solve that room. More in `tools/README.md`.
+"0 solutions" = nobody can solve that room. With movable crates it also says how many
+pushes the room needs at least. On a Mac type `python3` instead of `python`. More in
+`tools/README.md`.
+
+**Then update PIP's autopilot routes** (judge mode walks these), or he powers the
+changed room without walking it:
+
+```
+python tools/solver2.py Scenes/level_1.tscn --paths Data/routes/level_1.json --margin 3
+```
+
+## 9. Judge mode (for the TSA judges)
+
+On the title screen, top left: **JUDGE MODE**. When it's on:
+- LEVEL 1 / 2 / 3 buttons appear, so a judge can jump straight to any level.
+- In a level, **R** makes PIP take over: he walks to the next room, sets the clamp
+  down if it's needed, grabs the wire and walks the route (no timer, no zaps). Then
+  you get the controls back. R again for the next room. After two fails PIP says
+  "Press R and I'll walk you through it" instead of offering a hint.
+- If the Output panel says **"Autopilot couldn't walk room N"**, PIP gave up and just
+  powered the room. Almost always the map changed: make the routes again (section 8).
 
 ## Common mistakes
 

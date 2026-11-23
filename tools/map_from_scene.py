@@ -4,10 +4,11 @@
 # looks up each tile's "kind" in layout_tileset.tres, and writes one character
 # per tile to tools/out/level1.txt. The solver and preview tools read that file.
 #
-#   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
+#   # wall   . floor   S start   G goal   N node   B pole   X red (discharge)
 #   x blinking grate   C crate   D door   P spawn   E exit
 #   * power cell   , hull (outside floor)   ~ open space   A airlock pad   = barrier
-#   @ core (Level 3: wrap the wire round it)   (space) = nothing
+#   @ core (Level 3: wrap the wire round it)   f fuse   F fuse door   M main door
+#   o clamp socket   k clamp   c movable crate (push it)   (space) = nothing
 #
 # Run from the project folder:   python tools/map_from_scene.py [scene.tscn] [out.txt]
 #   e.g. python tools/map_from_scene.py Scenes/level_2.tscn tools/out/level2.txt
@@ -21,9 +22,10 @@ import os, re, struct, sys
 SCENE = sys.argv[1] if len(sys.argv) > 1 else 'Scenes/level_1.tscn'
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
 OUT = sys.argv[2] if len(sys.argv) > 2 else 'tools/out/level1.txt'
-SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
+SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'pole': 'B',
           'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
-          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@'}
+          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@',
+          'fuse': 'f', 'fuse_door': 'F', 'main_door': 'M', 'socket': 'o', 'clamp': 'k', 'box': 'c'}
 
 scene = open(SCENE, encoding='utf-8').read()
 layout = scene[scene.index('[node name="Layout"'):]

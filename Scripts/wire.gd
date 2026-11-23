@@ -143,6 +143,13 @@ func add_anchor(p: Vector2) -> void:
 	_refresh()
 
 
+## The wire came off a pole again (level.gd _update_wraps): drop its last corner.
+func remove_last_anchor() -> void:
+	if anchors.size() > 1:
+		anchors.remove_at(anchors.size() - 1)
+		_refresh()
+
+
 func set_live_end(p: Vector2) -> void:
 	live_end = p
 	_sparks.position = p

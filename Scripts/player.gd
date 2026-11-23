@@ -7,10 +7,8 @@
 #   WIRED     walking around while carrying the wire. The wire is pulled tight
 #             in a straight line from the last pad you touched, so you can't
 #             walk anywhere that would make it pass through a crate, wall or
-#             red tile (level.gd answers that question for us).
-#   CHOOSING  stopped on a purple BEND, waiting for you to press one of its
-#             two arrows
-#   FLUNG     the bend is throwing you in a straight line, no steering
+#             red tile (level.gd answers that question for us). Purple poles
+#             are solid: you walk round them and the wire wraps round them.
 #   LOCKED    a short "cut-scene" (shocked, room solved, PIP talking...), no control
 #   DRIFT     spacewalk: you walked off the edge of a hull plate and float in a
 #             straight line across open space until your mag boots grab the
@@ -19,13 +17,13 @@
 #
 # This script only handles moving + animation. The rules live in level.gd.
 # The player tells the level "I moved" by calling level.player_moved(), and
-# the level answers by calling functions back on the player (choose_fling,
+# the level answers by calling functions back on the player (grab_wire,
 # lock, release...).
 # ---------------------------------------------------------------------------
 class_name Astronaut          # lets other scripts use "Astronaut" as a type
 extends CharacterBody2D       # the node type this script is attached to
 
-enum State { FREE, WIRED, CHOOSING, FLUNG, LOCKED, DRIFT }
+enum State { FREE, WIRED, LOCKED, DRIFT }
 
 const LAMP_ENERGY := 0.85     # helmet lamp brightness when it's on
 
@@ -36,14 +34,17 @@ const FEET_HALF := Vector2(6, 4)
 # @export shows these in the Inspector so you can tweak them without code.
 ## Walking speed in pixels per second (100 = about 3 tiles a second).
 @export var walk_speed := 100.0
-## How fast a BEND pad throws you.
-@export var fling_speed := 260.0
 ## How fast you float across open space on a spacewalk (tools/solver2.py uses this too).
 @export var drift_speed := 150.0
 
 var level: WireLevel = null   # set by the level when the game starts
-## Walking speed is multiplied by this (the leg servos suit upgrade raises it).
+## Walking speed is multiplied by this (the LEG SERVOS skills raise it).
 var speed_mult := 1.0
+## PIP's autopilot (judge mode, autopilot.gd) is walking for you: the keys are
+## ignored and `auto_dir` is used instead, like a stick held in that direction.
+## Everything else (walls, the wire, wrapping) works exactly as when you walk.
+var autopilot := false
+var auto_dir := Vector2.ZERO
 var state: State = State.FREE
 var facing := Vector2i(0, 1)  # which way he looks: (0,1) = down, towards the camera
 var _last_x := 1              # last left/right he faced (for sprites with no "walk_up")
@@ -51,9 +52,6 @@ var _last_x := 1              # last left/right he faced (for sprites with no "w
 var _drift_dir := Vector2.ZERO
 var _drift_target := Vector2.ZERO
 var _drift_t := 0.0
-var _fling_dir := Vector2.ZERO
-var _choice_at := Vector2.ZERO
-var _choices: Array[Vector2] = []
 var _moving := false
 var _carrying := false
 var _anim_override := ""      # forces an animation ("shock", "burnt")
@@ -86,11 +84,6 @@ func _physics_process(delta: float) -> void:
 			_walk(delta)
 			if level:
 				level.player_moved()
-		State.CHOOSING:
-			_moving = false
-			_choose()
-		State.FLUNG:
-			_fling_step(delta)
 		State.DRIFT:
 			_drift_step(delta)
 		State.LOCKED:
@@ -108,34 +101,12 @@ func is_moving() -> bool:
 
 
 func is_wired() -> bool:
-	return state in [State.WIRED, State.CHOOSING, State.FLUNG] or (state in [State.LOCKED, State.DRIFT] and _carrying)
+	return state == State.WIRED or (state in [State.LOCKED, State.DRIFT] and _carrying)
 
 
 func grab_wire() -> void:
 	state = State.WIRED
 	_carrying = true
-
-
-## Stopped on a BEND: stand on its centre and wait for one of the two directions.
-func choose_fling(at: Vector2, options: Array[Vector2]) -> void:
-	position = at
-	_choice_at = at
-	_choices = options
-	state = State.CHOOSING
-
-
-## Fly off in a straight line from `from`.
-func fling(from: Vector2, dir: Vector2) -> void:
-	position = from
-	_fling_dir = dir.normalized()
-	_face(_fling_dir)
-	state = State.FLUNG
-
-
-## The fling ended on a node (or hit something), so you can walk again.
-func land() -> void:
-	if state == State.FLUNG:
-		state = State.WIRED
 
 
 func lock(keep_carrying := false) -> void:
@@ -181,7 +152,7 @@ func hand_position() -> Vector2:
 
 func _walk(delta: float) -> void:
 	# get_vector turns the 4 arrow/WASD actions into one direction (length 0..1)
-	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	var input := auto_dir if autopilot else Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	_moving = input.length() > 0.1
 	if _moving:
 		_face(input)
@@ -225,6 +196,10 @@ func _slide(mv: Vector2, may_nudge: bool) -> void:
 	if remaining <= 0.0:
 		return
 	var target := position + dir * remaining
+	# A movable crate in the way, and you're walking straight at it? Lean on it:
+	# the level rolls it a tile after a moment (level.gd lean_on_crate).
+	if may_nudge and level.lean_on_crate(target, dir):
+		return
 	# Only open space in the way (no wall, no crate)? Push off and drift across.
 	# (box_blocked's last argument = "does open space count as blocked?")
 	if may_nudge and level.box_blocked(target, FEET_HALF) and not level.box_blocked(target, FEET_HALF, false):
@@ -264,37 +239,6 @@ func _dir_name() -> String:
 	if facing.x < 0:
 		return "left"
 	return "up" if facing.y < 0 else "down"
-
-
-# ------------------------------------------------------------------ bends
-
-## On a bend: wait until the keys point (roughly) at one of the two options.
-func _choose() -> void:
-	var input := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	if input.length() < 0.5:
-		return
-	for option in _choices:
-		# dot = how much two directions agree: 1 same way, 0 sideways, -1 opposite
-		if input.normalized().dot(option) > 0.65:
-			level.bend_chosen()
-			fling(_choice_at, option)
-			return
-
-
-func _fling_step(delta: float) -> void:
-	_moving = true
-	var remaining := fling_speed * delta
-	# Move 2 px at a time so we can't skip past a wall, a red tile or a pad.
-	while remaining > 0.0 and state == State.FLUNG:
-		var s := minf(2.0, remaining)
-		var next := position + _fling_dir * s
-		if level.box_blocked(next, FEET_HALF):
-			land()                 # hit something solid: you can walk again
-			level.fling_stopped()
-			return
-		position = next
-		remaining -= s
-		level.player_moved()       # may touch a pad / get shocked (changes state)
 
 
 # ------------------------------------------------------------------ spacewalk drift
@@ -353,7 +297,7 @@ func _update_anim() -> void:
 		anim = _first_existing(["idle_" + dir, "carry"])
 	else:
 		anim = _first_existing(["idle_" + dir, "idle"])
-	sprite.speed_scale = 2.0 if state == State.FLUNG else 1.0
+	sprite.speed_scale = 1.0
 	# floating in zero-G: tilt gently from side to side
 	sprite.rotation = sin(_drift_t * 5.0) * 0.14 if state == State.DRIFT else 0.0
 	if sprite.animation != anim or not sprite.is_playing():

@@ -9,7 +9,7 @@
 #   python tools/maps/build_level2.py
 #   python tools/map_to_scene.py tools/maps/level2.txt Scenes/level_2.tscn
 #
-#   # wall  . floor  , hull  ~ open space  S start  G goal  N node  B bend  X sparks
+#   # wall  . floor  , hull  ~ open space  S start  G goal  N node  B pole  X sparks
 #   C crate/debris  D door (no wall beside it = gangway)  A airlock pad  * power cell
 #   P spawn  E exit
 

@@ -44,6 +44,8 @@ func _start() -> void:
 	_level.all_rooms_powered.connect(func() -> void: _fire(StoryBeat.Trigger.ALL_POWERED, -1))
 	_level.ship_lighting_up.connect(func() -> void: _fire(StoryBeat.Trigger.SHIP_LIGHTS_UP, -1))
 	_level.empty_cell_touched.connect(func() -> void: _fire(StoryBeat.Trigger.TOUCH_EMPTY_CELL, -1))
+	_level.crate_pushed.connect(func(i: int) -> void: _fire(StoryBeat.Trigger.PUSH_CRATE, i))
+	_level.crate_grounded.connect(func(i: int) -> void: _fire(StoryBeat.Trigger.GROUND_CRATE, i))
 	if _level.test_room >= 0:
 		_skip_to_test_room()
 	if not (_level.test_room >= 0 and _level.test_skip_intro):

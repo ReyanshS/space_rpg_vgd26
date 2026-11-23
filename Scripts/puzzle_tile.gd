@@ -1,5 +1,6 @@
 # ---------------------------------------------------------------------------
-# puzzle_tile.gd: one interactive floor tile. Start, goal, node, bend,
+# puzzle_tile.gd: one interactive floor tile. Start, goal, node, pole, fuse door,
+# main door (with its lamps, set_lamps), clamp socket,
 # red discharge, door, gangway (a door out in space: a catwalk that extends
 # across the gap when the hull section is powered), airlock pad, barrier
 # (a cargo stack on a lift that sinks into the floor when its stage is powered),
@@ -22,8 +23,8 @@ extends Node2D
 # An enum is a list of named numbers: Kind.START == 0, Kind.GOAL == 1, ...
 # The order matches the pictures in puzzle_tiles.png from left to right
 # (DOOR_OPEN and GANGWAY_OPEN are the "after" pictures of a door / gangway).
-enum Kind { START, GOAL, NODE, BEND, DISCHARGE, DISCHARGE_OFF, CRATE, DOOR,
-	DOOR_OPEN, GANGWAY, GANGWAY_OPEN, AIRLOCK, BARRIER, CORE }
+enum Kind { START, GOAL, NODE, POLE, DISCHARGE, DISCHARGE_OFF, CRATE, DOOR,
+	DOOR_OPEN, GANGWAY, GANGWAY_OPEN, AIRLOCK, BARRIER, CORE, FUSE_DOOR, MAIN_DOOR, SOCKET }
 
 const SHEET_PATH := "res://Assets/images/tiles/puzzle_tiles.png"
 const DOOR_OPEN_FRAME := 8
@@ -31,7 +32,7 @@ const GLOW := {
 	Kind.START: Color(1.0, 0.85, 0.3),
 	Kind.GOAL: Color(0.35, 0.65, 1.0),
 	Kind.NODE: Color(1.0, 0.55, 0.2),
-	Kind.BEND: Color(0.75, 0.45, 1.0),
+	Kind.POLE: Color(0.75, 0.45, 1.0),
 	Kind.DISCHARGE: Color(1.0, 0.25, 0.25),
 	Kind.DISCHARGE_OFF: Color(1.0, 0.25, 0.25),   # a blinking grate (red while lit)
 	Kind.DOOR: Color(0.4, 1.0, 0.55),
@@ -39,9 +40,17 @@ const GLOW := {
 	Kind.AIRLOCK: Color(1.0, 0.78, 0.3),
 	Kind.BARRIER: Color(1.0, 0.6, 0.2),
 	Kind.CORE: Color(0.35, 1.0, 0.6),
+	Kind.FUSE_DOOR: Color(1.0, 0.7, 0.2),
+	Kind.MAIN_DOOR: Color(1.0, 0.3, 0.25),
+	Kind.SOCKET: Color(0.75, 0.45, 1.0),
 }
 const LOOP_COLOR := Color(1.0, 0.82, 0.25)    # the same yellow as the live wire
 const DOOR_LOCKED := Color(1.0, 0.3, 0.25)
+# The pole is a support pillar (drawn by tools/art_pillar.py). The picture is
+# 32 x 64 and its foot is PILLAR_FOOT px down from its top, on the tile's centre.
+const PILLAR_TEX := "res://Assets/images/tiles/pillar.png"
+const PILLAR_GLOW_TEX := "res://Assets/images/tiles/pillar_glow.png"
+const PILLAR_FOOT := 56
 
 # "static" = shared by all tiles, so the picture is only loaded once.
 static var _sheet: Texture2D
@@ -66,9 +75,13 @@ var _glow: Sprite2D
 var _light: PointLight2D
 var _crackle: CPUParticles2D
 var _prompt_node: Node2D
-var _preview_node: Node2D
-var _preview_on := false
-var _preview_side := Vector2.ZERO
+var _post_node: Node2D        # poles: the pillar standing on the plate
+var _ring_glow: Sprite2D      # poles: the purple cable ring, shining in the dark
+var _ring_flash := 0.0        # poles: flashes when the wire wraps round it
+var _player: Node2D           # poles: to see if he's walking behind the pillar
+var _lamp_node: Node2D        # main doors: the row of lamps
+var _lamps_lit := 0
+var _lamps_total := 0
 var _loop_node: Node2D
 var _loop_on := false
 var _loop_from := 0.0         # the angle the loop starts at (towards the START pad)
@@ -90,7 +103,7 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 	if kind == Kind.GANGWAY:
 		LightFX.glow(_sprite)      # the retracted catwalk's outline shines in space
 	if GLOW.has(kind):
-		var col: Color = DOOR_LOCKED if _is_door() else GLOW[kind]   # locked doors glow red
+		var col: Color = DOOR_LOCKED if kind == Kind.DOOR or kind == Kind.GANGWAY else GLOW[kind]   # locked doors glow red
 		_glow = _make_sprite(kind)
 		_glow.material = _add_mat
 		_glow.modulate = Color(col, 0.0)
@@ -113,10 +126,17 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 		_crackle.randomness = 1.0
 		_add_fx(_crackle)
 		_crackle.emitting = kind == Kind.DISCHARGE      # blinking grates only crackle while lit
-	if kind == Kind.START:
+	if kind == Kind.DISCHARGE:
+		live = true                # a red floor is live until a power link switches it off
+	if kind == Kind.START or kind == Kind.SOCKET:
 		_prompt_node = _make_overlay(_draw_prompt)
-	if kind == Kind.BEND:
-		_preview_node = _make_overlay(_draw_preview)
+	if kind == Kind.MAIN_DOOR:
+		_lamp_node = _make_overlay(_draw_lamps)
+		_lamp_node.z_index = 2
+		if rotated:
+			_lamp_node.rotation = PI / 2.0
+	if kind == Kind.POLE:
+		_make_pillar()
 	if kind == Kind.CORE:
 		_loop_node = _make_overlay(_draw_loop)
 		_loop_node.z_index = 6      # relative to the tile (-7): -1, so just under the player
@@ -153,21 +173,25 @@ func _process(delta: float) -> void:
 	if _glow and not is_open:
 		var a := 0.0
 		match kind:
-			Kind.START, Kind.GOAL, Kind.NODE, Kind.BEND, Kind.AIRLOCK, Kind.CORE:
+			Kind.START, Kind.GOAL, Kind.NODE, Kind.AIRLOCK, Kind.CORE:
 				a = 0.18 + 0.12 * sin(_t * 3.0)     # slow gentle pulse
-			Kind.DISCHARGE:
-				a = 0.3 + 0.2 * sin(_t * 9.0)
-			Kind.DISCHARGE_OFF:
+			Kind.POLE:
+				a = 0.06 + 0.04 * sin(_t * 3.0)     # just the plate's little lights: the pillar's ring does the glowing
+			Kind.DISCHARGE, Kind.DISCHARGE_OFF:
 				if live:
 					a = 0.3 + 0.2 * sin(_t * 9.0)
 				elif _warning:
 					a = 0.25 if int(_t * 20.0) % 2 == 0 else 0.0     # quick flicker: "watch out"
-			Kind.DOOR, Kind.GANGWAY, Kind.BARRIER:
+			Kind.DOOR, Kind.GANGWAY, Kind.BARRIER, Kind.FUSE_DOOR, Kind.MAIN_DOOR:
 				a = 0.12 + 0.08 * sin(_t * 2.0)
+			Kind.SOCKET:
+				a = 0.15 + 0.1 * sin(_t * 3.0)
 		if active:
 			a = 0.5 + 0.25 * sin(_t * 10.0)       # fast pulse: "timer paused here"
 		if powered:
 			a = 0.5 + 0.2 * sin(_t * 8.0)
+			if kind == Kind.POLE:
+				a = 0.15
 		_glow.modulate.a = a
 	if _light:
 		var e := 0.5 + 0.08 * sin(_t * 3.0)
@@ -176,15 +200,15 @@ func _process(delta: float) -> void:
 		if powered:
 			e = 0.9
 		_light.energy = e
-	if kind == Kind.DISCHARGE or (kind == Kind.DISCHARGE_OFF and live):
+	if (kind == Kind.DISCHARGE or kind == Kind.DISCHARGE_OFF) and live:
 		_flick -= delta
 		if _flick <= 0.0:
 			_flick = randf_range(0.04, 0.35)
 			_sprite.modulate = Color(1.5, 1.4, 1.4) if randf() < 0.3 else Color.WHITE
 	if prompt and _prompt_node:
 		_prompt_node.queue_redraw()
-	if _preview_on and _preview_node:
-		_preview_node.queue_redraw()     # keep the bend arrows pulsing
+	if _post_node:
+		_update_pillar(delta)
 	if _loop_on and _loop_node:
 		_loop_node.queue_redraw()
 
@@ -205,28 +229,43 @@ func _draw_prompt() -> void:
 	_prompt_node.draw_rect(Rect2(o + Vector2(4, 8), Vector2(5, 1)), ink)
 
 
-## BEND pads: while you're stopped on one, show its two ways out as arrows.
-## `side` is one way; the other way is the exact opposite (-side).
-func show_choice(on: bool, side: Vector2) -> void:
-	_preview_on = on
-	_preview_side = side
-	if _preview_node:
-		_preview_node.queue_redraw()
+## POLE: a steel support pillar standing on its floor plate, holding up the
+## deck above. The wire wraps round its foot (the tile's centre, where level.gd
+## puts the corner of the wire). The purple ring on it glows in the dark, so you
+## can spot the pillars a wire can catch on.
+func _make_pillar() -> void:
+	_post_node = Node2D.new()
+	_post_node.z_index = 6      # relative to the tile (-7): -1, over the wires but under the player
+	add_child(_post_node)
+	var column := Sprite2D.new()
+	column.texture = load(PILLAR_TEX)
+	column.centered = false
+	column.position = Vector2(-16, -PILLAR_FOOT)   # its foot on the tile's centre
+	_post_node.add_child(column)
+	_ring_glow = Sprite2D.new()
+	_ring_glow.texture = load(PILLAR_GLOW_TEX)
+	_ring_glow.centered = false
+	_ring_glow.position = column.position
+	_ring_glow.material = _add_mat                 # colours add up: it shines
+	LightFX.glow(_ring_glow)
+	_post_node.add_child(_ring_glow)
 
 
-func _draw_preview() -> void:
-	if not _preview_on:
-		return
-	var pulse := 0.6 + 0.4 * sin(_t * 10.0)
-	var col := Color(0.92, 0.7, 1.0, pulse)
-	var outline := Color(0.15, 0.05, 0.25, pulse)
-	for dir in [_preview_side, -_preview_side]:
-		var tip: Vector2 = dir * (32.0 + 2.0 * sin(_t * 10.0))
-		var base: Vector2 = dir * 22.0
-		var side: Vector2 = Vector2(-dir.y, dir.x) * 6.0
-		var tri := PackedVector2Array([tip, base + side, base - side])
-		_preview_node.draw_colored_polygon(tri, col)
-		_preview_node.draw_polyline(PackedVector2Array([tip, base + side, base - side, tip]), outline, 1.0)
+## Every frame: the ring pulses, and if the astronaut walks BEHIND the pillar
+## (above it on screen, where the column would hide him), it's drawn over him
+## and turns see-through. In front of it, he's drawn over the pillar.
+## (A top-down game has no real depth: we fake it by changing the order.)
+func _update_pillar(delta: float) -> void:
+	_ring_flash = maxf(0.0, _ring_flash - delta * 2.5)
+	_ring_glow.modulate.a = minf(1.0, (0.55 + 0.25 * sin(_t * 3.0) if not powered else 0.9) + _ring_flash)
+	if _player == null:
+		_player = get_tree().get_first_node_in_group("player") as Node2D
+	var behind := false
+	if _player:
+		var d := _player.global_position - global_position
+		behind = d.y < 0.0 and d.y > -PILLAR_FOOT - 8.0 and absf(d.x) < 22.0
+	_post_node.z_index = 8 if behind else 6      # 1 = over the player, -1 = under him
+	_post_node.modulate.a = move_toward(_post_node.modulate.a, 0.45 if behind else 1.0, delta * 4.0)
 
 
 ## CORE: the level calls this every frame while you carry the wire in its room.
@@ -279,6 +318,7 @@ func set_live(on: bool, warning := false) -> void:
 ## Quick flash + spark burst when the wire touches this tile.
 func hit() -> void:
 	burst(GLOW.get(kind, Color.WHITE), 14)
+	_ring_flash = 1.0                 # poles: the ring lights up as the wire catches
 	_sprite.scale = Vector2(1.25, 1.25)
 	# A Tween animates a property over time: here, scale goes back to 1 in 0.18 s.
 	var tw := create_tween()
@@ -305,7 +345,31 @@ func burst(color: Color, amount: int) -> void:
 
 
 func _is_door() -> bool:
-	return kind == Kind.DOOR or kind == Kind.GANGWAY
+	return kind in [Kind.DOOR, Kind.GANGWAY, Kind.FUSE_DOOR, Kind.MAIN_DOOR]
+
+
+## Main doors: `lit` of `total` lamps are on (one per part of the deck powered).
+func set_lamps(lit: int, total: int) -> void:
+	if lit > _lamps_lit:
+		burst(Color(1.0, 0.85, 0.3), 10)
+	_lamps_lit = lit
+	_lamps_total = total
+	if _lamp_node:
+		_lamp_node.queue_redraw()
+
+
+## The main door's lamps: small round lights on its plate, green when lit.
+func _draw_lamps() -> void:
+	if is_open or _lamps_total <= 0:
+		return
+	var gap := 6.0 if _lamps_total <= 3 else 18.0 / (_lamps_total - 1)
+	var x0 := -gap * (_lamps_total - 1) * 0.5
+	for i in _lamps_total:
+		var p := Vector2(x0 + i * gap, -9).round()
+		var on := i < _lamps_lit
+		_lamp_node.draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Color(0.02, 0.03, 0.1))
+		_lamp_node.draw_rect(Rect2(p - Vector2(1, 1), Vector2(3, 3)),
+			Color(0.45, 1.0, 0.5) if on else Color(0.35, 0.08, 0.08))
 
 
 ## Door bar flickers out, leaving the open door frame. Its light goes red -> green.
@@ -343,6 +407,8 @@ func _finish_open() -> void:
 	if _glow:
 		_glow.region_rect = _sprite.region_rect
 		_glow.modulate.a = 0.0
+	if _lamp_node:
+		_lamp_node.queue_redraw()
 	burst(Color(0.4, 1.0, 0.55), 22)
 
 

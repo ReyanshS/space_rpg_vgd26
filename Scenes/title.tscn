@@ -3,17 +3,22 @@
 [ext_resource type="Script" uid="uid://dhlexchakyr0l" path="res://Scripts/title.gd" id="1_title"]
 [ext_resource type="Script" uid="uid://4tet2c0n0nd6" path="res://Scripts/starfield.gd" id="2_stars"]
 [ext_resource type="SpriteFrames" uid="uid://de1pypgu4xh2n" path="res://Assets/images/astronaut/astronaut_frames.tres" id="3_frames"]
-[ext_resource type="Texture2D" path="res://Assets/ui/frame_screen.png" id="4_screen"]
 [ext_resource type="Texture2D" path="res://Assets/images/ui/logo.png" id="5_logo"]
+[ext_resource type="Script" path="res://Scripts/key_hint.gd" id="9_key"]
 
-[sub_resource type="StyleBoxTexture" id="StyleBox_screen"]
-texture = ExtResource("4_screen")
-texture_margin_left = 6.0
-texture_margin_top = 6.0
-texture_margin_right = 6.0
-texture_margin_bottom = 6.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
+[sub_resource type="StyleBoxFlat" id="StyleBox_screen"]
+bg_color = Color(0.03, 0.055, 0.09, 0.82)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.82, 1, 0.45)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 6
 
 [node name="Title" type="Node2D" unique_id=1413600814]
 script = ExtResource("1_title")
@@ -40,6 +45,7 @@ offset_top = 4.0
 offset_right = 300.0
 offset_bottom = 22.0
 theme_override_colors/font_color = Color(1, 1, 1, 0.4)
+theme_override_font_sizes/font_size = 6
 text = "TSA Video Game Design 2026-27"
 
 [node name="Logo" type="TextureRect" parent="UI" unique_id=743491736]
@@ -59,32 +65,103 @@ mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBox_screen")
 
 [node name="Story" type="Label" parent="UI" unique_id=539097612]
-offset_left = 186.0
-offset_top = 104.0
-offset_right = 464.0
-offset_bottom = 160.0
-theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
+offset_left = 190.0
+offset_top = 108.0
+offset_right = 460.0
+offset_bottom = 156.0
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 9
 text = "A solar storm fried the ship and you're the only one awake. Grab the live wire and get her running again."
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="Start" type="Label" parent="UI" unique_id=1025221126]
-offset_left = 176.0
-offset_top = 170.0
-offset_right = 474.0
-offset_bottom = 188.0
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "> PRESS E TO START_"
-horizontal_alignment = 1
+[node name="Buttons" type="HBoxContainer" parent="UI"]
+offset_left = 186.0
+offset_top = 164.0
+offset_right = 464.0
+offset_bottom = 184.0
+theme_override_constants/separation = 8
+alignment = 1
 
-[node name="Controls" type="Label" parent="UI" unique_id=178598356]
-offset_top = 222.0
+[node name="Play" type="Button" parent="UI/Buttons"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "START"
+
+[node name="NewGame" type="Button" parent="UI/Buttons"]
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "NEW GAME"
+
+[node name="Controls" type="VBoxContainer" parent="UI"]
+offset_top = 218.0
 offset_right = 480.0
-offset_bottom = 262.0
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
-text = "Move: WASD / arrow keys    Grab the wire: E / Space
-Back to start: R    Hint: H    Menu: Esc"
-horizontal_alignment = 1
+offset_bottom = 264.0
+mouse_filter = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="Row1" type="HBoxContainer" parent="UI/Controls"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="Move" type="Control" parent="UI/Controls/Row1"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("WASD")
+text = "move"
+text_color = Color(0.56, 0.66, 0.78, 1)
+
+[node name="Grab" type="Control" parent="UI/Controls/Row1"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("E")
+text = "grab the wire"
+text_color = Color(0.56, 0.66, 0.78, 1)
+
+[node name="Back" type="Control" parent="UI/Controls/Row1"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("R")
+text = "back to start"
+text_color = Color(0.56, 0.66, 0.78, 1)
+
+[node name="Row2" type="HBoxContainer" parent="UI/Controls"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="Hint" type="Control" parent="UI/Controls/Row2"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("H")
+text = "hint"
+text_color = Color(0.56, 0.66, 0.78, 1)
+
+[node name="Skills" type="Control" parent="UI/Controls/Row2"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("T")
+text = "skills"
+text_color = Color(0.56, 0.66, 0.78, 1)
+
+[node name="Menu" type="Control" parent="UI/Controls/Row2"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("9_key")
+keys = PackedStringArray("Esc")
+text = "menu"
+text_color = Color(0.56, 0.66, 0.78, 1)
 
 [node name="Fade" type="ColorRect" parent="UI" unique_id=1872592639]
 anchors_preset = 15
