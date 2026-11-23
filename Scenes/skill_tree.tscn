@@ -1,16 +1,20 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://Scripts/skill_tree.gd" id="1_tree"]
-[ext_resource type="Texture2D" path="res://Assets/ui/frame_screen.png" id="2_screen"]
 
-[sub_resource type="StyleBoxTexture" id="StyleBox_screen"]
-texture = ExtResource("2_screen")
-texture_margin_left = 6.0
-texture_margin_top = 6.0
-texture_margin_right = 6.0
-texture_margin_bottom = 6.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
+[sub_resource type="StyleBoxFlat" id="StyleBox_screen"]
+bg_color = Color(0.03, 0.055, 0.09, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.82, 1, 0.5)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 6
 
 [node name="SkillTree" type="Control"]
 process_mode = 3
@@ -52,10 +56,10 @@ mouse_filter = 2
 
 [node name="Buttons" type="HBoxContainer" parent="."]
 layout_mode = 0
-offset_left = 26.0
-offset_top = 236.0
-offset_right = 226.0
-offset_bottom = 258.0
+offset_left = 28.0
+offset_top = 238.0
+offset_right = 228.0
+offset_bottom = 254.0
 theme_override_constants/separation = 6
 
 [node name="Unlock" type="Button" parent="Buttons"]

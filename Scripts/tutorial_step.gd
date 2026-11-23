@@ -24,6 +24,8 @@ enum Trigger {
 	ENTER_NEXT_ROOM,  ## you walk into a later room
 	REACH_HERE,       ## you walk to where this marker is
 	DRIFT,            ## you drift across open space in this room (spacewalk)
+	PUSH_CRATE,       ## you push a movable crate in this room
+	GROUND_CRATE,     ## a crate shorts out a red tile in this room
 }
 
 ## The instruction shown at the top of the screen.

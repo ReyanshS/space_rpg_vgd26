@@ -66,10 +66,7 @@ func _draw() -> void:
 	if _float_text > 0.0:
 		var a := clampf(_float_text / 0.3, 0.0, 1.0)
 		var y := -14.0 - (0.9 - _float_text) * 26.0
-		# the project's pixel font (Project Settings > GUI > Theme > Custom)
-		var theme := ThemeDB.get_project_theme()
-		var font: Font = theme.default_font if theme and theme.default_font else ThemeDB.fallback_font
-		draw_string(font, Vector2(-9, y), _label, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.3, a))
+		UIStyle.text(self, Vector2(0, y), _label, Color(1.0, 0.9, 0.3, a), UIStyle.BODY, HORIZONTAL_ALIGNMENT_CENTER)
 
 
 ## Plugged into the live wire: burst of sparks, the label (e.g. "+2s") floats

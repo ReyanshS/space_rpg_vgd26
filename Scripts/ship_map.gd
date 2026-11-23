@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # ship_map.gd: PIP's map of the deck (press M). It pauses the game and draws
 # every room of the level from above, like a dungeon map:
-#   amber room   powered          green room   you've been in, no power yet
+#   amber room   powered          blue room    you've been in, no power yet
 #   dark room    not visited yet  grey room    a hall (nothing to solve)
 #   white dot    you (it blinks)
 #   doors        green = open, red = shut, amber = needs a fuse,
@@ -17,10 +17,10 @@ extends Control
 
 signal closed
 
-const AMBER := Color(1.0, 0.76, 0.3)
-const GREEN := Color(0.66, 0.94, 0.63)
-const DIM := Color(0.24, 0.36, 0.27)
-const GLASS := Color(0.03, 0.08, 0.05, 0.96)
+const AMBER := UIStyle.AMBER
+const GREEN := UIStyle.GREEN
+const DIM := Color(0.2, 0.32, 0.45)           # a room you've seen that has no power yet
+const GLASS := UIStyle.GLASS
 
 var _info := {}
 var _t := 0.0
@@ -59,13 +59,12 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if _info.is_empty():
 		return
-	var font := get_theme_default_font()
 	var screen := get_viewport_rect().size
 	draw_rect(Rect2(Vector2.ZERO, screen), Color(0, 0, 0, 0.55))
 	var panel := Rect2(12, 8, screen.x - 24, screen.y - 16)
-	draw_rect(panel, Color(0.29, 0.32, 0.38))                         # metal case
-	draw_rect(panel.grow(-3), GLASS)                                  # the green screen
-	draw_string(font, panel.position + Vector2(10, 16), "DECK MAP", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, AMBER)
+	UIStyle.draw_box(self, panel, Color(0.03, 0.055, 0.09, 0.96), UIStyle.EDGE, 6)
+	UIStyle.text(self, panel.position + Vector2(10, 16), "DECK MAP", UIStyle.TEXT, UIStyle.HEAD)
+	UIStyle.text(self, Vector2(panel.end.x - 10, panel.position.y + 15), "M  close", UIStyle.DIM, UIStyle.SMALL + 1, HORIZONTAL_ALIGNMENT_RIGHT)
 	# fit the level into the screen: how many pixels per tile
 	var rect: Rect2i = _info["rect"]
 	var area := Rect2(panel.position + Vector2(10, 24), panel.size - Vector2(20, 46))
@@ -74,9 +73,9 @@ func _draw() -> void:
 	var origin := area.position + (area.size - Vector2(rect.size) * s) * 0.5 - Vector2(rect.position) * s
 	var tile := func(c: Vector2i) -> Rect2: return Rect2((origin + Vector2(c) * s).round(), Vector2(s, s))
 	for room in _info["rooms"]:
-		var col := Color(0.12, 0.15, 0.14)
+		var col := Color(0.08, 0.11, 0.16)
 		if room["hall"]:
-			col = Color(0.33, 0.36, 0.4) if room["visited"] else Color(0.16, 0.18, 0.2)
+			col = Color(0.3, 0.36, 0.44) if room["visited"] else Color(0.12, 0.15, 0.2)
 		elif room["solved"]:
 			col = AMBER.darkened(0.25)
 		elif room["visited"]:
@@ -92,8 +91,8 @@ func _draw() -> void:
 			for c in room["cells"]:
 				mid += Vector2(c)
 			mid /= room["cells"].size()
-			draw_string(font, origin + mid * s + Vector2(-3, 5), str(room["cells_left"]),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 16, AMBER)
+			UIStyle.text(self, origin + mid * s + Vector2(s * 0.5, s * 0.5 + 3), str(room["cells_left"]),
+				AMBER, UIStyle.BODY, HORIZONTAL_ALIGNMENT_CENTER)
 	for d in _info["doors"]:
 		var col := Color(0.9, 0.25, 0.2)
 		match d["kind"]:
@@ -109,12 +108,16 @@ func _draw() -> void:
 		draw_rect(tile.call(_info["clamp_at"]), Color(0.75, 0.47, 1.0))
 	if int(_t * 4.0) % 2 == 0:
 		var p: Vector2 = origin + _info["player"] * s
-		draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Color.WHITE)
+		draw_circle(p, 3.0, Color(1, 1, 1, 0.25))
+		draw_circle(p, 1.8, Color.WHITE)
 	# the key, along the bottom
 	var y := panel.end.y - 8
 	var x := panel.position.x + 10
 	for k in [[AMBER.darkened(0.25), "powered"], [DIM, "no power"], [AMBER, "fuse door"],
 			[Color(1.0, 0.2, 0.15), "main door"], [Color.WHITE, "you"]]:
-		draw_rect(Rect2(x, y - 8, 6, 6), k[0])
-		draw_string(font, Vector2(x + 9, y), k[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, GREEN.darkened(0.2))
-		x += 18 + font.get_string_size(k[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+		var dot := StyleBoxFlat.new()
+		dot.set_corner_radius_all(2)
+		dot.bg_color = k[0]
+		draw_style_box(dot, Rect2(x, y - 6, 6, 6))
+		UIStyle.text(self, Vector2(x + 9, y), k[1], UIStyle.DIM, UIStyle.SMALL + 1)
+		x += 18 + UIStyle.text_width(k[1], UIStyle.SMALL + 1)

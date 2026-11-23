@@ -22,8 +22,9 @@
 #
 # It's a CanvasLayer, which means it stays still on screen while the camera
 # moves. Its nodes live in hud.tscn, so open that scene to change colours and
-# sizes without code. All text uses the project theme (Assets/ui/theme.tres ->
-# the m6x11 pixel font at size 16).
+# sizes without code. The look (dark glass panels, white text, amber accents)
+# comes from the project theme (Assets/ui/theme.tres) and ui_style.gd, which
+# also has the colours the code-drawn parts below use.
 #
 # Pausing: hud.tscn sets this node's Process Mode to "Always", so the HUD keeps
 # running when the game is paused (get_tree().paused = true). That's how the
@@ -41,20 +42,19 @@ signal results_again
 ## Height of the console at the bottom. level.gd keeps the room above it.
 const CONSOLE_H := 48
 const TYPE_SPEED := 48.0          # letters per second in the speech box
-# The look: ship hardware outside (riveted metal frames, Assets/ui/frame_*.png,
-# drawn by tools/art_ui.py) and an old green computer screen inside.
-const NAME_COLOR := "#ffc24d"     # amber: names, keys, headings
-const TEXT_COLOR := "#a8f0a0"     # phosphor green: what PIP says
-const DIM_COLOR := "#6f9c74"      # dim green: the standing objective
-const KEY_COLOR := "#ffc24d"
-const AMBER := Color(1.0, 0.76, 0.3)
-const PHOSPHOR := Color(0.66, 0.94, 0.63)
+# The look: see ui_style.gd. These are the same colours as text for bbcode.
+const NAME_COLOR := "#ffc24d"     # amber: who's talking
+const TEXT_COLOR := "#e6f2ff"     # white: what they say
+const DIM_COLOR := "#8fa8c7"      # dim blue grey: the standing objective
+const GOAL_COLOR := "#66d9ff"     # cyan: the word GOAL in front of it
+const AMBER := UIStyle.AMBER
+const PHOSPHOR := Color(0.55, 0.95, 0.6)   # PIP's face is still a little green screen
 # Level 3: when PIP malfunctions he talks as "P!P" in red, with an angry face.
 const ROGUE_SPEAKER := "P!P"
 const ROGUE_NAME_COLOR := "#ff5a4a"
 const ROGUE_TEXT_COLOR := "#ffb09c"
 const ROGUE_RED := Color(1.0, 0.33, 0.27)
-const LED_OFF := Color(0.12, 0.15, 0.14)  # a segment of a meter that isn't lit
+const LED_OFF := UIStyle.LED_OFF        # a segment of a meter that isn't lit
 
 @onready var toast: PanelContainer = $Toast
 @onready var toast_label: Label = $Toast/Text
@@ -230,6 +230,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _set_paused(on: bool) -> void:
 	pause_panel.visible = on
 	if on:
+		pause_panel.modulate.a = 0.0
+		create_tween().tween_property(pause_panel, "modulate:a", 1.0, 0.15)
 		get_tree().paused = true
 		_update_pause_skills()
 		$Pause/VBox/Buttons/Resume.grab_focus()     # so the keys can pick a button straight away
@@ -358,7 +360,7 @@ func set_objective(text: String, world_pos: Vector2, arrow: bool) -> void:
 func _show_idle() -> void:
 	_line_bbcode = ""
 	dialogue_text.visible_characters = -1
-	dialogue_text.text = ("[color=%s]> %s[/color]" % [DIM_COLOR, _objective]) if _objective != "" else ""
+	dialogue_text.text = ("[color=%s]GOAL[/color]  [color=%s]%s[/color]" % [GOAL_COLOR, DIM_COLOR, _objective]) if _objective != "" else ""
 
 
 ## Draws the arrows: the yellow tutorial arrow, PIP's blue one while he points
@@ -387,7 +389,7 @@ func _draw_arrow(world: Vector2, col: Color, dark: Color) -> void:
 		var tri := PackedVector2Array([tip, tip + Vector2(-7, -9), tip + Vector2(-3, -9),
 			tip + Vector2(-3, -16), tip + Vector2(3, -16), tip + Vector2(3, -9), tip + Vector2(7, -9)])
 		marker.draw_colored_polygon(tri, col)
-		marker.draw_polyline(tri + PackedVector2Array([tip]), dark, 1.0)
+		marker.draw_polyline(tri + PackedVector2Array([tip]), dark, 1.0, true)
 	else:
 		# off screen: stick to the screen edge and point towards it
 		var p := Vector2(clampf(screen.x, inside.position.x, inside.end.x), clampf(screen.y, inside.position.y, inside.end.y))
@@ -401,21 +403,17 @@ func _draw_arrow(world: Vector2, col: Color, dark: Color) -> void:
 ## The E key under PIP's screen: "press E to go on". It bobs up and down a
 ## little so the eye notices it.
 func _draw_next_key() -> void:
-	var bob := roundf(absf(sin(_t * 4.0)) * -2.0)
+	var bob := absf(sin(_t * 4.0)) * -2.0
 	_draw_key(Vector2(6, 6 + bob), "E", next_key)
 
 
-## A little keyboard key with a letter on it (13 x 13 px, centre at `at`),
-## drawn on `ci` (the arrow layer unless you say otherwise).
+## A little keyboard key with a letter on it (centre at `at`), drawn on `ci`
+## (the arrow layer unless you say otherwise). The look is in ui_style.gd.
 func _draw_key(at: Vector2, letter: String, ci: CanvasItem = null) -> void:
 	if ci == null:
 		ci = marker
-	var o := (at - Vector2(6, 6)).round()
-	ci.draw_rect(Rect2(o + Vector2(0, 1), Vector2(13, 13)), Color(0.05, 0.05, 0.1, 0.9))
-	ci.draw_rect(Rect2(o, Vector2(13, 13)), Color(0.95, 0.95, 1.0))
-	ci.draw_rect(Rect2(o + Vector2(1, 1), Vector2(11, 10)), Color(0.82, 0.84, 0.92))
-	var font := marker.get_theme_default_font()
-	ci.draw_string(font, o + Vector2(3, 11), letter, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.12, 0.12, 0.2))
+	var w := UIStyle.key_width(letter)
+	UIStyle.draw_key(ci, at - Vector2(w, UIStyle.KEY_H) * 0.5, letter)
 
 
 ## While he holds the wire and stands still away from the last pad: show the
@@ -525,7 +523,7 @@ func _pages(speaker: String, line: String) -> PackedStringArray:
 	var font := dialogue_text.get_theme_font("normal_font")
 	var fsize := dialogue_text.get_theme_font_size("normal_font_size")
 	var width := maxf(dialogue_text.size.x, dialogue_text.custom_minimum_size.x) - 2.0
-	var prefix := speaker + "> "
+	var prefix := speaker + ": "
 	var pages := PackedStringArray()
 	var page := ""            # the words on the page we're filling
 	var row := 0              # which of the two rows we're on
@@ -562,7 +560,7 @@ func _show_line(speaker: String, line: String, blocking: bool) -> void:
 	_line_rogue = speaker == ROGUE_SPEAKER
 	var name_col := ROGUE_NAME_COLOR if _line_rogue else NAME_COLOR
 	var text_col := ROGUE_TEXT_COLOR if _line_rogue else TEXT_COLOR
-	_line_bbcode = "[color=%s]%s>[/color] [color=%s]%s[/color]" % [name_col, speaker, text_col, line]
+	_line_bbcode = "[color=%s]%s:[/color] [color=%s]%s[/color]" % [name_col, speaker, text_col, line]
 	dialogue_text.text = _line_bbcode
 	var total := float(dialogue_text.get_total_character_count())
 	var shown := float(speaker.length() + 2)
@@ -621,11 +619,13 @@ func _draw_portrait() -> void:
 	var s := portrait.size
 	var angry := _line_rogue if _talking else _rogue
 	var base := ROGUE_RED if angry else PHOSPHOR
-	var ink := base if _talking else base.darkened(0.45)
-	portrait.draw_rect(Rect2(Vector2.ZERO, s), Color(0.29, 0.32, 0.38))                  # metal case
-	portrait.draw_rect(Rect2(Vector2.ZERO, Vector2(s.x, 1)), Color(0.54, 0.58, 0.65))    # its top edge catches the light
-	var glass := Color(0.1, 0.03, 0.03) if angry else Color(0.03, 0.09, 0.05)
-	portrait.draw_rect(Rect2(Vector2(2, 2), s - Vector2(4, 4)), glass)                    # the glass
+	var ink := base if _talking else base.darkened(0.4)
+	# the case: a rounded dark frame with a thin edge in his colour
+	UIStyle.draw_box(portrait, Rect2(Vector2.ZERO, s), Color(0.07, 0.11, 0.17), Color(base, 0.55), 4)
+	var glass := StyleBoxFlat.new()
+	glass.set_corner_radius_all(3)
+	glass.bg_color = Color(0.12, 0.03, 0.03) if angry else Color(0.02, 0.09, 0.06)
+	portrait.draw_style_box(glass, Rect2(Vector2(2, 2), s - Vector2(4, 4)))
 	var glitch := angry and fmod(_t * 7.0, 5.0) < 0.6       # a short burst every so often
 	var o := Vector2(signf(sin(_t * 40.0)) if glitch else 0.0, 0.0)
 	var blink := fmod(_t, 3.2) < 0.12 and not angry
@@ -633,14 +633,17 @@ func _draw_portrait() -> void:
 		if blink:
 			portrait.draw_rect(Rect2(o + Vector2(x, 12), Vector2(4, 1)), ink)
 		elif angry:
-			# slanted eyes: each one a short staircase, high at the outside edge
+			# slanted eyes: high at the outside edge, low by the nose = a frown
 			var inner := 3.0 if x < 12.0 else 0.0
 			for k in 4:
-				var drop := absf(k - inner)       # lower towards the nose = a frown
+				var drop := absf(k - inner)
 				portrait.draw_rect(Rect2(o + Vector2(x + k, 9 + drop * 0.5), Vector2(1, 4)), ink)
 		else:
-			portrait.draw_rect(Rect2(o + Vector2(x, 9), Vector2(4, 5)), ink)
-			portrait.draw_rect(Rect2(o + Vector2(x + 2, 10), Vector2(1, 2)), ink.lightened(0.6))
+			var eye := StyleBoxFlat.new()
+			eye.set_corner_radius_all(2)
+			eye.bg_color = ink
+			portrait.draw_style_box(eye, Rect2(o + Vector2(x, 8.5), Vector2(4, 5.5)))
+			portrait.draw_rect(Rect2(o + Vector2(x + 2.3, 9.5), Vector2(1, 1.5)), ink.lightened(0.7))
 	var mouth := 1.0
 	if _typing:
 		mouth = 1.0 + float(int(_t * 14.0) % 3)
@@ -648,10 +651,10 @@ func _draw_portrait() -> void:
 	if glitch:
 		var y := 4.0 + float(int(_t * 23.0) % int(s.y - 8.0))
 		portrait.draw_rect(Rect2(2, y, s.x - 4, 1), ink.lightened(0.5))
-	for y in range(3, int(s.y) - 2, 2):
-		portrait.draw_rect(Rect2(2, y, s.x - 4, 1), Color(0, 0, 0, 0.35))                # scanlines
+	# a soft shine across the top of the glass
+	portrait.draw_rect(Rect2(4, 3, s.x - 8, 1), Color(1, 1, 1, 0.08))
 	var tip := AMBER if fmod(_t, 1.0) < 0.5 else Color(0.5, 0.3, 0.1)
-	portrait.draw_rect(Rect2(Vector2(s.x - 4, 1), Vector2(2, 1)), tip)                   # status light
+	portrait.draw_circle(Vector2(s.x - 4.5, 4.5), 1.0, tip)                              # status light
 
 
 # ------------------------------------------------------------------ toast
@@ -669,7 +672,12 @@ func show_toast(text: String, seconds := 2.0) -> void:
 	toast.reset_size()
 	toast.position.x = (get_viewport().get_visible_rect().size.x - toast.size.x) * 0.5
 	toast.visible = true
-	toast.modulate.a = 1.0
+	# it slides down into place as it fades in
+	toast.modulate.a = 0.0
+	toast.position.y = 0.0
+	var tin := create_tween().set_parallel(true)
+	tin.tween_property(toast, "modulate:a", 1.0, 0.18)
+	tin.tween_property(toast, "position:y", 6.0, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	await get_tree().create_timer(seconds).timeout
 	if token != _toast_token or not is_inside_tree():
 		return
@@ -697,11 +705,7 @@ func pulse_timer() -> void:
 ## One segment of an LED meter: lit = its colour with a brighter top row (like a
 ## little glowing bulb), unlit = dark.
 func _led(ci: CanvasItem, r: Rect2, lit: bool, col: Color) -> void:
-	if not lit:
-		ci.draw_rect(r, LED_OFF)
-		return
-	ci.draw_rect(r, col)
-	ci.draw_rect(Rect2(r.position, Vector2(r.size.x, 1)), col.lightened(0.45))
+	UIStyle.draw_led(ci, r, lit, col)
 
 
 ## The ship's lightning bolt icon, 8 x 13 pixels, top-left corner at `b`.
@@ -714,8 +718,7 @@ func _bolt(ci: CanvasItem, b: Vector2, col: Color) -> void:
 ## Amber, then orange, then blinking red when time is short; blue while paused.
 func _draw_timer() -> void:
 	var size := timer_bar.size
-	timer_bar.draw_rect(Rect2(Vector2.ZERO, size), Color(0.04, 0.05, 0.07, 0.85))
-	timer_bar.draw_rect(Rect2(Vector2.ZERO, size), Color(0.45, 0.48, 0.56), false, 1.0)
+	UIStyle.draw_box(timer_bar, Rect2(Vector2.ZERO, size), Color(0.03, 0.055, 0.09, 0.88), Color(0.4, 0.82, 1.0, 0.35), 3)
 	var col := AMBER
 	if _paused:
 		col = Color(0.45, 0.9, 1.0)
@@ -727,7 +730,7 @@ func _draw_timer() -> void:
 		col = col.lerp(Color.WHITE, _pulse)
 	var lit := ceili(_frac * 5.0 - 0.001)
 	for i in 5:
-		_led(timer_bar, Rect2(2 + i * 7, 2, 6, size.y - 4), i < lit, col)
+		_led(timer_bar, Rect2(2.5 + i * 6.5, 2.5, 5.5, size.y - 5), i < lit, col)
 
 
 # ------------------------------------------------------------------ console meters
@@ -781,48 +784,53 @@ func _update_keys() -> void:
 	for c in keys_box.get_children():
 		c.queue_free()
 	for k in want:
-		keys_box.add_child(KeyHint.make(PackedStringArray([k[0]]), k[1], Color(0.42, 0.62, 0.45)))
+		keys_box.add_child(KeyHint.make(PackedStringArray([k[0]]), k[1], UIStyle.DIM))
 
 
 ## The right side of the console: ship power LEDs and the cell counter on top,
 ## the oxygen meter underneath while you're outside.
 func _draw_status() -> void:
-	var font := status_box.get_theme_default_font()
+	# a thin divider between PIP's side and this side
+	status_box.draw_rect(Rect2(-4, 2, 1, status_box.size.y - 4), Color(UIStyle.EDGE, 0.25))
 	if _power_total > 0:
 		var flash := _power_flash > 0.0 and int(_t * 10.0) % 2 == 0
 		var ink := Color.WHITE if flash else AMBER
-		_bolt(status_box, Vector2(4, 2), ink)
+		_bolt(status_box, Vector2(4, 3), ink)
 		var seg_w := floorf((52.0 - 2.0 * (_power_total - 1)) / _power_total)
 		for i in _power_total:
 			_led(status_box, Rect2(16 + i * (seg_w + 2.0), 5, seg_w, 8), i < _power_on, ink)
 	if _cells_total > 0:
-		var o := Vector2(74, 1 - roundf(_cell_bump * 3.0))
+		var o := Vector2(74, 2 - roundf(_cell_bump * 3.0))
 		PowerCell.draw_battery(status_box, o, AMBER.lerp(Color.WHITE, _cell_bump), Color(0.4, 0.25, 0.02))
-		var ink2 := PHOSPHOR if _cells < _cells_total else AMBER
-		status_box.draw_string(font, Vector2(88, 14), "%d/%d" % [_cells, _cells_total], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, ink2)
+		var ink2 := UIStyle.TEXT if _cells < _cells_total else AMBER
+		UIStyle.text(status_box, Vector2(87, 13), "%d/%d" % [_cells, _cells_total], ink2, UIStyle.BODY)
 	# dungeon things you carry: fuses (with a count) and the cable clamp
 	if _fuses > 0:
-		var f := Vector2(128, 2)
+		var f := Vector2(126, 3)
 		status_box.draw_rect(Rect2(f, Vector2(5, 11)), Color(0.02, 0.035, 0.13))
 		status_box.draw_rect(Rect2(f + Vector2(1, 1), Vector2(3, 2)), Color(0.77, 0.8, 0.86))
 		status_box.draw_rect(Rect2(f + Vector2(1, 8), Vector2(3, 2)), Color(0.77, 0.8, 0.86))
 		status_box.draw_rect(Rect2(f + Vector2(2, 3), Vector2(1, 5)), AMBER)
-		status_box.draw_string(font, Vector2(135, 14), str(_fuses), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, AMBER)
+		UIStyle.text(status_box, Vector2(133, 13), str(_fuses), AMBER, UIStyle.BODY)
 	if _clamp:
-		var k := Vector2(148, 2)
+		var k := Vector2(148, 3)
 		status_box.draw_rect(Rect2(k, Vector2(7, 11)), Color(0.02, 0.035, 0.13))
 		status_box.draw_rect(Rect2(k + Vector2(1, 2), Vector2(5, 8)), Color(0.75, 0.47, 1.0))
 		status_box.draw_rect(Rect2(k + Vector2(-1, 0), Vector2(9, 2)), Color(0.92, 0.85, 1.0))
 	if _o2_on and not _reel_prompt and not _restart_prompt and not _waiting_key:
-		var col := Color(0.5, 0.85, 1.0)
+		var col := UIStyle.CYAN
 		if _o2_frac < 0.3:
-			col = Color(1.0, 0.3, 0.25) if int(_t * 6.0) % 2 == 0 else Color(1.0, 0.7, 0.6)
-		status_box.draw_string(font, Vector2(2, 37), "O2", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
-		var bar := Rect2(22, 27, 136, 8)
-		status_box.draw_rect(bar, LED_OFF)
-		var fill := Rect2(bar.position, Vector2(roundf(bar.size.x * _o2_frac), bar.size.y))
-		status_box.draw_rect(fill, col)
-		status_box.draw_rect(Rect2(fill.position, Vector2(fill.size.x, 1)), col.lightened(0.45))
+			col = UIStyle.RED if int(_t * 6.0) % 2 == 0 else Color(1.0, 0.7, 0.6)
+		UIStyle.text(status_box, Vector2(3, 35), "O2", col, UIStyle.BODY)
+		var bar := Rect2(22, 28, 136, 7)
+		var back := StyleBoxFlat.new()
+		back.set_corner_radius_all(3)
+		back.bg_color = LED_OFF
+		status_box.draw_style_box(back, bar)
+		if _o2_frac > 0.0:
+			back.bg_color = col
+			status_box.draw_style_box(back, Rect2(bar.position, Vector2(maxf(6.0, bar.size.x * _o2_frac), bar.size.y)))
+			status_box.draw_rect(Rect2(bar.position + Vector2(2, 1), Vector2(maxf(2.0, bar.size.x * _o2_frac - 4.0), 1)), col.lightened(0.45))
 
 
 # ------------------------------------------------------------------ screen effects
@@ -916,8 +924,9 @@ func _draw_stars() -> void:
 			var a := -PI / 2.0 + k * PI / 5.0
 			pts.append(c + Vector2(cos(a), sin(a)) * r)
 		if i < _stars_shown:
+			stars_box.draw_circle(c, 14.0, Color(AMBER, 0.12))                         # a soft glow behind it
 			stars_box.draw_colored_polygon(pts, AMBER)
-			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.45, 0.25, 0.0), 1.0)
+			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), AMBER.lightened(0.4), 1.0, true)
 		else:
-			stars_box.draw_colored_polygon(pts, Color(0.06, 0.12, 0.08))                 # an unlit star on the screen
-			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0.25, 0.42, 0.28), 1.0)
+			stars_box.draw_colored_polygon(pts, Color(0.07, 0.11, 0.17))               # an empty star
+			stars_box.draw_polyline(pts + PackedVector2Array([pts[0]]), UIStyle.FAINT, 1.0, true)

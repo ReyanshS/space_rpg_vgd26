@@ -65,6 +65,10 @@ they leave behind. At the end of each level you get up to three stars.
 - The **cable clamp**: once you find it, press **E** next to a purple **socket** to set it
   down. The wire wraps round it like a pillar, so you can make a corner where you need one.
   E again takes it back. Only one socket is ever the right one.
+- **Movable crates** (steel, with yellow stripes): walk into one and keep walking, and it rolls
+  a tile. Crates block the wire too, so move them out of the way first. Roll one onto a red
+  tile and it shorts it out: that tile is safe to walk on, and the wire can cross it.
+  Crate stuck in a corner? **R** puts the room's crates back.
 - **M** shows the deck map: which rooms have power, which doors are locked, where you are.
 
 ## Spacewalk (Level 2)

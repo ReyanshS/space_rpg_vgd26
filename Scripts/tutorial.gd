@@ -47,6 +47,8 @@ func _start() -> void:
 	_level.room_entered.connect(_on_room_entered)
 	_level.room_restarted.connect(_on_room_restarted)
 	_level.drift_started.connect(_on_drift_started)
+	_level.crate_pushed.connect(func(room: int) -> void: _check(TutorialStep.Trigger.PUSH_CRATE, room))
+	_level.crate_grounded.connect(func(room: int) -> void: _check(TutorialStep.Trigger.GROUND_CRATE, room))
 	# Playtesting from a TestStart marker (F6)? Skip the steps of the rooms before it.
 	var first := 0
 	if _level.test_room >= 0:

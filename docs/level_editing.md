@@ -38,11 +38,37 @@ paint. Untick **Show Layout In Editor** on the level node to see it without the 
 | main door | `M` | big red door: opens when every power link pointing at it has lit its lamp |
 | socket | `o` | where the cable clamp can be set down (E next to it). In a socket the clamp works like a pole |
 | clamp | `k` | the cable clamp lying on the floor: walk over it to pick it up (one per level) |
+| movable crate | `c` | steel crate with yellow stripes (the last tile in the palette): walk into it and it rolls one tile. Blocks you and the wire. Rolled onto a red tile, it shorts it out: that tile becomes safe for you and the wire |
 
 Rules the game checks:
 - Every room needs exactly **one START** and **one GOAL or CORE**, except a **hall**: a
   room with neither (a corridor, a hub). Halls never lock anything: their doors are open
-  from the start. The Output panel warns you if a puzzle room is missing something.
+  from the start.
+
+**Room labels.** While you paint, every room shows a small label in the top left corner:
+its number (the order you walk to it from the spawn), its name, its START time and how
+many movable crates it has. Anything missing shows in red ("needs a START pad", "needs a
+GOAL"). Paint a new room and the Room Titles and Room Wire Time lists (level node,
+Inspector) get a new entry by themselves: rename "ROOM n" to what it should be called.
+Don't want the labels? Untick **Show Room Info** on the level node.
+
+## 1a. Movable crates
+
+Paint them with the crate tile (`c`, the last one in the palette). In the game:
+- Walk straight into a crate and keep walking: after a moment it rolls one tile.
+- It only rolls onto floor or a red tile, never onto a pad, a battery, a socket, an item,
+  another crate, or across the wire you're carrying.
+- Onto a **live red tile** it shorts it out and sinks: that tile is now safe for you, and
+  the wire can cross it. That's the best trick: a red strip that blocks the wire, and
+  crates to open the one tile the wire needs (see the Cable Store in Level 1).
+- **R** puts the crates of the room back where they started (not once the room has
+  power). In a hall, R puts its crates back and you at the door you came in by.
+
+Good crate puzzles: few crates (1 to 3), and a clear job for them (open a line for the
+wire, short out the right red tile, clear the way to a node). Keep the doors of a room
+clear: a crate pushed in front of a door you need is a dead end (R fixes it, but it
+isn't fun). The solver tries the crates in every place you can push them, so it can
+take a minute on a room with crates.
 
 ## 1b. Dungeon parts: halls, fuses, the main door, the clamp, power links
 
@@ -203,7 +229,9 @@ python tools/solver2.py tools/out/level1.txt
 ```
 
 It lists every route that works in time, and whether each battery can be reached.
-"0 solutions" = nobody can solve that room. More in `tools/README.md`.
+"0 solutions" = nobody can solve that room. With movable crates it also says how many
+pushes the room needs at least. On a Mac type `python3` instead of `python`. More in
+`tools/README.md`.
 
 **Then update PIP's autopilot routes** (judge mode walks these), or he powers the
 changed room without walking it:

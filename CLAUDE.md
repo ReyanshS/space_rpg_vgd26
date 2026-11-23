@@ -5,8 +5,9 @@ must be documented). Title **STAR CIRCUIT** (the team's name). The player is an 
 power to a dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship's
 maintenance AI. `Scenes/title.tscn` is the main scene (logo: `Assets/images/ui/logo.png`) ->
 `level_1.tscn` (Engineering Deck: the team's 3 tutorial rooms, then a small dungeon: the Reactor
-Hall hub with 3 wings and a main door, then the Generator Room: 3 stages split by cargo
-barriers, ending in blinking grates; see "Dungeon parts") -> `level_2.tscn` (Main Deck: bridge,
+Hall hub (the fuse sits in a live reactor ring: roll a crate in to short a way through) with 3
+wings and a main door, then the Generator Room: 3 stages split by cargo barriers, ending in
+blinking grates; see "Dungeon parts" and "Movable crates") -> `level_2.tscn` (Main Deck: bridge,
 airlock, spacewalk across one open hull) -> `level_3.tscn` (The Core: PIP malfunctions and you
 reboot him by looping the wire round his core three times; the team's idea, see "The core" below).
 - The team works in `D:\Godot\tsa-project\space_rpg_vgd26` (GitHub `ReyanshS/space_rpg_vgd26`,
@@ -28,8 +29,8 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Writing (PIP, tutorial, popups):** the team wants it to sound natural, not AI-written. Short
   plain sentences, contractions, no dashes of any kind as punctuation, few exclamation marks, no
   ALL-CAPS words inside PIP's lines. PIP is a slightly nervous maintenance bot with dry humour.
-  Each line MUST fit the console: **two rows at 16 px** (about 70 characters; the speaker name
-  counts too). One text size everywhere (the team tried 12 px for long lines and said no).
+  Each line MUST fit the console: **two rows** of the console text (size 9, about 90
+  characters; the speaker name counts too). Keep lines short anyway: about 70 reads best.
 - **Code comments** follow the same style: plain sentences, no dashes as punctuation (use a
   comma, colon, full stop or brackets), no ALL-CAPS words for emphasis, script headers written as
   `# name.gd: what it does`. Caps are fine for real names: enum values, constants, START/GOAL/NODE
@@ -70,8 +71,13 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   that the lighting still looks right.
 
 ## Display
-480x270 viewport scaled 3x, nearest filtering, 32x32 tiles. UI font: m6x11 (`Assets/fonts`) via
-`Assets/ui/theme.tres` at size 16 — only use multiples of 16 or the pixel font blurs.
+480x270 game pixels, 1440x810 window, nearest filtering, 32x32 tiles. Stretch mode
+**canvas_items** (Nov 2026, "scale up" + sharper UI): positions and sizes are still in game
+pixels, but everything is drawn at the window's real resolution, so text and panels are sharp
+while the pixel art keeps its pixels (movement is a bit smoother: sub pixel steps show).
+UI font: the one built into Godot (Open Sans; the theme sets no font, so nothing to credit).
+Sizes in game pixels (x3 on screen): `UIStyle.SMALL` 6, `BODY` 8 (theme default), `HEAD` 11,
+`TITLE` 18; PIP's console text is 9. The pixel font m6x11 is still in `Assets/fonts`, unused.
 
 ## Game rules (level.gd enforces them)
 - START pad: stand on it, press **E/Space** to grab the wire. The timer starts with `wire_time`
@@ -131,7 +137,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 
 ## Dungeon parts (Nov 2026: "make it less linear, like a Zelda dungeon")
 - Level 1 is a dungeon: tutorial rooms 1-3 (the team's), then the REACTOR HALL hub with three
-  wings: CABLE STORE (open; its cargo hides the clamp and a fuse), COOLANT PUMPS (open, needs the
+  wings: CABLE STORE (open; its cargo hides the clamp; the fuse is in the hub's reactor ring), COOLANT PUMPS (open, needs the
   clamp: `needs the clamp` in the solver), REACTOR ACCESS (the team's old room 4, behind a fuse
   door). Each wing's goal has a PowerLink UNLOCK to the MAIN DOOR, which opens onto the
   Generator Room finale. Built by `tools/maps/build_level1_dungeon.py`. Order: B, then A and C in
@@ -151,6 +157,50 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Ship map** (M): `Scripts/ship_map.gd`, drawn from `level.map_info()`; only in levels with
   halls / fuse doors / main doors / links (`hud.set_map_available`).
 - Console: fuse count and clamp icon (hud.gd `set_fuses`, `set_clamp`).
+
+## Movable crates (Nov 22 2026, team: "add movable crates")
+- Tile kind `box`, map char `c` (palette frame 23, drawn by `tools/art_crate_icon.gd` from the
+  game's own drawing code). `_read_layout()` turns each into floor + a home in `_crate_homes`;
+  at runtime each is a `PushCrate` (`Scripts/push_crate.gd`, draws itself: steel with hazard
+  stripes, so it never looks like the fixed wooden cargo). In the editor `_crate_preview` draws them.
+- Rules (level.gd, "movable crates"): walk straight into one (player.gd `_slide` ->
+  `lean_on_crate()`), lean `PUSH_LEAN` 0.14 s, it rolls one tile (`_push_crate`) onto floor, the
+  spawn or a red tile, never onto pads, items, cells, sockets, another crate, you or the wire you
+  carry (`_wire_crosses`). Solid for feet and wire (`is_solid_for_walk` / `is_solid_for_wire`
+  check `_crates` first). Onto a LIVE red tile = `_short_out()`: sparks, it sinks, the tile goes
+  in `_grounded` (`_is_red()` says no: walkable, and the wire crosses it). Won't move = a shudder
+  + tick, PIP says `pip_crate_stuck` once.
+- R (`_respawn`): `reset_crates(room)` puts the room's crates home (shorted tiles turn red
+  again), unless the room has power. In a HALL with crates, R resets them and puts you back at
+  the door you came in by (`_entered_at`, else `_dev_spot`), so the reactor ring can't trap you.
+- Signals `crate_pushed`, `crate_grounded`; story/tutorial triggers PUSH_CRATE, GROUND_CRATE (at
+  the end of both enums). Texts: `popup_crate_grounded`, `popup_crates_reset`, `pip_crate`,
+  `pip_crate_ground`, `pip_crate_stuck`. Sound `push.wav` (`tools/sfx_crate.py`, plain Python).
+- Solver: `push_configs()` = every layout you can push a room's crates into (BFS, fewest pushes
+  first; you start on the START). It checks the wire in the first `--crate-tries` (24) layouts
+  AND in every layout that shorts out a new set of red tiles, after a quick "can you walk from
+  START to the goal" test (`walk_reaches`). Prints "needs the crates moved: at least n pushes".
+  Halls with crates get a plan instead (`hall_plan()`: fewest pushes so every door and item is
+  reachable), written to the routes JSON under "halls". The chosen layout is carried on to
+  later stages. Crates are only pushed before grabbing the wire (in the game you may push while
+  wired). A route's "pushes" = [[x, y, dx, dy], ...].
+- Autopilot: resets the room's crates, does the route's pushes (`_push`: walk behind, lean),
+  then the wire; hall plans run once, as soon as he can walk into that hall (`_do_hall_plans`).
+- Level 1 uses: REACTOR HALL (fuse in a 2 thick red ring, 2 crates: the one under the entrance
+  pushed down twice is the way in), CABLE STORE (rebuilt bigger: a red strip across the room;
+  short out the one tile (13,26) on the line START -> node; 2 crates, at least 3 pushes; lowest
+  timer 1.52 s), COOLANT PUMPS (a crate on the clamp's line). Built by
+  `tools/maps/build_level1_crates.py` (from the dungeon map). The fuse moved from the Cable Store
+  stash to the hub (the stash keeps the clamp).
+
+## Making levels in the editor (Nov 22 2026, team: "it should be very easy to create levels")
+- Painting is all it takes: each palette tile's `kind` gives it its art and its rules live.
+- **Room labels** (editor only, `show_room_info`, `_update_room_info()` / `_draw_room_info()`):
+  every room shows its number, name, START time ("level's" = the default) and crate count, and
+  red warnings (needs a START, 2 STARTs, needs a GOAL). Labels step down so they never overlap.
+- Paint a new room and `room_titles` / `room_wire_time` grow to match by themselves (a new
+  "ROOM n" / 0). They never shrink (no data lost); if a room is added in the middle, the labels
+  show at once which names moved.
 
 ## Judge mode and PIP's autopilot
 - Title, top left: JUDGE MODE toggle (`Game.judge_mode`, saved) + LEVEL n buttons. In a level,
@@ -254,12 +304,15 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   timer is a 5-LED bar floating above the astronaut's head. Also: tutorial/PIP arrows, toasts
   (top), fades, results with stars + skill points, pause menu, the skill tree screen (an
   instance of `Scenes/skill_tree.tscn`, `hud.open_skill_tree()`), cutscene film bar (top).
-- **UI look** (the team asked for "less AI"): ship hardware outside, old green terminal inside.
-  Panels are 9-slice `StyleBoxTexture`s of `Assets/ui/frame_screen.png` (riveted bezel + green
-  scanline screen) and `frame_plate.png` (riveted plate), drawn by `tools/art_ui.py`, margin 6.
-  Colours: amber `#ffc24d` (names, keys, headings), phosphor green `#a8f0a0` (text), dim green for
-  hints. Meters are LED segments (`_led()` in hud.gd). Keep new UI in this style - no flat
-  translucent boxes with thin glowing borders.
+- **UI look** ("clean sci-fi", Nov 22 2026; replaced the green terminal at the team's request:
+  "polished, modern ish"): dark glass panels with rounded corners and a thin cyan edge
+  (`StyleBoxFlat`), white text, amber for names / keys / things to buy, green = done, red =
+  danger. Everything lives in `Scripts/ui_style.gd` (`UIStyle`: colours, font sizes, `box()`,
+  `draw_box()`, `text()`, `draw_key()`, `draw_led()`) and the theme (`Assets/ui/theme.tres`:
+  Button, Panel, PanelContainer, Label, RichTextLabel). Code-drawn UI (console, timer, skill
+  tree, map, keycaps, dev menu) uses UIStyle, so a colour changed there changes everywhere.
+  PIP's face stays a little green screen (his character). Toasts slide in, the pause menu fades
+  in, results scale in. The old frame PNGs (`frame_*.png`, `button_*.png`) are no longer used.
 - **Story** (`Scripts/story.gd` on the `Story` node + `Scripts/story_beat.gd` Marker2D children):
   each beat has `trigger` (LEVEL_START, ENTER_ROOM, SOLVE_ROOM, REACH_HERE, GRAB_WIRE, FAIL_IN_ROOM,
   AIRLOCK, ALL_POWERED, FIRST_DRIFT, TOUCH_EMPTY_CELL, SHIP_LIGHTS_UP), `lines`, `pause_game`,
@@ -361,7 +414,8 @@ writer and the art/sound generators. See `tools/README.md`. After editing a room
 `python tools/solver2.py Scenes/level_N.tscn`: it reads the map AND the level's Rules numbers
 and lists routes with their "lowest timer" (the least time left on the way; carried over from
 pad to pad) and whether every power cell can be charged in time. `--paths f.json --margin 3`
-exports routes a bot can replay in the game.
+exports routes a bot can replay in the game. On a Mac the command is `python3`. Rooms with
+movable crates take longer (Level 1: about 80 s); see "Movable crates".
 Known blind spots of the cell check (false "NOT collectible"): it ignores the +2 s a cell gives,
 it forgets pole wraps when it checks the way on from a cell (L1 cell (24,7) is fine in the game),
 and in core rooms it never checks cells on the last stretch before the loop closes (L3 (21,3)).
@@ -407,5 +461,11 @@ with PIP's autopilot. The three
 intro cutscene PICTURES were provided by the team (record who made them, and the tool if they
 were AI-generated, for the copyright checklist); Claude only cropped them to 16:9 and shrank them
 to 480x270 with Python.
+Nov 22 2026 (Claude, at the team's request): movable crates (push_crate.gd, the push / short out /
+reset rules, the solver's crate layouts and hall plans, the autopilot's pushes, the palette icon
+and push.wav), the reworked Level 1 hub and Cable Store and the Coolant Pumps crate (solver-checked,
+then walked by the autopilot in the real game), the editor's room labels and growing room lists,
+the dev menu, and the "clean sci-fi" UI restyle (ui_style.gd, theme, HUD, title, skill tree,
+map; canvas_items stretch for sharp text). The UI font is Godot's built-in Open Sans.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

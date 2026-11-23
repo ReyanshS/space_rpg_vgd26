@@ -64,14 +64,16 @@ func _ready() -> void:
 ## they always match the levels in Game.LEVELS.
 func _make_judge_buttons() -> void:
 	var box := VBoxContainer.new()
-	box.position = Vector2(6, 22)
+	box.position = Vector2(6, 16)
 	box.add_theme_constant_override("separation", 3)
 	$UI.add_child(box)
 	var toggle := Button.new()
+	toggle.add_theme_font_size_override("font_size", UIStyle.SMALL + 1)
 	box.add_child(toggle)
 	var levels: Array[Button] = []
 	for n in Game.LEVELS.size():
 		var b := Button.new()
+		b.add_theme_font_size_override("font_size", UIStyle.SMALL + 1)
 		b.text = "LEVEL %d" % (n + 1)
 		b.pressed.connect(_start.bind(n + 1))
 		box.add_child(b)

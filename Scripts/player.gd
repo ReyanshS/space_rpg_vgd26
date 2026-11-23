@@ -196,6 +196,10 @@ func _slide(mv: Vector2, may_nudge: bool) -> void:
 	if remaining <= 0.0:
 		return
 	var target := position + dir * remaining
+	# A movable crate in the way, and you're walking straight at it? Lean on it:
+	# the level rolls it a tile after a moment (level.gd lean_on_crate).
+	if may_nudge and level.lean_on_crate(target, dir):
+		return
 	# Only open space in the way (no wall, no crate)? Push off and drift across.
 	# (box_blocked's last argument = "does open space count as blocked?")
 	if may_nudge and level.box_blocked(target, FEET_HALF) and not level.box_blocked(target, FEET_HALF, false):

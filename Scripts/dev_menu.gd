@@ -19,9 +19,8 @@
 # ---------------------------------------------------------------------------
 extends CanvasLayer
 
-const AMBER := Color(1.0, 0.76, 0.3)
-const DIM := Color(0.44, 0.61, 0.45)
-const SCREEN_TEX := preload("res://Assets/ui/frame_screen.png")
+const AMBER := UIStyle.AMBER
+const DIM := UIStyle.DIM
 
 var _root: Control             # everything the menu draws (null until it first opens)
 var _first_button: Button
@@ -121,13 +120,7 @@ func _build() -> void:
 	_root.add_child(center)
 
 	var panel := PanelContainer.new()
-	var frame := StyleBoxTexture.new()  # the same green screen as the HUD's panels
-	frame.texture = SCREEN_TEX
-	frame.set_texture_margin_all(6)
-	frame.set_content_margin_all(8)
-	frame.content_margin_left = 10
-	frame.content_margin_right = 10
-	panel.add_theme_stylebox_override("panel", frame)
+	panel.add_theme_stylebox_override("panel", UIStyle.box(UIStyle.GLASS, UIStyle.EDGE, 6, 6, 9.0))
 	center.add_child(panel)
 
 	var box := VBoxContainer.new()
@@ -155,9 +148,9 @@ func _build() -> void:
 ## One column: the level's name, then a button per room.
 func _level_column(number: int, path: String) -> VBoxContainer:
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 1)
+	col.add_theme_constant_override("separation", 2)
 	var info := _read_level(path)
-	col.add_child(_label("LEVEL %d: %s" % [number, info["name"]], AMBER))
+	col.add_child(_label("LEVEL %d  %s" % [number, info["name"]], UIStyle.CYAN))
 	# Stages of one room share a name (GENERATOR ROOM x3): add A, B, C to tell them apart.
 	var count := {}
 	for cp in info["rooms"]:
@@ -170,6 +163,7 @@ func _level_column(number: int, path: String) -> VBoxContainer:
 			seen[title] = int(seen.get(title, 0)) + 1
 			text += " " + "ABCDEFGH"[seen[title] - 1]
 		var b := Button.new()
+		b.add_theme_font_size_override("font_size", UIStyle.SMALL + 1)
 		b.text = text
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.pressed.connect(_jump.bind(number, cp[0]))

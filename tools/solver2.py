@@ -31,14 +31,19 @@ def near(x, y, pc, r):
 STEP = 4
 HANDS_UP = 9.0          # the wire ends at his hands, 9 px above his feet (player.gd hand_position)
 CORE_MAX_TIME = 30.0    # core rooms: routes slower than this (seconds) aren't worth listing
-WALK_SOLID = '# CDFM=~@B' # your feet can't go here (open space too: mag boots need hull)
-HARD_SOLID = '# CDFM=@B'  # you can't pass here at all, not even drifting
-WIRE_SOLID = '# CDFM=EX@' # the wire can't cross these (it CAN cross open space)
+WALK_SOLID = '# CDFM=~@Bc' # your feet can't go here (open space too: mag boots need hull)
+HARD_SOLID = '# CDFM=@Bc'  # you can't pass here at all, not even drifting
+WIRE_SOLID = '# CDFM=EX@c' # the wire can't cross these (it CAN cross open space)
 # F fuse door and M main door are doors; f fuse, k clamp and o socket are floor. A room with
 # sockets is also tried with the clamp in each socket (it then works like a pole, B).
 # 'B' is a POLE: solid for your feet, but the wire crosses it and wraps round its centre.
 # '@' is a CORE (Level 3): its room is solved by wrapping the wire all the way
 # round it (the wire's angle round the core adds up to a full turn) - no goal pad.
+# 'c' is a MOVABLE CRATE (push_crate.gd). Before checking the wire, the solver works out
+# where you can push a room's crates (push_configs: walk round, lean on one, it rolls a
+# tile; onto a red tile it shorts it out and both become floor), then checks the wire
+# route with the crates in each of those places, fewest pushes first. It doesn't push
+# crates while you carry the wire (you can in the game; it's never needed).
 # '=' is a BARRIER that hasn't moved yet. When a stage is checked, the barriers next
 # to the stages you've already powered have sunk into the floor: they become '.'.
 
@@ -322,6 +327,113 @@ def solve_room(M, pads, poles, cells, start_key, max_depth=12, core=None, start_
     return sols
 
 
+CRATE_ONTO = '.PX'       # a crate can roll onto floor, the spawn, or a red tile (shorts it out)
+PLAYER_BLOCK = '# CDFM=~@BcX'    # tiles you can't walk on (or through) while shoving crates about (grates blink, so they're fine)
+MAX_CONFIGS = 2000      # crate layouts to find at most (a room with many crates has lots)
+MAX_TRIES = 24          # --crate-tries: layouts to check the wire in (fewest pushes first)
+
+
+def push_configs(g, room_cells, start):
+    """Every way the room's crates can be arranged by pushing them, starting
+    with you on the START. Returns [(grid, pushes)], fewest pushes first; pushes
+    = [(crate x, y, dx, dy), ...] in order. A crate pushed onto a red tile shorts
+    it out: both become floor (level.gd _short_out)."""
+    cells = set(room_cells)
+    crates0 = frozenset(c for c in cells if g[c[1]][c[0]] == 'c')
+    if not crates0: return [(g, [])]
+    base = [list(row) for row in g]
+    for c, r in crates0: base[r][c] = '.'
+
+    def ch(c, r, crates, ground):
+        if (c, r) in crates: return 'c'
+        if (c, r) in ground: return '.'
+        if 0 <= r < len(base) and 0 <= c < len(base[r]): return base[r][c]
+        return ' '
+
+    def region(p, crates, ground):
+        """The tiles you can walk to (no wire) from p: round walls, crates and red tiles."""
+        seen = {p}; stack = [p]
+        while stack:
+            q = stack.pop()
+            for n in near4(*q):
+                if n in seen or ch(n[0], n[1], crates, ground) in PLAYER_BLOCK: continue
+                seen.add(n); stack.append(n)
+        return seen
+
+    start_state = (crates0, frozenset())
+    reach0 = region(start, *start_state)
+    key0 = (min(reach0), crates0, frozenset())
+    seen = {key0}
+    queue = [(crates0, frozenset(), reach0, [])]
+    out = []; found = {(crates0, frozenset())}
+    out.append((crates0, frozenset(), []))
+    i = 0
+    while i < len(queue) and len(out) < MAX_CONFIGS:
+        crates, ground, reach, pushes = queue[i]; i += 1
+        for (cx, cy) in crates:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                stand = (cx - dx, cy - dy); t = (cx + dx, cy + dy)
+                if stand not in reach or t not in cells: continue
+                k = ch(t[0], t[1], crates, ground)
+                if k not in CRATE_ONTO: continue
+                if t == start: continue                     # never onto the START (it's a pad)
+                nc = set(crates); nc.discard((cx, cy)); ng = set(ground)
+                if k == 'X' and t not in ground: ng.add(t)  # shorted out: the crate sinks into it
+                else: nc.add(t)
+                nc = frozenset(nc); ng = frozenset(ng)
+                nreach = region((cx, cy), nc, ng)
+                key = (min(nreach), nc, ng)
+                if key in seen: continue
+                seen.add(key)
+                np_ = pushes + [(cx, cy, dx, dy)]
+                queue.append((nc, ng, nreach, np_))
+                if (nc, ng) not in found:
+                    found.add((nc, ng)); out.append((nc, ng, np_))
+    res = []
+    for crates, ground, pushes in out:
+        gg = [row[:] for row in base]
+        for c, r in crates: gg[r][c] = 'c'
+        for c, r in ground: gg[r][c] = '.'
+        res.append(([''.join(row) for row in gg], pushes))
+    return res
+
+
+def walk_reaches(g, a, b):
+    """Can you walk (no wire) from tile a to a tile next to or on b? Round walls,
+    crates and red tiles. A quick test before the slow wire check."""
+    seen = {a}; stack = [a]
+    while stack:
+        q = stack.pop()
+        if abs(q[0] - b[0]) + abs(q[1] - b[1]) <= 1: return True
+        for n in near4(*q):
+            if n in seen or not (0 <= n[1] < len(g) and 0 <= n[0] < len(g[n[1]])): continue
+            if g[n[1]][n[0]] in PLAYER_BLOCK: continue
+            seen.add(n); stack.append(n)
+    return False
+
+
+def hall_plan(g, cells_of_room, earlier, rms):
+    """A hall (no START) with movable crates: the fewest pushes that let you walk
+    to every item (fuse, clamp) and every door of the hall, coming in from a
+    room you've already been in. None = the hall has no crates (or no way)."""
+    if not any(g[r][c] == 'c' for (c, r) in cells_of_room): return None
+    cells = set(cells_of_room)
+    earlier_cells = set(c for o in earlier for c in rms[o])
+    entry = None; targets = []
+    for (c, r) in cells_of_room:
+        if g[r][c] in 'fk': targets.append((c, r))
+        for n in near4(c, r):
+            if 0 <= n[1] < len(g) and 0 <= n[0] < len(g[n[1]]) and g[n[1]][n[0]] in 'DFM':
+                targets.append((c, r))
+                door = n; beyond = (2 * n[0] - c, 2 * n[1] - r)
+                if entry is None and beyond in earlier_cells: entry = (c, r)
+    if entry is None: entry = min(cells_of_room)
+    for gconf, pushes in push_configs(g, cells_of_room, entry):
+        if all(walk_reaches(gconf, entry, t) for t in targets):
+            return pushes, gconf
+    return None
+
+
 def rooms(g):
     H = len(g); W = len(g[0]); seen = {}; out = []
     for r in range(H):
@@ -404,9 +516,11 @@ if __name__ == '__main__':
     if '--paths' in args:      # write the most forgiving route of each stage (feet positions) to a JSON file
         i = args.index('--paths'); paths_out = args[i + 1]; del args[i:i + 2]
     paths = {}
-    for flag, var in (('--time', 'TIME'), ('--node', 'NODE_TIME'), ('--max', 'MAX_TIME'), ('--margin', 'MARGIN')):
+    halls = []           # crate plans for halls (rooms with no START): what PIP's autopilot pushes
+    for flag, var in (('--time', 'TIME'), ('--node', 'NODE_TIME'), ('--max', 'MAX_TIME'), ('--margin', 'MARGIN'),
+                      ('--crate-tries', 'MAX_TRIES')):
         if flag in args:
-            i = args.index(flag); globals()[var] = float(args[i + 1]); del args[i:i + 2]
+            i = args.index(flag); globals()[var] = type(globals()[var])(float(args[i + 1])); del args[i:i + 2]
     sys.argv = [sys.argv[0]] + args
     if sys.argv[1].endswith('.tscn'):
         # a level scene: make the text map with map_from_scene.py, and read the
@@ -439,7 +553,8 @@ if __name__ == '__main__':
         cells_of_room = rms[ri]
         # only rooms with a START get powered (halls don't move barriers)
         done = set(o for o in order[:k] if any(g[r][c] == 'S' for (c, r) in rms[o]))
-        M = Map(open_barriers(g, groups, done))
+        gopen = open_barriers(g, groups, done)
+        M = Map(gopen)
         pads = {}; cells = {}
         for (c, r) in cells_of_room:
             ch = g[r][c]
@@ -451,36 +566,78 @@ if __name__ == '__main__':
             for (c, r) in rms[o]:
                 if g[r][c] == 'N': pads[(c, r)] = (g[r][c], center(c, r))
         st = [k for k, v in pads.items() if v[0] == 'S']
-        if not st: continue
+        if not st:
+            plan = hall_plan(gopen, cells_of_room, order[:k], rms)
+            if plan is not None:
+                pushes, gconf = plan
+                print(f'Hall {k + 1}: crates: {len(pushes)} pushes open the way to every door and item')
+                halls.append({'hall': list(min(cells_of_room)), 'pushes': [list(p) for p in pushes]})
+                for (c, r) in cells_of_room:
+                    row = list(g[r]); row[c] = gconf[r][c]; g[r] = ''.join(row)
+            continue
         cores = [(c, r) for (c, r) in cells_of_room if g[r][c] == '@']
         core = center(*cores[0]) if cores else None
         # sockets: try the room with no clamp, and with the clamp in each socket
         # (the clamp is solid and the wire wraps round it, exactly like a pole)
         sockets = [(c, r) for (c, r) in cells_of_room if g[r][c] == 'o']
+        # movable crates: every layout you can push them into, fewest pushes first
+        layouts = push_configs(gopen, cells_of_room, st[0])
         sols = []
         clamp_of = {}                  # id(solution) -> socket used
-        for sock in [None] + sockets:
-            Mx, px = M, poles
-            if sock is not None:
-                gg = [list(row) for row in M.g]
-                gg[sock[1]][sock[0]] = 'B'
-                Mx, px = Map([''.join(row) for row in gg]), poles + [center(*sock)]
-            for s in solve_room(Mx, pads, px, cells, st[0], max_depth=6 if core else 12, core=core,
-                                start_time=ROOM_TIME.get(k + 1)):
+        pushes_of = {}                 # id(solution) -> the crate pushes it needs first
+        grid_of = {}                   # id(solution) -> the map with its crates where they ended up
+        found_at = None
+        goals = [p for p, v in pads.items() if v[0] == 'G'] or cores
+        tried = 0; shorted_seen = set()
+        for gconf, pushes in layouts:
+            # Which red tiles this layout shorted out. A layout that shorts out a new
+            # set is always checked (that's what crates are for); others only while
+            # we're still among the first MAX_TRIES (fewest pushes first).
+            shorted = frozenset((c, r) for (c, r) in cells_of_room if gopen[r][c] == 'X' and gconf[r][c] == '.')
+            new_short = shorted not in shorted_seen
+            shorted_seen.add(shorted)
+            if not new_short and (tried >= MAX_TRIES or (found_at is not None and tried >= found_at + 6)):
+                continue
+            # quick check first: can you even walk from the START to the goal?
+            if goals and not walk_reaches(gconf, st[0], goals[0]):
+                continue
+            tried += 1
+            Mc = M if not pushes else Map(gconf)
+            for sock in [None] + sockets:
+                Mx, px = Mc, poles
                 if sock is not None:
-                    s = (s[0] + [f'(clamp in {sock})'],) + tuple(s[1:])
-                clamp_of[id(s)] = sock
-                sols.append(s)
+                    gg = [list(row) for row in Mc.g]
+                    gg[sock[1]][sock[0]] = 'B'
+                    Mx, px = Map([''.join(row) for row in gg]), poles + [center(*sock)]
+                for s in solve_room(Mx, pads, px, cells, st[0], max_depth=6 if core else 12, core=core,
+                                    start_time=ROOM_TIME.get(k + 1)):
+                    if sock is not None:
+                        s = (s[0] + [f'(clamp in {sock})'],) + tuple(s[1:])
+                    if pushes:
+                        s = (['(crates moved)'] + s[0],) + tuple(s[1:])
+                    clamp_of[id(s)] = sock
+                    pushes_of[id(s)] = pushes
+                    grid_of[id(s)] = gconf
+                    sols.append(s)
+                    if found_at is None: found_at = tried
+        if len(layouts) > 1:
+            print(f'    crates: {len(layouts)} layouts you can push them into, checked the wire in {tried}')
         kind = f'CORE {cores[0]}: wrap the wire round it' if cores else 'goal'
         print(f'Stage {k + 1} (start {st[0]}, {kind}, START {min(ROOM_TIME.get(k + 1, TIME), MAX_TIME)} s): {len(sols)} solutions')
         if sockets and not any(clamp_of[id(s)] is None for s in sols) and sols:
             print('    needs the clamp: no route without it')
+        if sols and not any(not pushes_of[id(s)] for s in sols):
+            print(f'    needs the crates moved: at least {min(len(pushes_of[id(s)]) for s in sols)} pushes')
         if sols:
             top = max(sols, key=lambda x: (x[1], -x[3]))
             print(f'    most forgiving route: lowest timer {top[1]:.2f} s')
             paths[k + 1] = {'labels': top[0], 'lowest': top[1], 'points': [[p[0], p[1]] for p in top[4]],
                             'wraps': wrap_events(top[4]), 'start': list(st[0]),
-                            'clamp': list(clamp_of[id(top)]) if clamp_of[id(top)] else None}
+                            'clamp': list(clamp_of[id(top)]) if clamp_of[id(top)] else None,
+                            'pushes': [list(p) for p in pushes_of[id(top)]]}
+            # the crates stay where this route left them (later stages see them there)
+            for (c, r) in cells_of_room:
+                row = list(g[r]); row[c] = grid_of[id(top)][r][c]; g[r] = ''.join(row)
         best = {}
         for labels, spare, got, total, _trail in sols:
             key = ' -> '.join(labels)
@@ -496,4 +653,5 @@ if __name__ == '__main__':
                 print(f'    cell {c}: ' + ('collectible' if ok else 'NOT collectible on any route'))
     if paths_out:
         import json
+        if halls: paths['halls'] = halls
         json.dump(paths, open(paths_out, 'w'))

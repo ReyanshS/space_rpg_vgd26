@@ -98,6 +98,15 @@
 #     wire wraps round it. Puzzles that need a corner where there isn't one.
 #   - M opens the ship map (hud.gd), drawn from map_info().
 #
+# Movable crates (push_crate.gd; tile kind "box", map char c)
+#   - Walk straight into one and lean on it for a moment: it rolls one tile, if
+#     there's floor behind it. It blocks your feet and the wire, like a fixed crate.
+#   - Pushed onto a live red tile, it shorts the tile out and sinks: a steel plate
+#     you and the wire can cross (_grounded).
+#   - Carrying the wire, you can't roll a crate through the wire itself.
+#   - R puts the crates of the room you're in back where they started, unless
+#     that room already has power (reset_crates). In a hall, R only does that.
+#
 # The RPG side (skill points and the skill tree; see skill_manager.gd)
 #   - Finishing a level for the first time gives `skill_points` (an export, so
 #     harder levels can give more). Replays give nothing (_finish_level).
@@ -129,6 +138,8 @@ signal ship_lighting_up                      # every room has power: the lights-
 signal all_rooms_powered                     # ...and the cutscene is over (you can move again)
 signal item_picked(kind: String, index: int) # you picked up a "fuse" or the "clamp" in room `index`
 signal door_unlocked(index: int)             # a fuse door or main door opened (index = the room it leads to)
+signal crate_pushed(index: int)              # a movable crate rolled one tile in room `index`
+signal crate_grounded(index: int)            # a crate shorted out a red tile in room `index`
 
 const TILE := 32
 const DIRS4: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
@@ -164,11 +175,18 @@ const SRC_ROOF := 2
 const SRC_PUZZLE := 3
 const SRC_HULL := 4
 const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "door", "complete", "tick",
-	"pickup", "hiss", "puff", "clank", "alarm", "fanfare", "pulse"]
+	"pickup", "hiss", "puff", "clank", "alarm", "fanfare", "pulse", "push"]
 
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
 @export var layout: TileMapLayer
 ## Show the painted icons on top of the finished look while editing (off = preview the real look).
+## Editor only: label every room with its number, name, START time and any
+## problems (no START, no goal...), so you can see how the game reads your map.
+@export var show_room_info := true:
+	set(value):
+		show_room_info = value
+		if _room_info:
+			_room_info.queue_redraw()
 @export var show_layout_in_editor := true:
 	set(value):
 		show_layout_in_editor = value
@@ -286,6 +304,8 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var popup_fuse_used := "FUSE FITTED. DOOR OPEN"
 @export var popup_fuse_locked := "LOCKED. IT NEEDS A FUSE"
 @export var popup_clamp := "GOT THE CABLE CLAMP"
+@export var popup_crate_grounded := "SHORTED OUT. SAFE TO CROSS"
+@export var popup_crates_reset := "CRATES PUT BACK"
 
 # What PIP says about the dungeon parts (each one only once).
 @export_group("PIP's dungeon lines")
@@ -302,6 +322,12 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var pip_clamp := "A cable clamp. Press E by a purple socket to set it down."
 ## The first time you put the clamp in a socket.
 @export var pip_clamp_placed := "Now the wire wraps round it, like a pillar. E takes it back out."
+## The first time you push a movable crate.
+@export var pip_crate := "Those striped crates roll. Lean on one and it moves a tile."
+## The first time a crate shorts out a red tile.
+@export var pip_crate_ground := "It shorted the grate out. You and the wire can cross that tile now."
+## The first time a crate won't move (something behind it).
+@export var pip_crate_stuck := "Stuck? R puts this room's crates back where they started."
 
 # The last level only: when you reach the exit, the camera flies out into space
 # and the whole ship fires its engines and leaves (_fly_away), then the results.
@@ -426,6 +452,21 @@ var _visited := {}             # Room -> true once you've walked in (for the shi
 var _main_groups: Array = []   # main doors: {"tiles": [...], "needs": n, "lit": n}
 var _main_group_of := {}       # main door tile -> index in _main_groups
 var _locked_msg_cd := 0.0      # don't repeat "it's locked" every frame
+
+# --- movable crates (push_crate.gd)
+const PUSH_LEAN := 0.14        # seconds you lean on a crate before it rolls
+var _crate_homes: Array[Vector2i] = []   # where the crates start (read from the map, editor too)
+var _crate_list: Array[PushCrate] = []
+var _crates := {}              # tile -> PushCrate standing there (solid)
+var _grounded := {}            # red tile -> PushCrate that shorted it out (now a plate)
+var _crate_preview: Node2D     # editor only: draws the crates on the map
+var _room_info: Node2D         # editor only: the room labels (_draw_room_info)
+var _lean_cell := Vector2i(-1, -1)   # the crate you're leaning on...
+var _lean_dir := Vector2i.ZERO       # ...which way...
+var _lean_time := 0.0                # ...for how long...
+var _lean_frame := -10               # ...and the last physics frame you did
+var _lean_refused := false           # this lean already got its "won't move" shudder
+var _entered_at := {}                # Room -> where you last walked in (for R in a hall)
 
 # --- judge mode: PIP walks the room for you (autopilot.gd)
 ## True while the autopilot has the controls: no timer, no zaps, keys ignored.
@@ -1062,6 +1103,181 @@ func map_info() -> Dictionary:
 		"rect": _rect, "clamp_at": _clamp_at}
 
 
+# ===================================================================== movable crates
+# See "Movable crates" at the top. Where each crate is lives in _crates (tile ->
+# crate); a crate that sank into a red tile moves to _grounded. The crates
+# themselves (push_crate.gd) only draw and animate.
+
+## The player walks straight into something along `dir` and would stand at
+## `target`. If what's in the way is one movable crate (nothing else), he leans
+## on it, and after PUSH_LEAN seconds it rolls one tile. Returns true if it was
+## a crate, so the player doesn't also try to slide round it. (player.gd _slide)
+func lean_on_crate(target: Vector2, dir: Vector2) -> bool:
+	var c := _crate_in_box(target, Astronaut.FEET_HALF)
+	if c.x < 0 and c.y < 0:
+		return false
+	var d := Vector2i(roundi(dir.x), roundi(dir.y))
+	var frame := Engine.get_physics_frames()
+	if c != _lean_cell or d != _lean_dir or frame - _lean_frame > 2:
+		_lean_time = 0.0                    # a new lean: start counting again
+		_lean_refused = false
+	_lean_cell = c
+	_lean_dir = d
+	_lean_frame = frame
+	_lean_time += get_physics_process_delta_time()
+	if _lean_time >= PUSH_LEAN and not _busy:
+		_lean_time = 0.0
+		_push_crate(c, d)
+	return true
+
+
+## The one crate a box (feet) at `pos` would overlap, if that's the only solid
+## thing there. (-1, -1) = none, or a wall / a second crate is in the way too.
+func _crate_in_box(pos: Vector2, half: Vector2) -> Vector2i:
+	var none := Vector2i(-1, -1)
+	var found := none
+	for y in range(floori((pos.y - half.y) / TILE), floori((pos.y + half.y - 0.01) / TILE) + 1):
+		for x in range(floori((pos.x - half.x) / TILE), floori((pos.x + half.x - 0.01) / TILE) + 1):
+			var c := Vector2i(x, y)
+			if _crates.has(c):
+				if found != none and found != c:
+					return none
+				found = c
+			elif is_solid_for_walk(c):
+				return none
+	return found
+
+
+func _push_crate(c: Vector2i, d: Vector2i) -> void:
+	var k: PushCrate = _crates[c]
+	var t := c + d
+	if not _crate_can_go(t):
+		if not _lean_refused:
+			_lean_refused = true
+			k.refuse()
+			_play("tick")
+			if Game.first_time("crate_stuck"):
+				_pip_say(pip_crate_stuck)
+		return
+	_crates.erase(c)
+	_crates[t] = k
+	k.cell = t
+	k.slide_to(center_of(t))
+	_play("push")
+	var r: Room = k.room
+	crate_pushed.emit(r.index if r else -1)
+	if Game.first_time("crate_push"):
+		_pip_say(pip_crate)
+	if _is_red(t):
+		_short_out(k, t)
+	_check_stranded_soon()
+
+
+## A crate rolled onto a live red tile: it sparks, sinks and becomes a plate.
+func _short_out(k: PushCrate, t: Vector2i) -> void:
+	_crates.erase(t)
+	_grounded[t] = k
+	k.grounded = false          # it still looks like a crate until it has rolled there
+	k.ground()
+	var pt: PuzzleTile = _tiles.get(t)
+	if pt:
+		pt.set_live(false)
+	await get_tree().create_timer(PushCrate.SLIDE_TIME).timeout
+	if not is_inside_tree(): return
+	_play("shock")
+	_sparks_at(center_of(t))
+	_shake_cam(0.15, 1.5)
+	hud.show_toast(popup_crate_grounded, 2.0)
+	var r: Room = k.room
+	crate_grounded.emit(r.index if r else -1)
+	if Game.first_time("crate_ground"):
+		_pip_say(pip_crate_ground)
+
+
+## Can a crate roll onto tile t? Only onto floor (red tiles count: that shorts
+## them out), never onto pads, items, other crates, you or the wire you carry.
+func _crate_can_go(t: Vector2i) -> bool:
+	var k := kind_at(t)
+	if k != "floor" and k != "spawn" and k != "discharge":
+		return false
+	if _crates.has(t) or _pickups.has(t) or _cells.has(t) or t == _clamp_at:
+		return false
+	var feet := Rect2(player.position - Astronaut.FEET_HALF, Astronaut.FEET_HALF * 2.0)
+	if feet.intersects(Rect2(Vector2(t * TILE), Vector2(TILE, TILE))):
+		return false
+	if _wire != null and _wire_crosses(t):
+		return false
+	return true
+
+
+## Does the wire you're carrying run over tile t? (Pads and poles in order,
+## then the last stretch to your feet.)
+func _wire_crosses(t: Vector2i) -> bool:
+	var pts: Array[Vector2] = []
+	for c in _anchor_cells:
+		pts.append(center_of(c))
+	pts.append(player.position)
+	for i in pts.size() - 1:
+		var steps := maxi(1, ceili(pts[i].distance_to(pts[i + 1]) / 2.0))
+		for j in steps + 1:
+			if cell_of(pts[i].lerp(pts[i + 1], float(j) / steps)) == t:
+				return true
+	return false
+
+
+## Does room r have movable crates?
+func _room_has_crates(r: Room) -> bool:
+	return _crate_list.any(func(k: PushCrate) -> bool: return k.room == r)
+
+
+## Puts the crates of room r back where they started (a shorted tile turns red
+## again). Returns true if any crate had moved. quiet = no fade, no popup.
+func reset_crates(r: Room, quiet := false) -> bool:
+	var moved: Array[PushCrate] = []
+	for k in _crate_list:
+		if k.room == r and (k.cell != k.home or _grounded.has(k.cell)):
+			moved.append(k)
+	for k in moved:                          # first lift them all off the map...
+		if _grounded.get(k.cell) == k:
+			_grounded.erase(k.cell)
+			var pt: PuzzleTile = _tiles.get(k.cell)
+			if pt:
+				pt.set_live(not _red_off.has(k.cell))
+		elif _crates.get(k.cell) == k:
+			_crates.erase(k.cell)
+	for k in moved:                          # ...then put each one home (no two share a home)
+		_crates[k.home] = k
+		k.cell = k.home
+		if quiet:
+			k.position = center_of(k.home)
+			k.grounded = false
+			k.queue_redraw()
+		else:
+			k.go_home(center_of(k.home))
+	if not moved.is_empty() and player != null and box_blocked(player.position, Astronaut.FEET_HALF):
+		player.position = _nearest_safe_spot(player.position)   # a crate came home where you stood
+		_last_safe = player.position
+	if not moved.is_empty() and not quiet:
+		hud.show_toast(popup_crates_reset, 1.5)
+	return not moved.is_empty()
+
+
+## After a push the way back to the START may have opened (or closed): check soon.
+func _check_stranded_soon() -> void:
+	if _stranded:
+		_stranded_check = 0.0
+
+
+## For the autopilot: the room tile c is in (null = none).
+func room_at_cell(c: Vector2i) -> Room:
+	return _room_of.get(c)
+
+
+## For the autopilot: is there a crate standing on tile c?
+func crate_at(c: Vector2i) -> bool:
+	return _crates.has(c)
+
+
 # ===================================================================== judge mode: the autopilot
 # autopilot.gd does the walking; these are the few things it asks the level.
 
@@ -1295,6 +1511,13 @@ func _read_layout() -> void:
 		var kind := String(data.get_custom_data("kind"))
 		if kind != "":
 			_kinds[c] = kind
+	# A movable crate isn't part of the map: it's a thing standing on the floor
+	# (it moves). Remember where each one starts, and call its tile floor.
+	_crate_homes.clear()
+	for c in _kinds.keys():
+		if _kinds[c] == "box":
+			_crate_homes.append(c)
+			_kinds[c] = "floor"
 	# A power cell with open space on both sides (left and right, or above and
 	# below) floats in space: that tile is open space (you drift past it), it
 	# just has a cell on it. Otherwise the cell sits on the floor / hull.
@@ -1344,6 +1567,8 @@ func _is_room_cell(kind: String) -> bool:
 ## clamp in it, closed doors and barriers that haven't moved yet. Open space too,
 ## unless space_blocks is false (used for drifting: you float over space).
 func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
+	if _crates.has(c):
+		return true
 	var kind := kind_at(c)
 	if kind == "" or kind == "wall" or kind == "crate" or kind == "core" or kind == "pole":
 		return true
@@ -1359,11 +1584,13 @@ func is_solid_for_walk(c: Vector2i, space_blocks := true) -> bool:
 ## The wire can't pass over: nothing, walls, crates, cores, doors, the exit, live
 ## red tiles, and barriers until they've sunk away. (It can stretch across open space.)
 func is_solid_for_wire(c: Vector2i) -> bool:
+	if _crates.has(c):
+		return true
 	var kind := kind_at(c)
 	if kind == "barrier":
 		return not _open_doors.has(c)
 	if kind == "discharge":
-		return not _red_off.has(c)          # a red floor switched off by a power link is just floor
+		return _is_red(c)                   # switched off by a power link or shorted by a crate = just floor
 	return kind in ["", "wall", "crate", "core", "exit"] or DOOR_KINDS.has(kind)
 
 
@@ -1482,6 +1709,14 @@ func _build_visuals() -> void:
 			_pillar_preview.z_index = -6
 			add_child(_pillar_preview)
 			_pillar_preview.draw.connect(_draw_pillar_preview)
+			# and the movable crates (in the game each crate draws itself)
+			_crate_preview = Node2D.new()
+			_crate_preview.name = "CratePreview"
+			_crate_preview.z_index = -6
+			add_child(_crate_preview)
+			_crate_preview.draw.connect(func() -> void:
+				for c in _crate_homes:
+					PushCrate.draw_crate(_crate_preview, center_of(c)))
 	for l in [_ground, _walls, _props]:
 		l.tile_set = ts
 		l.clear()
@@ -1519,6 +1754,92 @@ func _build_visuals() -> void:
 	_hull_edges.queue_redraw()
 	if _pillar_preview:
 		_pillar_preview.queue_redraw()
+	if _crate_preview:
+		_crate_preview.queue_redraw()
+	if Engine.is_editor_hint():
+		_update_room_info()
+
+
+# ===================================================================== the editor's room labels
+# Painting is all it takes to make a level: every tile in the palette carries its
+# "kind", and the rules and the art come from that. What the tiles can't tell
+# you is how the game reads them: which room is number 5, what it's called,
+# how long its START gives you. So in the editor each room gets a label with
+# exactly that, plus a red warning if something's missing. And when you paint
+# a new room, the Room Titles and Room Wire Time lists grow to match.
+
+func _update_room_info() -> void:
+	_build_rooms(true)
+	# one name (and one START time) per room, in walking order: grow the lists
+	# when a new room appears, so they never fall behind the map
+	var n := _rooms.size()
+	if room_titles.size() < n:
+		var t := room_titles.duplicate()
+		while t.size() < n:
+			t.append("ROOM %d" % (t.size() + 1))
+		room_titles = t
+	if room_wire_time.size() < n and not room_wire_time.is_empty():
+		var w := room_wire_time.duplicate()
+		while w.size() < n:
+			w.append(0.0)
+		room_wire_time = w
+	if _room_info == null or not is_instance_valid(_room_info):
+		_room_info = Node2D.new()
+		_room_info.name = "RoomInfo"
+		_room_info.z_index = 60                 # over the painted Layout (50)
+		add_child(_room_info)
+		_room_info.draw.connect(_draw_room_info)
+	_room_info.queue_redraw()
+
+
+func _draw_room_info() -> void:
+	if not show_room_info:
+		return
+	var font := ThemeDB.fallback_font
+	var taken: Array[Rect2] = []       # labels already drawn (a new one steps down past them)
+	for r in _rooms:
+		if r.cells.is_empty():
+			continue
+		var top := r.cells[0]
+		for c in r.cells:
+			if c.y < top.y or (c.y == top.y and c.x < top.x):
+				top = c
+		var lines: Array = []          # [text, colour]
+		var i := r.index
+		var title := room_titles[i] if i >= 0 and i < room_titles.size() else "ROOM %d" % (i + 1)
+		if r.is_exit:
+			lines.append(["EXIT", Color(0.6, 1.0, 0.6)])
+		elif is_hall(r):
+			lines.append(["%d  %s  (hall)" % [i + 1, title], Color(0.75, 0.8, 0.9)])
+		else:
+			lines.append(["%d  %s" % [i + 1, title], Color(1.0, 0.85, 0.4)])
+			if r.start.x >= 0:
+				var own := room_wire_time[i] if i < room_wire_time.size() else 0.0
+				var secs := own if own > 0.0 else wire_time
+				lines.append(["START %.1f s%s" % [secs, "" if own > 0.0 else " (level's)"], Color(0.8, 0.95, 0.8)])
+			var starts := r.cells.filter(func(c: Vector2i) -> bool: return kind_at(c) == "start").size()
+			var crates := _crate_homes.filter(func(c: Vector2i) -> bool: return _room_of.get(c) == r).size()
+			if crates > 0:
+				lines.append(["%d crate%s" % [crates, "" if crates == 1 else "s"], Color(0.8, 0.85, 0.95)])
+			if r.airlock.x < 0:
+				if starts == 0:
+					lines.append(["needs a START pad", Color(1, 0.35, 0.3)])
+				elif starts > 1:
+					lines.append(["%d STARTs: use one" % starts, Color(1, 0.35, 0.3)])
+				if r.target().x < 0:
+					lines.append(["needs a GOAL (or a core)", Color(1, 0.35, 0.3)])
+		var at := Vector2(top * TILE) + Vector2(3, 3)
+		var w := 0.0
+		for l in lines:
+			w = maxf(w, font.get_string_size(l[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x)
+		var box := Rect2(at, Vector2(w + 8, lines.size() * 12 + 4))
+		while taken.any(func(t: Rect2) -> bool: return t.intersects(box)):
+			box.position.y += 14.0
+		taken.append(box)
+		at = box.position
+		_room_info.draw_rect(box, Color(0.03, 0.05, 0.1, 0.8))
+		for k in lines.size():
+			_room_info.draw_string(font, at + Vector2(4, 12 + k * 12), lines[k][0], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, lines[k][1])
 
 
 ## Editor only: a support pillar on every pole tile (the same picture the game uses).
@@ -1933,6 +2254,16 @@ func _spawn_runtime_tiles() -> void:
 			_blinkers.append(c)
 		if kind == "socket":
 			_sockets.append(c)
+	# movable crates draw themselves too (push_crate.gd)
+	for c in _crate_homes:
+		var k := PushCrate.new()
+		k.home = c
+		k.cell = c
+		k.room = _room_of.get(c)
+		k.position = center_of(c)
+		_tile_root.add_child(k)
+		_crate_list.append(k)
+		_crates[c] = k
 	# fuses and the clamp lying on the floor draw themselves (pickup.gd)
 	for c in _kinds:
 		if _kinds[c] == "fuse" or _kinds[c] == "clamp":
@@ -2875,6 +3206,7 @@ func _update_prompts() -> void:
 func _enter_room(r: Room) -> void:
 	var new_area := _current_room == null or _current_room.area_id != r.area_id
 	_current_room = r
+	_entered_at[r] = player.position    # R in a hall with crates brings you back here
 	_visited[r] = true
 	if r.is_exit:
 		_finish_level()
@@ -3567,7 +3899,7 @@ func _is_live_tile(c: Vector2i) -> bool:
 
 ## A red tile that's live (not switched off by a power link).
 func _is_red(c: Vector2i) -> bool:
-	return kind_at(c) == "discharge" and not _red_off.has(c)
+	return kind_at(c) == "discharge" and not _red_off.has(c) and not _grounded.has(c)
 
 
 ## Every frame: switch each blinking grate's picture on or off. Just before it
@@ -3584,6 +3916,17 @@ func _respawn() -> void:
 	_wire_room = null
 	_anchor_cells.clear()
 	_clear_stranded()
+	# R also puts this room's movable crates back (not once the room has power)
+	if r != null and (not r.solved or is_hall(r)):
+		reset_crates(r)
+		if is_hall(r) and _room_has_crates(r):
+			# A hall with crates has no START: R puts its crates back and you back
+			# at the door you came in by (so the crates can't shut you in anywhere).
+			player.position = _nearest_safe_spot(_entered_at.get(r, _dev_spot(r)))
+			_last_safe = player.position
+			_release_player()
+			_update_camera(0.0, true)
+			return
 	var target := _spawn
 	if r != null and r.start.x >= 0:
 		target = r.start

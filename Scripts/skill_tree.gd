@@ -4,9 +4,10 @@
 # Three columns (Wire, Suit, Life Support). Every skill is a little box, and a
 # line joins it to the skill you need first (its parent). Each box shows its
 # state:
-#   LOCKED     dark grey: unlock the skill above it first
+#   LOCKED     dark: unlock the skill above it first
 #   AVAILABLE  amber outline with its cost inside: you can buy it
-#   UNLOCKED   lit green: it's yours
+#   UNLOCKED   filled green with a tick: it's yours
+# The colours and sizes come from ui_style.gd, like the rest of the UI.
 # Arrows move between boxes and E unlocks the selected one. T or Esc closes.
 # With the mouse: click a box to select it, then the UNLOCK button (or click
 # the box again). BACK closes.
@@ -25,12 +26,12 @@ extends Control
 ## The player closed the screen.
 signal closed
 
-const AMBER := Color(1.0, 0.76, 0.3)
-const PHOSPHOR := Color(0.66, 0.94, 0.63)
-const DIM := Color(0.42, 0.62, 0.45)
-const LOCKED_INK := Color(0.36, 0.4, 0.42)
-const LED_OFF := Color(0.12, 0.15, 0.14)
-const BOX := 18.0                  # size of a skill's box, in pixels
+const AMBER := UIStyle.AMBER
+const PHOSPHOR := UIStyle.GREEN    # unlocked
+const DIM := UIStyle.DIM
+const LOCKED_INK := UIStyle.FAINT
+const LED_OFF := UIStyle.LED_OFF
+const BOX := 20.0                  # size of a skill's box, in pixels
 const COLUMN_X: Array[float] = [96.0, 240.0, 384.0]   # middle of each branch's column
 const COLUMN_W := 144.0
 const ROW_TOP := 70.0              # middle of the first row of boxes
@@ -237,12 +238,19 @@ func _place(s: SkillDef, d: int, children: Dictionary, slot: Dictionary, depth: 
 # ------------------------------------------------------------------ drawing
 
 func _draw_board() -> void:
-	var font := board.get_theme_default_font()
-	_text(font, Vector2(30, 34), "SKILL TREE", AMBER, 32)
+	var font := UIStyle.font()
+	UIStyle.text(board, Vector2(30, 32), "SKILL TREE", UIStyle.TEXT, UIStyle.TITLE)
+	# your points, in a little badge in the top right corner
 	var pts := SkillManager.points
-	_text(font, Vector2(450, 30), "SKILL POINTS: %d" % pts, AMBER if pts > 0 else DIM, 16, HORIZONTAL_ALIGNMENT_RIGHT)
+	var label := "%d POINT%s" % [pts, "" if pts == 1 else "S"]
+	var w := UIStyle.text_width(label, UIStyle.BODY) + 14.0
+	var badge := Rect2(452 - w, 18, w, 15)
+	UIStyle.draw_box(board, badge, Color(AMBER, 0.16) if pts > 0 else UIStyle.GLASS_HI,
+		Color(AMBER, 0.8) if pts > 0 else UIStyle.EDGE, 7)
+	UIStyle.text(board, Vector2(badge.get_center().x, 29), label, AMBER if pts > 0 else DIM, UIStyle.BODY, HORIZONTAL_ALIGNMENT_CENTER)
 	for b in SkillDef.BRANCH_NAMES.size():
-		_text(font, Vector2(COLUMN_X[b], 52), SkillDef.BRANCH_NAMES[b], PHOSPHOR, 16, HORIZONTAL_ALIGNMENT_CENTER)
+		UIStyle.text(board, Vector2(COLUMN_X[b], 52), SkillDef.BRANCH_NAMES[b], UIStyle.CYAN, UIStyle.BODY, HORIZONTAL_ALIGNMENT_CENTER)
+		board.draw_rect(Rect2(COLUMN_X[b] - 20, 55, 40, 1), Color(UIStyle.CYAN, 0.35))
 	# the lines first, so the boxes sit on top of them
 	for id in _pos:
 		var s := SkillManager.get_skill(id)
@@ -258,7 +266,7 @@ func _draw_link(a: Vector2, b: Vector2, col: Color) -> void:
 	var top := a.y + BOX * 0.5 + LABEL_H
 	var mid := roundf((top + b.y - BOX * 0.5) * 0.5)
 	var pts := PackedVector2Array([Vector2(a.x, top), Vector2(a.x, mid), Vector2(b.x, mid), b - Vector2(0, BOX * 0.5)])
-	board.draw_polyline(pts, col, 2.0)
+	board.draw_polyline(pts, Color(col, 0.7), 1.0, true)
 
 
 ## The colour a skill (and the line into it) is drawn in.
@@ -271,25 +279,26 @@ func _ink(id: String) -> Color:
 	return LOCKED_INK
 
 
-func _draw_skill(font: Font, id: String) -> void:
+func _draw_skill(_font: Font, id: String) -> void:
 	var s := SkillManager.get_skill(id)
 	var c: Vector2 = _pos[id]
 	var r := Rect2(c - Vector2(BOX, BOX) * 0.5, Vector2(BOX, BOX))
 	var ink := _ink(id)
 	var st := SkillManager.state(id)
+	if id == _sel:
+		# the selected box: a soft glow behind it
+		UIStyle.draw_box(board, r.grow(4.0), Color(UIStyle.CYAN, 0.12 + 0.06 * sin(_t * 5.0)), Color(UIStyle.CYAN, 0.9), 6)
 	if st == SkillManager.State.UNLOCKED:
-		# lit like one of the console's LEDs, with a dark tick on it
 		var lit := PHOSPHOR.lerp(Color.WHITE, clampf(1.0 - (_t - _flash.get(id, -9.0)) * 2.0, 0.0, 1.0))
-		board.draw_rect(r, lit)
-		board.draw_rect(Rect2(r.position, Vector2(BOX, 1)), lit.lightened(0.45))
-		board.draw_polyline(PackedVector2Array([c + Vector2(-5, 0), c + Vector2(-1, 4), c + Vector2(5, -4)]), Color(0.05, 0.2, 0.08), 2.0)
+		UIStyle.draw_box(board, r, lit, lit.lightened(0.3), 4)
+		board.draw_polyline(PackedVector2Array([c + Vector2(-5, 0), c + Vector2(-1.5, 3.5), c + Vector2(5, -3.5)]),
+			Color(0.03, 0.18, 0.08), 2.0, true)
 	else:
-		board.draw_rect(r, LED_OFF if st == SkillManager.State.LOCKED else Color(0.07, 0.1, 0.07))
-		board.draw_rect(r, ink, false, 1.0 if st == SkillManager.State.LOCKED else 2.0)
-		_text(font, c + Vector2(0, 5), str(s.cost), ink, 16, HORIZONTAL_ALIGNMENT_CENTER)
-	if id == _sel and fmod(_t, 0.8) < 0.55:
-		_draw_corners(r.grow(4.0), Color.WHITE)
-	_text(font, c + Vector2(0, BOX * 0.5 + 12), s.label(), ink if st != SkillManager.State.LOCKED else LOCKED_INK, 16, HORIZONTAL_ALIGNMENT_CENTER)
+		var bg := LED_OFF if st == SkillManager.State.LOCKED else Color(AMBER, 0.12)
+		UIStyle.draw_box(board, r, bg, Color(ink, 0.9 if st != SkillManager.State.LOCKED else 0.5), 4)
+		UIStyle.text(board, c + Vector2(0, 3.5), str(s.cost), ink, UIStyle.HEAD - 1, HORIZONTAL_ALIGNMENT_CENTER)
+	UIStyle.text(board, c + Vector2(0, BOX * 0.5 + 9), s.label(), ink if st != SkillManager.State.LOCKED else LOCKED_INK,
+		UIStyle.SMALL + 1, HORIZONTAL_ALIGNMENT_CENTER)
 
 
 ## Four little corner brackets round the selected box.
@@ -304,10 +313,11 @@ func _draw_corners(r: Rect2, col: Color) -> void:
 ## The bottom part: the selected skill's name, what it does, and whether you
 ## can buy it. Then the keys and a small key to the three colours.
 func _draw_info(font: Font) -> void:
-	board.draw_rect(Rect2(28, 182, 424, 1), DIM.darkened(0.4))
+	var card := Rect2(28, 180, 424, 50)
+	UIStyle.draw_box(board, card, UIStyle.GLASS_HI, Color(UIStyle.EDGE, 0.3), 5)
 	var s := SkillManager.get_skill(_sel)
 	if s:
-		_text(font, Vector2(30, 198), s.display_name, AMBER)
+		UIStyle.text(board, Vector2(38, 195), s.display_name, UIStyle.TEXT, UIStyle.HEAD - 1)
 		var status := ""
 		var col := PHOSPHOR
 		match SkillManager.state(s.id):
@@ -320,22 +330,22 @@ func _draw_info(font: Font) -> void:
 					col = AMBER
 				else:
 					status = "NEEDS " + pts
-					col = AMBER.darkened(0.45)
+					col = AMBER.darkened(0.35)
 			_:
 				var p := SkillManager.get_skill(s.parent_id)
 				status = "NEEDS %s FIRST" % (p.display_name if p else s.parent_id)
-				col = LOCKED_INK
-		_text(font, Vector2(450, 198), status, col, 16, HORIZONTAL_ALIGNMENT_RIGHT)
-		board.draw_multiline_string(font, Vector2(30, 214), s.description, HORIZONTAL_ALIGNMENT_LEFT, 420, 16, 2, PHOSPHOR)
-	var x := 236.0
-	for item in [["LOCKED", LOCKED_INK, false], ["AVAILABLE", AMBER, false], ["UNLOCKED", PHOSPHOR, true]]:
-		var r := Rect2(x, 242, 8, 8)
-		if item[2]:
-			board.draw_rect(r, item[1])
-		else:
-			board.draw_rect(r, item[1], false, 1.0)
-		_text(font, Vector2(x + 11, 251), item[0], item[1])
-		x += 16.0 + font.get_string_size(item[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+				col = UIStyle.DIM
+		var sw := UIStyle.text_width(status, UIStyle.SMALL + 1) + 12.0
+		var chip := Rect2(card.end.x - 10 - sw, 186, sw, 12)
+		UIStyle.draw_box(board, chip, Color(col, 0.14), Color(col, 0.7), 6)
+		UIStyle.text(board, Vector2(chip.get_center().x, 195), status, col, UIStyle.SMALL + 1, HORIZONTAL_ALIGNMENT_CENTER)
+		board.draw_multiline_string(font, Vector2(38, 210), s.description, HORIZONTAL_ALIGNMENT_LEFT, 404, UIStyle.BODY, 2, UIStyle.DIM)
+	var x := 268.0
+	for item in [["locked", LOCKED_INK, false], ["available", AMBER, false], ["unlocked", PHOSPHOR, true]]:
+		var r := Rect2(x, 244, 7, 7)
+		UIStyle.draw_box(board, r, item[1] if item[2] else LED_OFF, item[1], 2)
+		UIStyle.text(board, Vector2(x + 10, 251), item[0], UIStyle.DIM, UIStyle.SMALL + 1)
+		x += 18.0 + UIStyle.text_width(item[0], UIStyle.SMALL + 1)
 
 
 ## Text at `at` (the baseline). CENTER / RIGHT align it around / up to at.x.

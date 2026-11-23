@@ -15,6 +15,9 @@
 #     up/down), so when he's stuck he tries one direction at a time
 #   - the pillar wraps follow the route's "wraps" list (level.gd
 #     autopilot_sync_wraps), because some routes only just graze a pillar
+#   - movable crates: the route's "pushes" list says which crate to push which
+#     way, in order. He puts the room's crates back first (like R), then walks
+#     behind each crate and leans on it until it rolls (_push)
 # While it runs, the timer doesn't tick and nothing zaps him (level.gd checks
 # autopilot_on), so it can't fail. If a room has no route (someone changed the
 # map and didn't run the solver again) or he gets stuck, PIP powers the room
@@ -32,7 +35,10 @@ const DRIFT_GAP := 8.0       # route points further apart than this = a drift ac
 var level: WireLevel
 var running := false
 var debug := false           # true: print each step PIP takes (for finding where he gets stuck)
-var _routes := {}            # START tile -> {"points": Array[Vector2], "clamp": Vector2i, "wraps": {index: [pads, poles]}}
+var _routes := {}            # START tile -> {"points": Array[Vector2], "clamp": Vector2i, "wraps": {index: [pads, poles]}, "pushes": [[crate, dir]...]}
+
+
+var _hall_plans: Array = []  # halls with crates: {"cell": a tile of the hall, "pushes": [[crate, dir]...], "done": bool}
 
 
 func _note(s: String) -> void:
@@ -49,7 +55,14 @@ func load_routes(number: int) -> void:
 	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if typeof(data) != TYPE_DICTIONARY:
 		return
+	for h in data.get("halls", []):
+		var pushes: Array = []
+		for e in h["pushes"]:
+			pushes.append([Vector2i(int(e[0]), int(e[1])), Vector2i(int(e[2]), int(e[3]))])
+		_hall_plans.append({"cell": Vector2i(int(h["hall"][0]), int(h["hall"][1])), "pushes": pushes, "done": false})
 	for k in data:
+		if k == "halls":
+			continue
 		var r: Dictionary = data[k]
 		var pts: Array[Vector2] = []
 		for p in r["points"]:
@@ -60,7 +73,10 @@ func load_routes(number: int) -> void:
 		var wraps := {}          # point index -> [pads touched, the pillars wrapped after the last pad]
 		for e in r.get("wraps", []):
 			wraps[int(e[0])] = [int(e[1]), e[2]]
-		_routes[Vector2i(int(r["start"][0]), int(r["start"][1]))] = {"points": pts, "clamp": clamp, "wraps": wraps}
+		var pushes: Array = []   # [crate tile, direction] in order
+		for e in r.get("pushes", []):
+			pushes.append([Vector2i(int(e[0]), int(e[1])), Vector2i(int(e[2]), int(e[3]))])
+		_routes[Vector2i(int(r["start"][0]), int(r["start"][1]))] = {"points": pts, "clamp": clamp, "wraps": wraps, "pushes": pushes}
 
 
 ## One press of R: do the next room.
@@ -82,9 +98,20 @@ func _do_next_room() -> void:
 		if not await _walk_to_cell(level.exit_cell()):    # everything's done: off to the exit
 			level.autopilot_to_exit()
 		return
+	await _do_hall_plans()
 	_note("room %d, START %s" % [r.index + 1, r.start])
 	await _open_the_way(r.start)
 	var route: Dictionary = _routes.get(r.start, {})
+	# 0. the crates: put them back where they started, then push them like the route says
+	var pushes: Array = route.get("pushes", [])
+	if not pushes.is_empty():
+		level.reset_crates(r, true)
+		for p in pushes:
+			if not await _push(p[0], p[1]):
+				_note("couldn't push the crate at %s" % p[0])
+				level.autopilot_force_solve(r)
+				await _wait_quiet()
+				return
 	# 1. the clamp, if this room's route needs it in a socket
 	var sock: Vector2i = route.get("clamp", Vector2i(-1, -1))
 	if sock.x >= 0 and level.clamp_socket() != sock:
@@ -244,6 +271,55 @@ func _drift(from: Vector2, to: Vector2) -> bool:
 	while is_inside_tree() and p.state == Astronaut.State.DRIFT:
 		await get_tree().physics_frame
 	return is_inside_tree() and p.position.distance_to(to) < 12.0
+
+
+## A hall with movable crates (the hub): the solver worked out which pushes open
+## the way to every door and item there. Do that once, as soon as he can walk
+## into that hall (then the fuse in it can be picked up).
+func _do_hall_plans() -> void:
+	for plan in _hall_plans:
+		if plan["done"] or plan["pushes"].is_empty():
+			continue
+		var hall = level.room_at_cell(plan["cell"])
+		var first: Array = plan["pushes"][0]
+		var here := level.cell_of(level.player.position)
+		level.reset_crates(hall, true)
+		if level.walk_path(here, first[0] - first[1]).is_empty() and here != first[0] - first[1]:
+			continue                                   # can't get there yet
+		_note("hall plan at %s" % plan["cell"])
+		plan["done"] = true
+		for p in plan["pushes"]:
+			if not await _push(p[0], p[1]):
+				_note("hall plan: couldn't push the crate at %s" % p[0])
+				break
+	await _collect_reachable_items()
+
+
+## Pushes the crate on tile `c` one tile along `d`: walk to the tile behind it,
+## then lean on it (like holding the stick that way) until it rolls.
+func _push(c: Vector2i, d: Vector2i) -> bool:
+	if not level.crate_at(c):
+		return false
+	var behind := c - d
+	if not await _walk_to_cell(behind):
+		return false
+	if not await _steer_to(level.center_of(behind), 1.5):
+		return false
+	var p := level.player
+	var t := 0.0
+	while is_inside_tree() and level.crate_at(c) and t < 1.5:
+		p.auto_dir = Vector2(d)
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+	p.auto_dir = Vector2.ZERO
+	if not is_inside_tree() or level.crate_at(c):
+		return false
+	# let it finish rolling (and sinking, on a red tile) before the next one
+	var wait := 0.0
+	while is_inside_tree() and wait < PushCrate.SLIDE_TIME + 0.15:
+		await get_tree().physics_frame
+		wait += get_physics_process_delta_time()
+	return is_inside_tree()
 
 
 ## Walks (no wire) to a tile, along a path round walls and red tiles.

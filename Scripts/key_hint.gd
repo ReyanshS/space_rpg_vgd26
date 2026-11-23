@@ -13,8 +13,7 @@
 class_name KeyHint
 extends Control
 
-const KEY_H := 13.0                        # a keycap is 13 px tall (like hud.gd _draw_key)
-const FONT_SIZE := 16
+const FONT_SIZE := UIStyle.BODY      # the words after the keys (the keys' own look is in ui_style.gd)
 
 ## The keys, e.g. ["E"] or ["W", "A", "S", "D"]. Each one is its own keycap.
 @export var keys: PackedStringArray = ["E"]:
@@ -27,10 +26,10 @@ const FONT_SIZE := 16
 		text = v
 		_refresh()
 ## The colour of the text after the keys.
-@export var text_color := Color(0.66, 0.94, 0.63)
+@export var text_color := UIStyle.DIM
 
 
-static func make(p_keys: PackedStringArray, p_text: String, color := Color(0.66, 0.94, 0.63)) -> KeyHint:
+static func make(p_keys: PackedStringArray, p_text: String, color := UIStyle.DIM) -> KeyHint:
 	var k := KeyHint.new()
 	k.keys = p_keys
 	k.text = p_text
@@ -48,36 +47,19 @@ func _refresh() -> void:
 	queue_redraw()
 
 
-func _font() -> Font:
-	return get_theme_default_font()
-
-
-func _key_w(k: String) -> float:
-	return maxf(KEY_H, _font().get_string_size(k, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x + 6.0)
-
-
 func _get_minimum_size() -> Vector2:
-	if not is_inside_tree():
-		return Vector2.ZERO
 	var w := 0.0
 	for k in keys:
-		w += _key_w(k) + 2.0
+		w += UIStyle.key_width(k) + 2.0
 	if text != "":
-		w += 3.0 + _font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
-	return Vector2(ceilf(w), 16.0)
+		w += 3.0 + UIStyle.text_width(text, FONT_SIZE)
+	return Vector2(ceilf(w), 13.0)
 
 
 func _draw() -> void:
-	var font := _font()
-	var y := floorf((size.y - KEY_H) * 0.5)
+	var y := floorf((size.y - UIStyle.KEY_H) * 0.5)
 	var x := 0.0
 	for k in keys:
-		var w := _key_w(k)
-		draw_rect(Rect2(x, y + 1, w, KEY_H), Color(0.05, 0.05, 0.1, 0.9))       # shadow
-		draw_rect(Rect2(x, y, w, KEY_H), Color(0.95, 0.95, 1.0))                # the key's rim
-		draw_rect(Rect2(x + 1, y + 1, w - 2, KEY_H - 3), Color(0.82, 0.84, 0.92))   # its face
-		var tw := font.get_string_size(k, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
-		draw_string(font, Vector2(x + roundf((w - tw) * 0.5), y + 11), k, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, Color(0.12, 0.12, 0.2))
-		x += w + 2.0
+		x += UIStyle.draw_key(self, Vector2(x, y), k) + 2.0
 	if text != "":
-		draw_string(font, Vector2(x + 3.0, y + 11), text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, text_color)
+		UIStyle.text(self, Vector2(x + 3.0, y + UIStyle.KEY_H - 2.5), text, text_color, FONT_SIZE)

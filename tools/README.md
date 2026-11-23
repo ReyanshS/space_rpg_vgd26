@@ -22,7 +22,10 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | `maps/build_level1_dungeon.py` | How Level 1 became a dungeon (hub, three wings, main door). Reference only: edit Level 1 in Godot now | see the file |
 | `art_pillar.py` | Draws the POLE as a support pillar: `Assets/images/tiles/pillar.png` (the 32x64 column), `pillar_glow.png` (its purple ring, made to shine), the steel floor plate in `puzzle_tiles.png` frame 3 and the palette icon in `layout_tiles.png` frame 5 | `python tools/art_pillar.py` |
 | `art_barrier.py` | Draws the BARRIER tile (crate on a lift, hazard stripes) into `puzzle_tiles.png` frame 12 and its palette icon into `layout_tiles.png` frame 16 | `python tools/art_barrier.py` |
-| `art_ui.py` | Draws the UI frames `Assets/ui/frame_screen.png` (riveted bezel + green screen) and `frame_plate.png` (riveted plate) | `python tools/art_ui.py` |
+| `art_ui.py` | Draws the OLD UI frames `Assets/ui/frame_screen.png` and `frame_plate.png` (no longer used: the UI is now drawn by `Scripts/ui_style.gd` and the theme) | `python tools/art_ui.py` |
+| `art_crate_icon.gd` | Draws the movable crate into the Layout palette (`layout_tiles.png` frame 23, kind "box") with the game's own crate drawing (push_crate.gd). A Godot script, not Python; needs a window | `godot --path . --script tools/art_crate_icon.gd` |
+| `sfx_crate.py` | Makes `push.wav`, the movable crate rolling a tile. Plain Python (no numpy) | `python tools/sfx_crate.py` |
+| `maps/build_level1_crates.py` | How the movable crates went into Level 1 (hub reactor ring, the rebuilt Cable Store, the Coolant crate). Reference only | see the file |
 | `art_core.py` | Draws the CORE tile (Level 3's round socket) into `puzzle_tiles.png` frame 13 and its palette icon into `layout_tiles.png` frame 17 | `python tools/art_core.py` |
 | `sfx_pip.py` | Generates only the Level 3 boss sounds (`glitch`, `pulse`, `warn`, `boot`) - the other sounds stay as they are | `python tools/sfx_pip.py` |
 | `maps/build_level3.py` | How Level 3's first map was drafted as text (reference only - edit Level 3 in Godot now) | `python tools/maps/build_level3.py` |
@@ -33,7 +36,15 @@ Run `map_from_scene.py` first whenever the map changed — the solver and previe
 **Map characters:** `#` wall, `.` floor, `S` start, `G` goal, `N` node, `B` pole, `X` red tile,
 `x` blinking grate, `C` crate (or floating debris), `D` door (gangway when no wall is beside it),
 `P` spawn, `E` exit, `*` power cell, `,` hull, `~` open space, `A` airlock pad, `=` barrier,
-`@` core (Level 3), space = nothing.
+`@` core (Level 3), `f` fuse, `F` fuse door, `M` main door, `o` clamp socket, `k` clamp,
+`c` movable crate, space = nothing.
+
+**Movable crates (`c`):** the solver first works out every layout you can push a room's crates
+into (fewest pushes first), then checks the wire with the crates in each: the first 24
+(`--crate-tries n` for more) and every layout that shorts out a new set of red tiles. It prints
+"needs the crates moved: at least n pushes" when the room can't be done without them. A hall
+with crates gets a plan instead (the fewest pushes that open every door and item), saved under
+"halls" in the `--paths` file for PIP's autopilot.
 
 **Core rooms (`@`):** there's no goal. A route is finished when the wire (START, the pads it's
 wrapped round, then his hands) has gone a full turn round the core. Those routes end in
