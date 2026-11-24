@@ -11,9 +11,9 @@
 #       with the node beyond it. The clamp still waits in the stash.
 #   COOLANT PUMPS: a crate to roll out of the clamp's line.
 # Usage (from the project folder):
-#   python tools/map_from_scene.py Scenes/level_1.tscn tools/out/level_1_dungeon.txt
+#   python tools/map_from_scene.py Levels/level_1.tscn tools/out/level_1_dungeon.txt
 #   python tools/maps/build_level1_crates.py tools/out/level_1_dungeon.txt tools/maps/level1_crates.txt
-#   python tools/map_to_scene.py tools/maps/level1_crates.txt Scenes/level_1.tscn
+#   python tools/map_to_scene.py tools/maps/level1_crates.txt Levels/level_1.tscn
 import sys
 
 src = open(sys.argv[1], encoding='utf-8').read().split('\n')

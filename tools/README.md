@@ -8,8 +8,8 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 
 | Tool | What it's for | Command |
 | - | - | - |
-| `map_from_scene.py` | Reads the map you painted in a level scene and writes it as a text grid | `python tools/map_from_scene.py Scenes/level_2.tscn tools/out/level2.txt` (no arguments = Level 1) |
-| `map_to_scene.py` | The opposite: puts a text grid onto a scene's Layout layer (close the scene in Godot first) | `python tools/map_to_scene.py tools/maps/level2.txt Scenes/level_2.tscn` |
+| `map_from_scene.py` | Reads the map you painted in a level scene and writes it as a text grid | `python tools/map_from_scene.py Levels/level_2.tscn tools/out/level2.txt` (no arguments = Level 1) |
+| `map_to_scene.py` | The opposite: puts a text grid onto a scene's Layout layer (close the scene in Godot first) | `python tools/map_to_scene.py tools/maps/level2.txt Levels/level_2.tscn` |
 | `solver2.py` | Lists every route that solves each room in time, its lowest timer, and whether each power cell can be charged — use after editing a room or its Rules numbers | `python tools/solver2.py tools/out/level1.txt` |
 | `render.py` | One image of the whole level with the real tiles | `python tools/render.py tools/out/level1.txt tools/out/map_preview.png` |
 | `light_preview.py` | Mock-up of the dark-ship lighting, to try numbers before changing `level.gd` | `python tools/light_preview.py` |
@@ -62,7 +62,7 @@ timing of blinking grates (`x` counts as floor) - test those in the game - and i
 +2 s a power cell gives, so routes it finds work even without the cells. Pads count as touched
 from the feet or 10 px higher, like the game (`BODY_UP`).
 
-Easiest way: `python tools/solver2.py Scenes/level_1.tscn` reads the map AND the level's Rules
+Easiest way: `python tools/solver2.py Levels/level_1.tscn` reads the map AND the level's Rules
 (wire time, node time, max, per-room START times) straight from the scene.
 
 Solver output, e.g. `S(14,9) -> pole(19,9) -> N(19,4)@3.5s -> G(24,9)@7.0s   (lowest timer: 2.44 s)`

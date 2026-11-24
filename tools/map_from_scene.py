@@ -1,6 +1,6 @@
 # map_from_scene.py - turns the map you PAINTED in Godot into a text grid.
 #
-# Reads the Layout TileMapLayer inside Scenes/level_1.tscn (its `tile_map_data`),
+# Reads the Layout TileMapLayer inside Levels/level_1.tscn (its `tile_map_data`),
 # looks up each tile's "kind" in layout_tileset.tres, and writes one character
 # per tile to tools/out/level1.txt. The solver and preview tools read that file.
 #
@@ -11,7 +11,7 @@
 #   o clamp socket   k clamp   c movable crate (push it)   (space) = nothing
 #
 # Run from the project folder:   python tools/map_from_scene.py [scene.tscn] [out.txt]
-#   e.g. python tools/map_from_scene.py Scenes/level_2.tscn tools/out/level2.txt
+#   e.g. python tools/map_from_scene.py Levels/level_2.tscn tools/out/level2.txt
 # (tools/map_to_scene.py does the opposite: text grid -> scene.)
 #
 # tile_map_data format (Godot 4): 2 bytes = format version, then 12 bytes per
@@ -19,7 +19,7 @@
 # uint16 alternative tile.
 import os, re, struct, sys
 
-SCENE = sys.argv[1] if len(sys.argv) > 1 else 'Scenes/level_1.tscn'
+SCENE = sys.argv[1] if len(sys.argv) > 1 else 'Levels/level_1.tscn'
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
 OUT = sys.argv[2] if len(sys.argv) > 2 else 'tools/out/level1.txt'
 SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'pole': 'B',

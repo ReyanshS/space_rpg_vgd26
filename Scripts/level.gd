@@ -204,7 +204,8 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 		_apply_layout_visibility()
 
 @export_group("Level")
-## Which level this is. The order of the levels is in Game.LEVELS (game_state.gd).
+## Which level this is. It must match the file name: Levels/level_2.tscn is
+## level 2 (game_state.gd finds the levels by their file names).
 @export var level_number := 1
 ## Shown in the pause menu.
 @export var level_name := "ENGINEERING DECK"
@@ -232,7 +233,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## A room's own START time, one number per room in walking order (like Room
 ## Names). 0 or missing = use wire_time. Lets an easy room (a tutorial) or a
 ## long one get more time without changing the whole level.
-## Check with:  python tools/solver2.py Scenes/level_1.tscn
+## Check with:  python tools/solver2.py Levels/level_1.tscn
 @export var room_wire_time: PackedFloat32Array = []
 ## Seconds a power cell adds to the wire's timer when you grab it with the wire.
 @export var cell_bonus := 2.0
@@ -563,6 +564,7 @@ func _ready() -> void:
 			layout.changed.connect(_queue_rebuild)
 		return
 	add_to_group("level")      # lets the tutorial / guides find us with get_first_node_in_group
+	_check_level_number()
 	_ensure_input_actions()
 	_build_rooms()
 	_setup_darkness()
@@ -1483,7 +1485,7 @@ func autopilot_sync_wraps(pads: int, want: Array) -> void:
 func autopilot_force_solve(r: Room) -> void:
 	if r.solved or _busy:
 		return
-	push_warning("Autopilot couldn't walk room %d, so PIP powered it directly. If the map changed, run: python tools/solver2.py Scenes/level_%d.tscn --paths Data/routes/level_%d.json --margin 3" % [r.index + 1, level_number, level_number])
+	push_warning("Autopilot couldn't walk room %d, so PIP powered it directly. If the map changed, run: python tools/solver2.py Levels/level_%d.tscn --paths Data/routes/level_%d.json --margin 3" % [r.index + 1, level_number, level_number])
 	if _wire == null:
 		player.position = center_of(r.start)
 		_current_room = r
@@ -2247,6 +2249,16 @@ func _build_areas() -> void:
 		for m in members:
 			m.area_bounds = b
 		next_id += 1
+
+
+## The game numbers the levels by file name (level_2.tscn is Level 2). If you
+## copy a level to make a new one, change level_number too, or its results and
+## autopilot routes would belong to the wrong level.
+func _check_level_number() -> void:
+	var file := scene_file_path.get_file()
+	var m := RegEx.create_from_string("^level_(\\d+)\\.tscn$").search(file)
+	if m and int(m.get_string(1)) != level_number:
+		push_warning("%s has level_number %d: set it to %s (Inspector > Level)." % [file, level_number, m.get_string(1)])
 
 
 ## Friendly warnings in the Output panel when the map is missing something.

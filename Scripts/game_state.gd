@@ -16,12 +16,16 @@
 # ---------------------------------------------------------------------------
 extends Node
 
-## The levels in the order you play them.
-const LEVELS: Array[String] = [
-	"res://Scenes/level_1.tscn",
-	"res://Scenes/level_2.tscn",
-	"res://Scenes/level_3.tscn",
-]
+## The folder the levels live in. Every scene in it called level_<number>.tscn
+## is a level, played in number order. To add a level, save its scene there
+## with the next number (level_4.tscn): the level select, the dev menu and
+## Continue find it by themselves, there's no list to update. Other scenes in
+## the folder (a test room, say) are left alone.
+const LEVEL_FOLDER := "res://Levels/"
+## The levels in the order you play them, found in LEVEL_FOLDER once when the
+## game starts (_find_levels). It's written in capitals like a constant because
+## nothing changes it after that.
+var LEVELS: Array[String] = _find_levels()
 const TITLE_SCENE := "res://Scenes/title.tscn"
 ## The opening cutscene, played when you start a new game (before Level 1).
 const INTRO_SCENE := "res://Scenes/intro.tscn"
@@ -212,6 +216,30 @@ func load_music(track_name: String) -> AudioStream:
 	if s is AudioStreamOggVorbis:
 		s.loop = true        # when it reaches the end, start again from the top
 	return s
+
+
+## Looks in LEVEL_FOLDER for level_1.tscn, level_2.tscn ... and returns their
+## paths in number order. The numbers must go 1, 2, 3 with none missing,
+## because a level's number is its place in this list (go_to_level(2) loads
+## the 2nd one). So a file after a gap is left out, with a warning.
+static func _find_levels() -> Array[String]:
+	var by_number := {}
+	var name_rule := RegEx.create_from_string("^level_(\\d+)\\.tscn$")
+	# ResourceLoader.list_directory, not DirAccess: it also works in the exported
+	# web build, where Godot stores scenes converted, under other file names.
+	for file in ResourceLoader.list_directory(LEVEL_FOLDER):
+		var m := name_rule.search(file)
+		if m:
+			by_number[int(m.get_string(1))] = LEVEL_FOLDER + file
+	var found: Array[String] = []
+	while by_number.has(found.size() + 1):
+		found.append(by_number[found.size() + 1])
+	for n in by_number:
+		if n > found.size():
+			push_warning("%s is left out: there's no level_%d.tscn before it." % [by_number[n], found.size() + 1])
+	if found.is_empty():
+		push_warning("No levels found. Save them in %s as level_1.tscn, level_2.tscn ..." % LEVEL_FOLDER)
+	return found
 
 
 func has_level(number: int) -> bool:

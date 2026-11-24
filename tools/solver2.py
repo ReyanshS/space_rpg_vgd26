@@ -9,7 +9,7 @@
 # Use it after changing a room to make sure there's no shortcut and no impossible segment.
 # The constants below must match player.gd (walk_speed, drift_speed)
 # and level.gd (wire_time, node_time, max_wire_time, pad radii, CELL_RADIUS).
-#     python tools/solver2.py Scenes/level_1.tscn        (easiest: reads the map AND
+#     python tools/solver2.py Levels/level_1.tscn        (easiest: reads the map AND
 #                                                         the level's Rules numbers)
 #     python tools/solver2.py tools/out/level1.txt --time 3.5 --node 2.5 --max 4.5
 #     (a text map from map_from_scene.py, with the numbers typed in; skills not counted)

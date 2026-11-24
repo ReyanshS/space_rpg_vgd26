@@ -2,12 +2,12 @@
 #
 # Each area was sketched as its own small text map and checked with the solver,
 # then this script pasted them together at their positions and wrote
-# tools/maps/level2.txt. tools/map_to_scene.py turned that into Scenes/level_2.tscn.
+# tools/maps/level2.txt. tools/map_to_scene.py turned that into Levels/level_2.tscn.
 #
 # From now on, EDIT LEVEL 2 IN GODOT (paint on the Layout layer), not here -
 # running this again would overwrite your painted changes once you copy it in.
 #   python tools/maps/build_level2.py
-#   python tools/map_to_scene.py tools/maps/level2.txt Scenes/level_2.tscn
+#   python tools/map_to_scene.py tools/maps/level2.txt Levels/level_2.tscn
 #
 #   # wall  . floor  , hull  ~ open space  S start  G goal  N node  B pole  X sparks
 #   C crate/debris  D door (no wall beside it = gangway)  A airlock pad  * power cell

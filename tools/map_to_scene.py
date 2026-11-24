@@ -11,7 +11,7 @@
 #   @ core (Level 3: wrap the wire round it)   f fuse   F fuse door   M main door
 #   o clamp socket   k clamp   c movable crate (push it)   (space) = nothing
 #
-# Run from the project folder:   python tools/map_to_scene.py tools/maps/level2.txt Scenes/level_2.tscn
+# Run from the project folder:   python tools/map_to_scene.py tools/maps/level2.txt Levels/level_2.tscn
 #
 # The top-left character of the text file becomes tile (0, 0) in Godot.
 import re, struct, sys

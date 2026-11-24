@@ -4,7 +4,7 @@ Godot 4.7 top-down puzzle game for the TSA Video Game Design event (2026-27; AI 
 must be documented). Title **STAR CIRCUIT** (the team's name). The player is an astronaut restoring
 power to a dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship's
 maintenance AI. `Scenes/title.tscn` is the main scene (logo: `Assets/images/ui/logo.png`) ->
-`level_1.tscn` (Engineering Deck: the team's 3 tutorial rooms, then a small dungeon: the Reactor
+`Levels/level_1.tscn` (Engineering Deck: the team's 3 tutorial rooms, then a small dungeon: the Reactor
 Hall hub (the cable clamp sits in a live reactor ring: roll a crate in to short a way through) with 3
 wings and a main door, then the Generator Room: 3 stages split by cargo barriers, ending in
 blinking grates; see "Dungeon parts" and "Movable crates") -> `level_2.tscn` (Main Deck: bridge,
@@ -64,7 +64,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   on the most forgiving perfect route: tutorial rooms (L1 1-3) 2.3-3 s, rest of L1 1-1.8 s,
   L2 0.7-1.3 s (hard but fair), L3 rooms are timed mostly by PIP's meter. A bot replayed the
   solver's route in every room in the real game: all solvable, lowest timer within ~0.1 s of
-  the solver. Re-check after ANY change: `python tools/solver2.py Scenes/level_N.tscn`.
+  the solver. Re-check after ANY change: `python tools/solver2.py Levels/level_N.tscn`.
 - Level 3 exists (the guide says judges play to level 3). A full bot run of it takes ~75 s of play.
 - Judges play from a link, so the game needs a **web export**. Web builds run on WebGL 2 (Godot's
   Compatibility renderer); this project is set to Forward+, so test a web export early and check
@@ -255,7 +255,7 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   (`level.blinker_live_in(c, dt)` predicts the wave, `GRATE_MARGIN` 0.15 s either side). He
   then walks in the gap behind the wave. Still no zaps during the autopilot, as a safety net.
 - `autopilot.debug = true` prints each step and where he got stuck.
-- Routes: `Data/routes/level_N.json` from `python tools/solver2.py Scenes/level_N.tscn --paths
+- Routes: `Data/routes/level_N.json` from `python tools/solver2.py Levels/level_N.tscn --paths
   Data/routes/level_N.json --margin 3` (keyed by START tile; `clamp` = the socket used; `wraps`
   = [point index, pads touched, [[pole x, pole y, side]...]] where the wraps change). Godot
   lists `.json` as a resource, so exports include them without a filter.
@@ -327,7 +327,11 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 - `Scripts/player.gd` (`Astronaut`): state machine FREE / WIRED / LOCKED / DRIFT (no fling any more).
   Only movement + animation; asks the level for rules (`player_moved()`, `wire_reaches()`,
   `drift_landing()`...).
-- `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`), results, the save file
+- `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`, found at start by
+  `_find_levels()`: every `Levels/level_<n>.tscn`, in number order, numbers 1, 2, 3 with no gap;
+  `ResourceLoader.list_directory` so it works in the web build too. A new level = save the next
+  `level_<n>.tscn` in `Levels/`, nothing else to edit; the level warns if its `level_number`
+  doesn't match its file name), results, the save file
   (`save_game()` / `load_game()`, `user://save.cfg`, `has_save()`, `continue_level()`), `o2_bonus()`,
   `go_to_level()`, `first_time(tip)` (PIP explains things once), `story_values()` for `{cells}` /
   `{o2_bonus}` / `{o2_per_cell}` in story text.
@@ -455,7 +459,7 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 ## Python tools
 `tools/` (ignored by Godot via `.gdignore`) has the level solver, map/lighting previews, the map
 writer and the art/sound generators. See `tools/README.md`. After editing a room, run
-`python tools/solver2.py Scenes/level_N.tscn`: it reads the map AND the level's Rules numbers
+`python tools/solver2.py Levels/level_N.tscn`: it reads the map AND the level's Rules numbers
 and lists routes with their "lowest timer" (the least time left on the way; carried over from
 pad to pad) and whether every power cell can be charged in time. `--paths f.json --margin 3`
 exports routes a bot can replay in the game. On a Mac the command is `python3`. Rooms with
@@ -520,6 +524,7 @@ list them in the copyright checklist with their OFL.txt; Claude only wired them 
 letter spacing).
 Nov 23 2026 (Claude, at Nilay's request): the skill point notification (popup, pinging dot on
 SKILLS, PIP's upgrade line, worded from Nilay's own) and PIP's autopilot timing the blinking
-grates.
+grates. Also: the level scenes moved to `Levels/` and the game finds them by file name, so a
+new level needs no code change.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

@@ -5,7 +5,13 @@ the map, what PIP says and when, the tutorial, the yellow floor arrows, where
 rogue PIP docks in Level 3, PIP's rule lines and the popup texts. Then you can
 test it straight away from any room with **F6**.
 
-Open a level: `Scenes/level_1.tscn`, `level_2.tscn` or `level_3.tscn`.
+Open a level: `Levels/level_1.tscn`, `level_2.tscn` or `level_3.tscn`.
+
+**A new level:** duplicate a level in the FileSystem panel (right click > Duplicate) and call it
+the next number, `level_4.tscn`, in the same `Levels` folder. Set its **Level Number** to 4 in
+the Inspector. That's all: the game finds every `level_<number>.tscn` in `Levels` by itself,
+so the level select, the dev menu and Continue show it straight away. The numbers must go 1, 2,
+3, 4 with none missing (a file after a gap is left out, and the Output panel says why).
 
 > If Godot says files changed on disk, always pick **Reload**, never Resave.
 
@@ -153,7 +159,7 @@ The same level node also has **Level** (name, results message), **Rules**,
 - **Node Hold**: how long standing on a node holds the clock.
 - **Cell Bonus**: seconds a battery adds.
 After changing any of them (or the map), check every room still works:
-`python tools/solver2.py Scenes/level_2.tscn`. Look at "most forgiving route: lowest
+`python tools/solver2.py Levels/level_2.tscn`. Look at "most forgiving route: lowest
 timer": the least time a perfect player has left. About 1 s is hard, 2 s+ is easy.
 
 ## 4. The tutorial
@@ -240,7 +246,7 @@ straight away. Every run starts with it off. If the team likes it, it can become
 After changing a room's map:
 
 ```
-python tools/map_from_scene.py Scenes/level_1.tscn tools/out/level1.txt
+python tools/map_from_scene.py Levels/level_1.tscn tools/out/level1.txt
 python tools/solver2.py tools/out/level1.txt
 ```
 
@@ -253,7 +259,7 @@ pushes the room needs at least. On a Mac type `python3` instead of `python`. Mor
 changed room without walking it:
 
 ```
-python tools/solver2.py Scenes/level_1.tscn --paths Data/routes/level_1.json --margin 3
+python tools/solver2.py Levels/level_1.tscn --paths Data/routes/level_1.json --margin 3
 ```
 
 ## 9. Judge mode (for the TSA judges)

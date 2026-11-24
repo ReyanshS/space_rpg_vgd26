@@ -8,7 +8,7 @@
 #
 # Run from the project folder:  python tools/maps/build_level3.py
 # then:  python tools/solver2.py tools/maps/level3.txt
-#        python tools/map_to_scene.py tools/maps/level3.txt Scenes/level_3.tscn
+#        python tools/map_to_scene.py tools/maps/level3.txt Levels/level_3.tscn
 W, H = 44, 24
 g = [[' '] * W for _ in range(H)]
 

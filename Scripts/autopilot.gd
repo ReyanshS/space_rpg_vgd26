@@ -55,7 +55,7 @@ func _note(s: String) -> void:
 func load_routes(number: int) -> void:
 	var path := ROUTES % number
 	if not FileAccess.file_exists(path):
-		push_warning("No autopilot routes: run  python tools/solver2.py Scenes/level_%d.tscn --paths Data/routes/level_%d.json --margin 3" % [number, number])
+		push_warning("No autopilot routes: run  python tools/solver2.py Levels/level_%d.tscn --paths Data/routes/level_%d.json --margin 3" % [number, number])
 		return
 	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if typeof(data) != TYPE_DICTIONARY:

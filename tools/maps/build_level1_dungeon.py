@@ -11,7 +11,7 @@
 #   south  the MAIN DOOR (MM): all three wings light one lamp each (power links
 #          in the scene), then it opens onto the Generator Room.
 # Usage (from the project folder):
-#   python tools/map_from_scene.py Scenes/level_1.tscn tools/out/level_1_old.txt   (the old map)
+#   python tools/map_from_scene.py Levels/level_1.tscn tools/out/level_1_old.txt   (the old map)
 #   python tools/maps/build_level1_dungeon.py tools/out/level_1_old.txt tools/maps/level1_dungeon.txt
 import sys
 
