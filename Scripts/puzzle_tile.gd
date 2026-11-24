@@ -62,6 +62,10 @@ static var _sheet: Texture2D
 static var _add_mat: CanvasItemMaterial
 
 var kind: int = Kind.START
+## Set before setup(): the map already shows this tile's picture (one of the
+## team's art tiles, drawn by the level's Art layers), so our own picture and
+## its glow copy stay hidden. The light, sparks and [E] key still work.
+var art_from_map := false
 var powered := false          # room solved: shine brightly
 var active := false           # this node is the one you're standing on (timer paused)
 var is_open := false          # doors only
@@ -142,6 +146,10 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 			_lamp_node.rotation = PI / 2.0
 	if kind == Kind.POLE:
 		_make_pillar()
+	if art_from_map:
+		_sprite.visible = false
+		if _glow:
+			_glow.visible = false
 	if kind == Kind.CORE:
 		_loop_node = _make_overlay(_draw_loop)
 		_loop_node.z_index = 6      # relative to the tile (-7): -1, so just under the player

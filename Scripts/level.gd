@@ -422,6 +422,11 @@ var _live_grates := {}         # editor only: tile -> PuzzleTile of each blinkin
 var _map_hash := 0             # editor only: a fingerprint of the painted map (to spot painting)
 var _map_check := 0.0          # editor only: seconds until we look at the fingerprint again
 var _test_cells: Array[Vector2i] = []   # painted "test start" tiles (F6 starts there)
+var _art := {}                 # tile -> [source, atlas coords, alternative, kind]: the team's art tiles
+var _art_floor: TileMapLayer   # the team's floor tiles, as painted
+var _art_walls: TileMapLayer   # the team's walls (front faces, sides, corners), as painted
+var _art_props: TileMapLayer   # the team's pads and crates (animated ones animate by themselves)
+static var _wall_pieces := {}  # which neighbours are floor (bits) -> that wall piece in wall_sides.png
 var _rebuild_queued := false
 
 # --- rooms
@@ -1620,6 +1625,16 @@ func _read_layout() -> void:
 	for c in _floating_cells:
 		_kinds[c] = "space"
 	_rect = layout.get_used_rect().grow(1)
+	# Tiles from the team's art sheets (every source but 0, the plain palette)
+	# are shown as painted: the level copies them onto its Art layers instead of
+	# drawing its own picture there. Their kind still gives them their rules.
+	_art.clear()
+	for c in layout.get_used_cells():
+		var src := layout.get_cell_source_id(c)
+		if src > 0:
+			var data := layout.get_cell_tile_data(c)
+			var kind := String(data.get_custom_data("kind")) if data else ""
+			_art[c] = [src, layout.get_cell_atlas_coords(c), layout.get_cell_alternative_tile(c), kind]
 
 
 ## What is painted at tile `c`? "" means nothing (outside the map).
@@ -1805,22 +1820,44 @@ func _build_visuals() -> void:
 			add_child(_crate_preview)
 			_crate_preview.draw.connect(func() -> void:
 				for c in _crate_homes:
-					PushCrate.draw_crate(_crate_preview, center_of(c)))
+					var art := _art_texture(c)
+					if art:
+						_crate_preview.draw_texture(art, center_of(c) - Vector2(16, 16))
+					else:
+						PushCrate.draw_crate(_crate_preview, center_of(c)))
 	for l in [_ground, _walls, _props]:
 		l.tile_set = ts
 		l.clear()
-	var depth := _face_depths()
-	var slices := _face_slices(depth)
+	# the team's art, copied from the Layout as it was painted (same z as ours).
+	# Made on their own, not with the layers above: when Godot reloads this
+	# script into a scene that's already open, the old layers are still there
+	# but these new ones aren't yet.
+	if _art_floor == null or not is_instance_valid(_art_floor):
+		_art_floor = _new_layer("ArtFloor", -10)
+		_art_walls = _new_layer("ArtWalls", -9)
+		_art_props = _new_layer("ArtProps", -7)
+	for l in [_art_floor, _art_walls, _art_props]:
+		l.tile_set = layout.tile_set          # the same tiles you paint with (animations included)
+		l.clear()
 	for c in _kinds:
 		var kind: String = _kinds[c]
+		if _art.has(c):
+			var a: Array = _art[c]
+			match a[3]:
+				"wall":
+					_art_walls.set_cell(c, a[0], a[1], a[2])     # the team's wall, exactly as painted
+					continue
+				"floor":
+					_art_floor.set_cell(c, a[0], a[1], a[2])
+					continue                  # the team's floor instead of ours
+				"box":
+					pass                      # a crate you push draws itself (push_crate.gd): just floor here
+				_:
+					_art_props.set_cell(c, a[0], a[1], a[2])   # pads, crates: drawn over our floor
 		if kind == "wall":
-			if depth.has(c):
-				# part of a wall panel: pick the right 32x32 slice of wall_face.png
-				_walls.set_cell(c, SRC_WALL, Vector2i(int(slices.get(c, 1)), 3 - int(depth[c])))
-			else:
-				# top of a wall: the roof tile whose rim matches the floor around it
-				var m := _roof_mask(c)
-				_walls.set_cell(c, SRC_ROOF, Vector2i(m & 15, m >> 4))
+			# a plain grey wall from the old palette: show the wall piece whose edge
+			# follows the floor (tools/retile_walls.py paints these as real tiles)
+			_art_walls.set_cell(c, SRC_ART_WALL, _wall_piece(c))
 			continue
 		if kind == "space":
 			continue          # open space: draw nothing, the starfield shows through
@@ -1828,20 +1865,18 @@ func _build_visuals() -> void:
 			if Engine.is_editor_hint() and not live_preview:
 				_props.set_cell(c, SRC_PUZZLE, Vector2i(GANGWAY_FRAME, 0), 1 if _door_rotated(c) else 0)
 			continue          # the catwalk is a PuzzleTile at runtime
-		if kind == "crate" and _is_floating(c):
+		if kind == "crate" and _is_floating(c) and not _art.has(c):
 			_props.set_cell(c, SRC_PUZZLE, Vector2i(PUZZLE_FRAME["crate"], 0))   # floating debris
 			continue
 		if _is_outside(c):
 			_ground.set_cell(c, SRC_HULL, Vector2i(_hull_variant(c), 0))
-		elif int(depth.get(c + Vector2i.UP, 0)) == 1:
-			_ground.set_cell(c, SRC_WALL, Vector2i(0, 3))   # light strip under a wall panel
 		else:
 			_ground.set_cell(c, SRC_FLOOR, Vector2i(_floor_variant(c), 0))
 		# fixed cargo is drawn here; pads, doors and so on are real PuzzleTiles in
 		# the game (and in the editor's live preview). With the preview off, the
 		# editor shows their still pictures here instead.
 		var still := Engine.is_editor_hint() and not live_preview
-		if PUZZLE_FRAME.has(kind) and (still or kind == "crate"):
+		if PUZZLE_FRAME.has(kind) and (still or kind == "crate") and not _art.has(c):
 			var alt := 1 if (DOOR_KINDS.has(kind) and _door_rotated(c)) else 0
 			_props.set_cell(c, SRC_PUZZLE, Vector2i(PUZZLE_FRAME[kind], 0), alt)
 	_hull_edges.queue_redraw()
@@ -1965,6 +2000,7 @@ func _build_live_preview() -> void:
 			continue                                 # nothing to show, or fixed cargo (on the Props layer)
 		var t := PuzzleTile.new()
 		t.position = center_of(c)
+		t.art_from_map = _art.has(c)      # the team's picture is on the Art layer already
 		_live_root.add_child(t)
 		if kind == "door" and _is_gangway(c):
 			t.setup(PuzzleTile.Kind.GANGWAY, _door_rotated(c))
@@ -2082,6 +2118,54 @@ func _draw_pillar_preview() -> void:
 			_pillar_preview.draw_texture(tex, center_of(c) + Vector2(-16, -PuzzleTile.PILLAR_FOOT))
 
 
+## Walls are painted as real tiles: the team's front panels (wall.png) and the
+## 47 wall pieces (wall_sides.png, tools/art_wall_sides.py), each shown exactly
+## as painted. Only a plain grey "wall" from the old palette has no picture of
+## its own; it borrows the piece whose light edge runs along exactly the sides
+## (and corners) where there's floor next to it, the same piece
+## tools/retile_walls.py would paint there. Open space and the outside of the
+## map aren't floor: walls fade to dark there.
+const SRC_ART_WALL := 3        # the 47 wall pieces (wall_sides.png)
+const WALL_DIRS := [Vector2i(0, -1), Vector2i(1, -1), Vector2i(1, 0), Vector2i(1, 1),
+	Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 0), Vector2i(-1, -1)]   # N NE E SE S SW W NW
+const WALL_NAMES := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+
+
+func _wall_piece(c: Vector2i) -> Vector2i:
+	if _wall_pieces.is_empty():
+		# wall_sides.json (written with the picture) lists each piece's floor sides
+		var list = JSON.parse_string(FileAccess.get_file_as_string("res://Assets/images/tiles/team/wall_sides.json"))
+		for p in list:
+			var bits := 0
+			for d in p["open"]:
+				bits |= 1 << WALL_NAMES.find(d)
+			_wall_pieces[bits] = Vector2i(int(p["x"]), int(p["y"]))
+	var bits := 0
+	for i in 8:
+		var k := kind_at(c + WALL_DIRS[i])
+		if k != "" and k != "wall" and k != "space":
+			bits |= 1 << i                    # floor (or a pad, a door...) on that side
+	# a corner only counts when both sides next to it are wall (bits: N 1, NE 2, E 4, SE 8, S 16, SW 32, W 64, NW 128)
+	for corner in [[1, 0, 2], [3, 2, 4], [5, 4, 6], [7, 6, 0]]:
+		if bits & (1 << corner[1]) or bits & (1 << corner[2]):
+			bits &= ~(1 << corner[0])
+	return _wall_pieces.get(bits, Vector2i.ZERO)
+
+
+## The picture of the team's art tile painted at c (null if it isn't one).
+## An AtlasTexture shows one square of a bigger picture.
+func _art_texture(c: Vector2i) -> Texture2D:
+	if not _art.has(c):
+		return null
+	var src := layout.tile_set.get_source(_art[c][0]) as TileSetAtlasSource
+	if src == null:
+		return null
+	var t := AtlasTexture.new()
+	t.atlas = src.texture
+	t.region = src.get_tile_texture_region(_art[c][1])
+	return t
+
+
 func _new_layer(layer_name: String, z: int) -> TileMapLayer:
 	var l := TileMapLayer.new()
 	l.name = layer_name
@@ -2118,93 +2202,6 @@ func _add_atlas(ts: TileSet, id: int, path: String, grid: Vector2i) -> TileSetAt
 		for x in grid.x:
 			src.create_tile(Vector2i(x, y))
 	return src
-
-
-## Wall tiles 1-3 above a floor tile become the wall panel (1 = bottom row).
-func _face_depths() -> Dictionary:
-	var d := {}
-	for y in range(_rect.end.y, _rect.position.y - 1, -1):
-		for x in range(_rect.position.x, _rect.end.x):
-			var c := Vector2i(x, y)
-			if kind_at(c) != "wall":
-				continue
-			var below := kind_at(c + Vector2i.DOWN)
-			if _walkable(below) and below != "door":
-				d[c] = 1
-			elif below == "wall":
-				var bd := int(d.get(c + Vector2i.DOWN, 0))
-				if bd == 1 or bd == 2:
-					d[c] = bd + 1
-	return d
-
-
-## Picks which column of the 6-wide wall panel each wall tile uses
-## (left cap, plain middle, centre tab, right cap) so panels of any width look right.
-func _face_slices(depth: Dictionary) -> Dictionary:
-	var out := {}
-	for y in range(_rect.position.y, _rect.end.y):
-		var x := _rect.position.x
-		while x < _rect.end.x:
-			if int(depth.get(Vector2i(x, y), 0)) != 1:
-				x += 1
-				continue
-			var x1 := x
-			while int(depth.get(Vector2i(x1 + 1, y), 0)) == 1:
-				x1 += 1
-			var sl := _panel_slices(x1 - x + 1)
-			for i in sl.size():
-				var col := Vector2i(x + i, y)
-				out[col] = sl[i]
-				for k in [1, 2]:
-					var up := col + Vector2i(0, -k)
-					if int(depth.get(up, 0)) == k + 1:
-						out[up] = sl[i]
-			x = x1 + 1
-	return out
-
-
-func _panel_slices(length: int) -> Array[int]:
-	var parts: Array[int] = []
-	if length <= 8:
-		parts.append(length)
-	else:
-		var k := maxi(1, roundi(length / 6.0))
-		var base := floori(float(length) / k)
-		for i in k:
-			parts.append(base + (1 if i < length % k else 0))
-	var out: Array[int] = []
-	for n in parts:
-		if n == 1:
-			out.append(1)
-			continue
-		var s: Array[int] = []
-		s.resize(n)
-		s.fill(1)
-		s[0] = 0
-		s[n - 1] = 5
-		if n >= 4:
-			var m := floori((n - 2) / 2.0)
-			s[m] = 2
-			s[m + 1] = 3
-			for i in range(m + 2, n - 1):
-				s[i] = 4
-		out.append_array(s)
-	return out
-
-
-## 8 yes/no questions ("is there floor N, E, S, W, NE, SE, SW, NW?") packed
-## into one number 0-255 using bits. That number picks one of 256 roof tiles.
-func _roof_mask(c: Vector2i) -> int:
-	var m := 0
-	if _walkable(kind_at(c + Vector2i(0, -1))): m |= 1
-	if _walkable(kind_at(c + Vector2i(1, 0))): m |= 2
-	if _walkable(kind_at(c + Vector2i(0, 1))): m |= 4
-	if _walkable(kind_at(c + Vector2i(-1, 0))): m |= 8
-	if _walkable(kind_at(c + Vector2i(1, -1))): m |= 16
-	if _walkable(kind_at(c + Vector2i(1, 1))): m |= 32
-	if _walkable(kind_at(c + Vector2i(-1, 1))): m |= 64
-	if _walkable(kind_at(c + Vector2i(-1, -1))): m |= 128
-	return m
 
 
 ## Mostly clean floor plates, sometimes a scuffed one. The "hash" looks random
@@ -2484,6 +2481,7 @@ func _spawn_runtime_tiles() -> void:
 			continue
 		var t := PuzzleTile.new()
 		t.position = center_of(c)
+		t.art_from_map = _art.has(c)      # the team's picture is on the Art layer already
 		_tile_root.add_child(t)
 		if kind == "door" and _is_gangway(c):
 			t.setup(PuzzleTile.Kind.GANGWAY, _door_rotated(c))
@@ -2501,6 +2499,7 @@ func _spawn_runtime_tiles() -> void:
 		k.cell = c
 		k.room = _room_of.get(c)
 		k.position = center_of(c)
+		k.art = _art_texture(c)           # the team's crate picture, if it was painted with one
 		_tile_root.add_child(k)
 		_crate_list.append(k)
 		_crates[c] = k

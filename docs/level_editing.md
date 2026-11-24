@@ -56,6 +56,43 @@ Layout either way.
 | movable crate | `c` | steel crate with yellow stripes: walk into it and it rolls one tile. Blocks you and the wire. Rolled onto a red tile, it shorts it out: that tile becomes safe for you and the wire |
 | test start | (none) | green flag (the last tile in the palette): F6 starts you here, see section 7. In the game it's plain floor |
 
+### The team's art tiles
+
+The palette has more than one sheet now. In the TileMap panel, the list on the
+left picks which one you paint from:
+
+| Sheet | What's on it | Its rule (kind) |
+| - | - | - |
+| layout_tiles | the plain palette above | see the table |
+| ground | floor plates in different sizes | floor: walk on it |
+| wall | the front wall faces (power strip, windows, computers), 3 tiles tall | wall: solid |
+| wall_sides | 47 wall pieces: every way a wall can touch floor (sides, corners, thin walls, solid dark) | wall: solid |
+| objects | start, goal and extra time blocks, a grey block, a small and a big crate | start / goal / node; grey block and big crate = fixed cargo (solid); small crate = movable crate |
+| start_anim, goal_anim, node_anim | one animated tile each: paint one square and the whole animation plays | start / goal / node |
+
+They're shown exactly as you paint them, in the editor and in the game. Their
+rules come from their kind, the same as the plain palette: a start block works
+like a START pad (you stand on it), the big crate blocks you and the wire, the
+small crate rolls when you walk into it. Paint all four quarters of the big crate.
+
+How to lay out a room with them:
+- Front wall: paint one of the wall faces along the top of the room (all 3
+  rows). Drag across a whole panel in the palette to paint it in one click.
+- Every other wall: a piece from `wall_sides`. Each piece has its light edge
+  on the sides where floor touches it; the rest is the dark top of the wall. Pick
+  the piece whose edge matches the floor next to it (the solid dark one for
+  walls with no floor next to them, like above a front wall).
+- Quicker for big changes: paint walls roughly (any wall piece, or the plain
+  grey wall), then run `python3 tools/retile_walls.py Levels/level_N.tscn`
+  with Godot closed. It repaints every wall of that level: front panels where
+  a wall stands 3 tall above floor, the right piece everywhere else.
+- Doors, spawn, exit and the other tiles still come from the plain palette.
+
+To change a tile's rule, open `Assets/images/tiles/layout_tileset.tres`, pick the
+sheet, select the tile and change **Custom Data > kind** (for example, give the
+grey block a job). To change an animation's speed, select its tile and change
+**Animation > Speed**.
+
 Rules the game checks:
 - Every room needs exactly **one START** and **one GOAL or CORE**, except a **hall**: a
   room with neither (a corridor, a hub). Halls never lock anything: their doors are open

@@ -28,6 +28,22 @@ SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'po
           'fuse': 'f', 'fuse_door': 'F', 'main_door': 'M', 'socket': 'o', 'clamp': 'k', 'box': 'c',
           'test_start': '.'}   # test start = floor for the solver (an editor note)
 
+def tileset_kinds(path):
+    """(source id, atlas x, atlas y) -> kind, from the tileset's Custom Data.
+    The tileset has several sources (the Layout palette is source 0, the team's
+    art sheets are 1 and up), each in its own [sub_resource] block."""
+    text = open(path, encoding='utf-8').read()
+    ids = {m.group(2): int(m.group(1)) for m in re.finditer(r'sources/(\d+) = SubResource\("([^"]+)"\)', text)}
+    out = {}
+    for block in re.split(r'\n(?=\[sub_resource )', text):
+        m = re.match(r'\[sub_resource type="TileSetAtlasSource" id="([^"]+)"\]', block)
+        if not m or m.group(1) not in ids:
+            continue
+        for k in re.finditer(r'(\d+):(\d+)/0/custom_data_0 = "(\w*)"', block):
+            out[(ids[m.group(1)], int(k.group(1)), int(k.group(2)))] = k.group(3)
+    return out
+
+
 scene = open(SCENE, encoding='utf-8').read()
 layout = scene[scene.index('[node name="Layout"'):]
 m = re.search(r'tile_map_data = PackedByteArray\(([^)]*)\)', layout)
@@ -40,15 +56,12 @@ if raw.startswith('"'):                      # newer Godot can store it as base6
 else:
     data = bytes(int(v) for v in raw.split(','))
 
-# atlas coords -> kind, from the tileset's Custom Data
-kinds = {}
-for k in re.finditer(r'(\d+):(\d+)/0/custom_data_0 = "(\w*)"', open(TILESET, encoding='utf-8').read()):
-    kinds[(int(k.group(1)), int(k.group(2)))] = k.group(3)
+kinds = tileset_kinds(TILESET)
 
 cells = {}
 for i in range(2, len(data) - 11, 12):
     x, y, src, ax, ay, alt = struct.unpack('<hhHHHH', data[i:i + 12])
-    cells[(x, y)] = SYMBOL.get(kinds.get((ax, ay), ''), '?')
+    cells[(x, y)] = SYMBOL.get(kinds.get((src, ax, ay), ''), '?')
 
 xs = [c[0] for c in cells]
 ys = [c[1] for c in cells]

@@ -244,6 +244,33 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   rooms powered and the intro skipped; it wins over an active TestStart node. 2+ painted = red
   flags + a warning. Kept as nodes on purpose (the team chose this): story beats,
   tutorial steps, hint guides, power links (they hold text or connections).
+- **Team art tiles** (Nov 24 2026, team: "update all the assets"): the team's PNGs live in
+  `Assets/images/tiles/team/` and are sources 1-7 of the Layout tileset (0 = the plain
+  palette): 1 ground (floor), 2 wall (front faces, wall), 3 wall_sides (Claude-made: all 47
+  "blob" wall pieces, one light edge where floor touches then dark, `wall_sides.json` lists
+  each piece's floor sides), 4 objects (node, goal, start, grey block = crate, small crate =
+  box, big 2x2 crate = 4 crate tiles; the purple bend block is left out on purpose), 5-7
+  start / goal / node animations (one animated tile each, 0.1 s a frame). Built by
+  `tools/build_team_tiles.gd` (keeps the tileset uid). `_read_layout()` stores every
+  source > 0 tile in `_art` (with its kind); `_build_visuals()` copies them onto the
+  ArtFloor / ArtWalls / ArtProps layers (same tileset, so animations play) and skips our own
+  picture there. PuzzleTile `art_from_map` hides its sprite + glow (light, sparks, [E] stay);
+  PushCrate `art` draws the painted crate. Rules come only from the kind. The map tools key
+  kinds by (source, x, y) (`tileset_kinds()`); map_to_scene writes source 0 only.
+  `team/wall.png` is the team's **"Wall-tilemap3d v2"** (each panel has a dark top band, 53/55/59,
+  so walls look 3D); the flat "Wall-tilemap v2" isn't used. (A first check wrongly called them
+  identical: PIL's getbbox() on an RGBA difference only looks at alpha. Compare pixels.)
+  The 47 wall pieces are wall TOPS in the same style: 2 px rim at the floor, the 3D panels'
+  shadow steps, then the dark top colour, so side walls continue the panels' top band.
+- **Old walls are gone** (Nov 24 2026, team: "delete all the old walls"): every wall in
+  levels 1-3 is a team tile on the Layout, painted by `tools/retile_walls.py` (front panels
+  where a wall is 3 tall above non-door floor, runs of 2+ columns: 6 = power strip, 4 = power,
+  10 = computers / windows, else stretched; everything else the wall piece for its 8
+  neighbours, where '', wall and space count as not floor). Painted walls show exactly as
+  painted. A plain grey palette wall borrows the same piece at draw time (`_wall_piece()`);
+  the old auto wall faces, roofs and the light strip under them were removed from level.gd.
+  The rule maps (solver input) were identical before and after. Godot's terrain brush was
+  tried and dropped: it treats empty space past the map edge as floor (rims facing nothing).
 - **Room labels** (editor only, `show_room_info`, `_update_room_info()` / `_draw_room_info()`):
   every room shows its number, name, START time ("level's" = the default) and crate count, and
   red warnings (needs a START, 2 STARTs, needs a GOAL). Labels step down so they never overlap.
@@ -562,5 +589,9 @@ zap and on powering a room, a trauma camera shake, squash and stretch on the ast
 pickups, pitch-varied sounds.
 Nov 24 2026 (Claude, at the team's request): the editor's live preview (painted tiles come alive
 in the editor) and the paintable test start tile with its palette icon (`tools/art_test_start.py`).
+Nov 24 2026: the team's new art (ground, front walls, objects, start / goal / extra time
+animations) is the TEAM's own (from their Drive; record who drew it); Claude only cut it into
+tiles, gave each tile its rule and wired it in. Claude drew the side, bottom and corner walls to
+match (`tools/art_wall_sides.py`, pixel by pixel in Python, in the team's colours).
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.
