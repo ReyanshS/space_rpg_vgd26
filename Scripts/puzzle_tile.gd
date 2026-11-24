@@ -16,7 +16,12 @@
 #   - a small PointLight2D that lights up the floor around it.
 # The tile doesn't know any game rules. The level just calls hit(),
 # set_powered(), open_door() etc. and the tile plays the matching animation.
+#
+# @tool: the level also makes these in the editor (its live preview), so a pad
+# you paint glows and sparks there just like in the game. In the editor it
+# makes no PointLight2D (there's no darkness to light up).
 # ---------------------------------------------------------------------------
+@tool
 class_name PuzzleTile
 extends Node2D
 
@@ -109,7 +114,7 @@ func setup(p_kind: int, rotated := false) -> PuzzleTile:
 		_glow.modulate = Color(col, 0.0)
 		_add_fx(_glow)
 		# a small light so the floor around the pad is lit too
-		if kind != Kind.DISCHARGE and kind != Kind.DISCHARGE_OFF:
+		if kind != Kind.DISCHARGE and kind != Kind.DISCHARGE_OFF and not Engine.is_editor_hint():
 			_light = LightFX.make(col, 44.0, 0.55)
 			add_child(_light)
 	if rotated:

@@ -25,7 +25,8 @@ OUT = sys.argv[2] if len(sys.argv) > 2 else 'tools/out/level1.txt'
 SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'pole': 'B',
           'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
           'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@',
-          'fuse': 'f', 'fuse_door': 'F', 'main_door': 'M', 'socket': 'o', 'clamp': 'k', 'box': 'c'}
+          'fuse': 'f', 'fuse_door': 'F', 'main_door': 'M', 'socket': 'o', 'clamp': 'k', 'box': 'c',
+          'test_start': '.'}   # test start = floor for the solver (an editor note)
 
 scene = open(SCENE, encoding='utf-8').read()
 layout = scene[scene.index('[node name="Layout"'):]

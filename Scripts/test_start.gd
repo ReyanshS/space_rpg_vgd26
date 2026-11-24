@@ -8,6 +8,9 @@
 #      before it already has power: doors open, cargo sunk, and in Level 3
 #      PIP has already turned (and flown to the right socket).
 #
+# Quicker: paint the "test start" tile (the green flag in the Layout palette)
+# where you want to start and press F6. A painted tile wins over this node.
+#
 # It only works when you run that one level scene from the Godot editor (F6).
 # Playing the whole game (F5, title -> Level 1 -> ...) or an exported / web build
 # ignores it completely, so you can't ship a game that starts in the wrong room.

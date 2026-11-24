@@ -228,6 +228,22 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 
 ## Making levels in the editor (Nov 22 2026, team: "it should be very easy to create levels")
 - Painting is all it takes: each palette tile's `kind` gives it its art and its rules live.
+- **Live preview** (Nov 24 2026, team: "like the Geometry Dash editor"): level export
+  `live_preview` (on). In the editor `_build_live_preview()` makes the same PuzzleTile /
+  PowerCell / Pickup nodes the game makes, under a `LivePreview` node with no owner (never
+  saved), rebuilt on every paint. Godot 4.7's TileMapLayer does NOT emit `changed` when you
+  paint, so `_watch_painting()` hashes `layout.tile_map_data` 5x a second and rebuilds when it
+  changes (the old redraw-on-paint never worked in 4.7). Those three scripts are `@tool` (no PointLight2D in the
+  editor). `_tick_live_preview()` (level `_process` in the editor) runs the grate wave;
+  main doors show one lamp per UNLOCK link. `LiveMarks` (z 55) draws SPAWN / EXIT / TEST
+  START markers and stars on space. With the preview on, the Props layer and the pillar
+  preview skip pads (the preview has them). `show_layout_in_editor` now defaults to off.
+- **Test start tile** (kind `test_start`, palette frame 24, `tools/art_test_start.py`, no map
+  char: `map_from_scene.py` writes it as floor): `_read_layout()` keeps it in `_test_cells`
+  and makes it floor. F6 (editor build, not `Game.playing_through`) starts there with earlier
+  rooms powered and the intro skipped; it wins over an active TestStart node. 2+ painted = red
+  flags + a warning. Kept as nodes on purpose (the team chose this): story beats,
+  tutorial steps, hint guides, power links (they hold text or connections).
 - **Room labels** (editor only, `show_room_info`, `_update_room_info()` / `_draw_room_info()`):
   every room shows its number, name, START time ("level's" = the default) and crate count, and
   red warnings (needs a START, 2 STARTs, needs a GOAL). Labels step down so they never overlap.
@@ -544,5 +560,7 @@ grates. Also: the level scenes moved to `Levels/` and the game finds them by fil
 new level needs no code change. And the game feel ("juice", `Scripts/juice.gd`): hitstop on the
 zap and on powering a room, a trauma camera shake, squash and stretch on the astronaut, popping
 pickups, pitch-varied sounds.
+Nov 24 2026 (Claude, at the team's request): the editor's live preview (painted tiles come alive
+in the editor) and the paintable test start tile with its palette icon (`tools/art_test_start.py`).
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

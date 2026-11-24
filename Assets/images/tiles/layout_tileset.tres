@@ -53,6 +53,8 @@ texture_region_size = Vector2i(32, 32)
 22:0/0/custom_data_0 = "clamp"
 23:0/0 = 0
 23:0/0/custom_data_0 = "box"
+24:0/0 = 0
+24:0/0/custom_data_0 = "test_start"
 
 [resource]
 tile_size = Vector2i(32, 32)

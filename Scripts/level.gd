@@ -4,7 +4,10 @@
 # The big picture
 #   1. You paint the level on the "Layout" TileMapLayer with simple tiles
 #      (floor, wall, start, goal, node, pole, red, crate, door, spawn, exit,
-#      cell, hull, space, airlock, barrier).
+#      cell, hull, space, airlock, barrier, and more: see the palette).
+#      In the editor every tile comes alive as you paint it (the live preview:
+#      glowing pads, bobbing cells, blinking grates), and a "test start" tile
+#      marks where F6 drops you.
 #      Each tile in the palette carries a hidden label called "kind"
 #      (set in Assets/images/tiles/layout_tileset.tres -> Custom Data).
 #   2. _read_layout() turns the painted tiles into a Dictionary:
@@ -190,7 +193,14 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 
 ## The TileMapLayer you paint on. If empty, a child called "Layout" is used.
 @export var layout: TileMapLayer
-## Show the painted icons on top of the finished look while editing (off = preview the real look).
+## Editor only: the tiles you paint come alive, like in the game. Pads glow,
+## batteries bob, grates blink in their wave, pillars stand on the poles. It's
+## the same code the game uses (puzzle_tile.gd, power_cell.gd, pickup.gd).
+@export var live_preview := true:
+	set(value):
+		live_preview = value
+		if is_inside_tree():
+			_queue_rebuild()
 ## Editor only: label every room with its number, name, START time and any
 ## problems (no START, no goal...), so you can see how the game reads your map.
 @export var show_room_info := true:
@@ -198,7 +208,9 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 		show_room_info = value
 		if _room_info:
 			_room_info.queue_redraw()
-@export var show_layout_in_editor := true:
+## Editor only: show the flat palette icons on top of the finished look too
+## (handy to check which tile is which; off = see only the real look).
+@export var show_layout_in_editor := false:
 	set(value):
 		show_layout_in_editor = value
 		_apply_layout_visibility()
@@ -404,6 +416,12 @@ var _walls: TileMapLayer
 var _props: TileMapLayer
 var _hull_edges: Node2D        # draws the thickness of the hull plates
 var _pillar_preview: Node2D    # editor only: draws the support pillars on pole tiles
+var _live_root: Node2D         # editor only: the live preview (real pads, cells, pickups)
+var _live_marks: Node2D        # editor only: markers for tiles the game never draws (spawn, exit...)
+var _live_grates := {}         # editor only: tile -> PuzzleTile of each blinking grate
+var _map_hash := 0             # editor only: a fingerprint of the painted map (to spot painting)
+var _map_check := 0.0          # editor only: seconds until we look at the fingerprint again
+var _test_cells: Array[Vector2i] = []   # painted "test start" tiles (F6 starts there)
 var _rebuild_queued := false
 
 # --- rooms
@@ -628,6 +646,8 @@ func _apply_layout_visibility() -> void:
 		layout.visible = true
 		layout.z_index = 50
 		layout.self_modulate = Color(1, 1, 1, 0.45 if show_layout_in_editor else 0.0)
+		# (you can still paint on it while it's see-through: Godot shows the
+		# tile under your mouse, and the live preview shows the result)
 	else:
 		layout.visible = false     # in the game you only see the pretty layers
 
@@ -677,6 +697,16 @@ func _apply_test_start() -> void:
 		for r in _rooms:
 			if r.index == index and index > 0:
 				_start_in_room(r, _dev_spot(r), true, true)
+		return
+	# A painted "test start" tile wins: paint it, press F6, you start there.
+	if not _test_cells.is_empty() and OS.has_feature("editor") and not Game.playing_through:
+		if _test_cells.size() > 1:
+			push_warning("%d test start tiles are painted: using the one at %s. Erase the others." % [_test_cells.size(), _test_cells[0]])
+		var tr: Room = _room_of.get(_test_cells[0])
+		if tr == null:
+			push_warning("The test start tile isn't in a room - starting at the spawn.")
+			return
+		_start_in_room(tr, center_of(_test_cells[0]), true, true)
 		return
 	var ts := _active_test_start()
 	if ts == null:
@@ -1570,6 +1600,13 @@ func _read_layout() -> void:
 		if _kinds[c] == "box":
 			_crate_homes.append(c)
 			_kinds[c] = "floor"
+	# The "test start" tile is a note for the editor (F6 starts there, see
+	# _apply_test_start). For the rules it's plain floor.
+	_test_cells.clear()
+	for c in _kinds.keys():
+		if _kinds[c] == "test_start":
+			_test_cells.append(c)
+			_kinds[c] = "floor"
 	# A power cell with open space on both sides (left and right, or above and
 	# below) floats in space: that tile is open space (you drift past it), it
 	# just has a cell on it. Otherwise the cell sits on the floor / hull.
@@ -1788,7 +1825,7 @@ func _build_visuals() -> void:
 		if kind == "space":
 			continue          # open space: draw nothing, the starfield shows through
 		if kind == "door" and _is_gangway(c):
-			if Engine.is_editor_hint():
+			if Engine.is_editor_hint() and not live_preview:
 				_props.set_cell(c, SRC_PUZZLE, Vector2i(GANGWAY_FRAME, 0), 1 if _door_rotated(c) else 0)
 			continue          # the catwalk is a PuzzleTile at runtime
 		if kind == "crate" and _is_floating(c):
@@ -1800,7 +1837,11 @@ func _build_visuals() -> void:
 			_ground.set_cell(c, SRC_WALL, Vector2i(0, 3))   # light strip under a wall panel
 		else:
 			_ground.set_cell(c, SRC_FLOOR, Vector2i(_floor_variant(c), 0))
-		if PUZZLE_FRAME.has(kind) and (Engine.is_editor_hint() or kind == "crate"):
+		# fixed cargo is drawn here; pads, doors and so on are real PuzzleTiles in
+		# the game (and in the editor's live preview). With the preview off, the
+		# editor shows their still pictures here instead.
+		var still := Engine.is_editor_hint() and not live_preview
+		if PUZZLE_FRAME.has(kind) and (still or kind == "crate"):
 			var alt := 1 if (DOOR_KINDS.has(kind) and _door_rotated(c)) else 0
 			_props.set_cell(c, SRC_PUZZLE, Vector2i(PUZZLE_FRAME[kind], 0), alt)
 	_hull_edges.queue_redraw()
@@ -1810,6 +1851,7 @@ func _build_visuals() -> void:
 		_crate_preview.queue_redraw()
 	if Engine.is_editor_hint():
 		_update_room_info()
+		_build_live_preview()
 
 
 # ===================================================================== the editor's room labels
@@ -1894,8 +1936,144 @@ func _draw_room_info() -> void:
 			_room_info.draw_string(font, at + Vector2(4, 12 + k * 12), lines[k][0], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, lines[k][1])
 
 
+# ===================================================================== the editor's live preview
+# Like a level editor in a game: what you paint is what you get. Every tile with
+# something on it (pads, doors, red floor, grates, barriers, the core, power
+# cells, fuses, the clamp) gets the very same object the game makes for it
+# (PuzzleTile, PowerCell, Pickup), so it glows, sparks, bobs and blinks right
+# there in the editor. Those scripts are @tool, which means Godot runs them in
+# the editor too.
+# These nodes have no owner, so Godot never saves them into the scene: they're
+# thrown away and made again every time you paint (_build_visuals calls us).
+# The game itself doesn't use any of this; it makes its own in _spawn_runtime_tiles.
+
+func _build_live_preview() -> void:
+	if _live_root != null and is_instance_valid(_live_root):
+		_live_root.queue_free()
+		_live_root = null
+	if _live_marks != null and is_instance_valid(_live_marks):
+		_live_marks.queue_free()
+		_live_marks = null
+	_live_grates.clear()
+	if not live_preview:
+		return
+	_live_root = _new_root("LivePreview", -7)       # the same depth as the game's PuzzleTiles
+	var preview_tiles := {}                          # tile -> PuzzleTile (for the main door lamps)
+	for c in _kinds:
+		var kind: String = _kinds[c]
+		if not PUZZLE_FRAME.has(kind) or kind == "crate":
+			continue                                 # nothing to show, or fixed cargo (on the Props layer)
+		var t := PuzzleTile.new()
+		t.position = center_of(c)
+		_live_root.add_child(t)
+		if kind == "door" and _is_gangway(c):
+			t.setup(PuzzleTile.Kind.GANGWAY, _door_rotated(c))
+		else:
+			t.setup(PUZZLE_FRAME[kind], DOOR_KINDS.has(kind) and _door_rotated(c))
+		preview_tiles[c] = t
+		if kind == "blinker":
+			_live_grates[c] = t
+	for c in _floating_cells + _kinds.keys().filter(func(k: Vector2i) -> bool: return _kinds[k] == "cell"):
+		var cell := PowerCell.new()
+		cell.position = center_of(c)
+		_live_root.add_child(cell)
+	for c in _kinds:
+		if _kinds[c] == "fuse" or _kinds[c] == "clamp":
+			var p := Pickup.new()
+			p.kind = _kinds[c]
+			p.position = center_of(c)
+			_live_root.add_child(p)
+	_preview_main_lamps(preview_tiles)
+	# spawn, exit, test start and open space have no picture in the game:
+	# they get a small marker so you can see where you put them
+	_live_marks = _new_root("LiveMarks", 55)          # over the Layout icons (50)
+	# bind(): the node hands itself to the draw function. (When you paint, the old
+	# node may draw one last time before it's deleted: it must draw on itself.)
+	_live_marks.draw.connect(_draw_live_marks.bind(_live_marks))
+	_live_marks.queue_redraw()
+
+
+## Did someone paint? Godot 4.7's TileMapLayer doesn't send its "changed" signal
+## when you paint a tile, so 5 times a second we take a fingerprint of the map
+## (hash() turns all the painted tiles into one number) and compare it with the
+## last one. A different number = something was painted: redraw everything.
+func _watch_painting(delta: float) -> void:
+	_map_check -= delta
+	if _map_check > 0.0 or layout == null:
+		return
+	_map_check = 0.2
+	var h := hash(layout.tile_map_data)
+	if h != _map_hash:
+		if _map_hash != 0:
+			_queue_rebuild()
+		_map_hash = h
+
+
+## A main door shows one lamp per UNLOCK link pointing at it, like in the game.
+func _preview_main_lamps(preview_tiles: Dictionary) -> void:
+	var needs := {}                                  # main door tile -> lamps
+	for link in find_children("*", "Marker2D", true, false):
+		if not link is PowerLink or link.action != PowerLink.Action.UNLOCK:
+			continue
+		for target in link.target_cells(self):
+			if kind_at(target) == "main_door":
+				for tile in _door_group(target):
+					needs[tile] = int(needs.get(tile, 0)) + 1
+	for tile in needs:
+		var t: PuzzleTile = preview_tiles.get(tile)
+		if t:
+			t.set_lamps(0, needs[tile])
+
+
+## Every frame in the editor: the blinking grates run their wave, with the
+## level's own grate_cycle / grate_live / grate_wave numbers.
+func _tick_live_preview(delta: float) -> void:
+	_watch_painting(delta)
+	if _live_grates.is_empty():
+		return
+	_light_t += delta
+	for c in _live_grates:
+		var t: PuzzleTile = _live_grates[c]
+		if is_instance_valid(t):
+			t.set_live(blinker_live(c), _blinker_phase(c) > grate_cycle - 0.35)
+
+
+func _draw_live_marks(ci: CanvasItem) -> void:
+	var font := ThemeDB.fallback_font
+	for c in _kinds:
+		var at := Vector2(c * TILE)
+		match _kinds[c]:
+			"space":
+				# open space: a few dim stars (the game shows the starfield here)
+				ci.draw_rect(Rect2(at, Vector2(TILE, TILE)), Color(0.02, 0.03, 0.08, 0.6))
+				var h := absi(c.x * 73856093 ^ c.y * 19349663)
+				for i in 3:
+					var p := Vector2((h >> (i * 5)) % 30 + 1, (h >> (i * 5 + 15)) % 30 + 1)
+					ci.draw_rect(Rect2(at + p, Vector2.ONE), Color(0.8, 0.85, 1.0, 0.7))
+			"spawn":
+				_draw_mark(ci, font, at, "SPAWN", Color(0.45, 0.85, 1.0))
+			"exit":
+				_draw_mark(ci, font, at, "EXIT", Color(0.6, 1.0, 0.6))
+	for c in _test_cells:
+		var col := Color(0.3, 1.0, 0.45) if _test_cells.size() == 1 else Color(1, 0.35, 0.3)
+		var at := Vector2(c * TILE)
+		ci.draw_rect(Rect2(at + Vector2(15, 4), Vector2(2, 24)), col)        # a flag pole...
+		ci.draw_colored_polygon(PackedVector2Array([at + Vector2(17, 4),
+			at + Vector2(28, 8), at + Vector2(17, 12)]), col)                         # ...and its flag
+		var label := "TEST START (F6)" if _test_cells.size() == 1 else "%d TEST STARTS: use one" % _test_cells.size()
+		ci.draw_string(font, at + Vector2(0, TILE + 9), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, col)
+
+
+## A thin coloured frame with a word in it, for tiles that are invisible in the game.
+func _draw_mark(ci: CanvasItem, font: Font, at: Vector2, word: String, col: Color) -> void:
+	ci.draw_rect(Rect2(at + Vector2(1, 1), Vector2(TILE - 2, TILE - 2)), col, false, 1.0)
+	ci.draw_string(font, at + Vector2(2, 19), word, HORIZONTAL_ALIGNMENT_CENTER, TILE - 4, 7, col)
+
+
 ## Editor only: a support pillar on every pole tile (the same picture the game uses).
 func _draw_pillar_preview() -> void:
+	if live_preview:
+		return            # the live preview's pole tiles stand their own pillars
 	var tex := load(PuzzleTile.PILLAR_TEX) as Texture2D
 	if tex == null:
 		return
@@ -2813,7 +2991,10 @@ func _refill_o2() -> void:
 
 # _process runs every drawn frame: good for things that are only visual.
 func _process(delta: float) -> void:
-	if Engine.is_editor_hint() or player == null:
+	if Engine.is_editor_hint():
+		_tick_live_preview(delta)     # the editor's blinking grates
+		return
+	if player == null:
 		return
 	if _wire != null and player.is_wired():
 		_wire.set_live_end(player.hand_position())

@@ -20,8 +20,17 @@ so the level select, the dev menu and Continue show it straight away. The number
 ## 1. The map
 
 Select the **Layout** node. The TileMap panel opens at the bottom. Pick a tile and
-paint. The finished look (walls, floor plates, hull) redraws by itself while you
-paint. Untick **Show Layout In Editor** on the level node to see it without the icons.
+paint. What you paint is what you get, like a game's level editor: the finished
+look (walls, floor plates, hull) redraws by itself, and every pad, door, battery
+and pickup comes alive right where you put it. Pads glow, batteries bob, red floor
+sparks, blinking grates run their wave, pillars stand on the poles. That's the
+**Live Preview** switch on the level node (on by default). It uses the game's own
+code, so it looks the same as when you play.
+
+Tiles the game never draws get a small marker instead: SPAWN, EXIT, the TEST START
+flag, and a few stars on open space. Tick **Show Layout In Editor** to also see the
+flat palette icons on top (handy to check which tile is which). You can paint on the
+Layout either way.
 
 | Tile | Map char | What it does |
 | - | - | - |
@@ -44,7 +53,8 @@ paint. Untick **Show Layout In Editor** on the level node to see it without the 
 | main door | `M` | red lamp door: opens when every power link pointing at it has lit its lamp. One link = one lamp, so it also works as a small "powered from over there" door |
 | socket | `o` | where the cable clamp can be set down (E next to it). In a socket the clamp works like a pole |
 | clamp | `k` | the cable clamp lying on the floor: walk over it to pick it up (one per level) |
-| movable crate | `c` | steel crate with yellow stripes (the last tile in the palette): walk into it and it rolls one tile. Blocks you and the wire. Rolled onto a red tile, it shorts it out: that tile becomes safe for you and the wire |
+| movable crate | `c` | steel crate with yellow stripes: walk into it and it rolls one tile. Blocks you and the wire. Rolled onto a red tile, it shorts it out: that tile becomes safe for you and the wire |
+| test start | (none) | green flag (the last tile in the palette): F6 starts you here, see section 7. In the game it's plain floor |
 
 Rules the game checks:
 - Every room needs exactly **one START** and **one GOAL or CORE**, except a **hall**: a
@@ -60,7 +70,7 @@ Don't want the labels? Untick **Show Room Info** on the level node.
 
 ## 1a. Movable crates
 
-Paint them with the crate tile (`c`, the last one in the palette). In the game:
+Paint them with the movable crate tile (`c`, the steel crate with yellow stripes). In the game:
 - Walk straight into a crate and keep walking: after a moment it rolls one tile.
 - It only rolls onto floor or a red tile, never onto a pad, a battery, a socket, an item,
   another crate, or across the wire you're carrying.
@@ -213,14 +223,21 @@ its number, his shutdown time and a dotted flight path. On the **RoguePip** node
 - The save file is `user://save.cfg`. To start clean while testing, press **N** on the title
   screen (or delete it: Project > Open User Data Folder).
 
-## 7. Test it straight away: TestStart + F6
+## 7. Test it straight away: the test start tile + F6
 
-Every level has a **TestStart** node (a flag in the editor).
-1. Drag it into the room you want to test.
-2. Tick **Active**.
-3. Press **F6** (Run Current Scene).
+1. Paint the **test start** tile (the green flag, last in the palette) where you
+   want to start. It shows as a green flag with "TEST START (F6)".
+2. Press **F6** (Run Current Scene).
 
 You start on the flag. Every room before it already counts as powered: doors open,
+cargo sunk, PIP already turned and on the right socket. Paint only one: with two,
+both flags turn red and the game uses the first one it finds. Erase it (or leave it:
+it's plain floor in the real game) when you're done.
+
+**The old way still works:** every level also has a **TestStart** node. Drag it
+into a room, tick **Active**, press F6. A painted test start tile wins over it.
+
+With the node you start on the flag. Every room before it already counts as powered: doors open,
 cargo sunk, PIP already turned and on the right socket. Options:
 - **Skip Earlier Rooms**: untick to start there with nothing powered.
 - **Play Intro**: tick to hear PIP's LEVEL_START lines anyway.

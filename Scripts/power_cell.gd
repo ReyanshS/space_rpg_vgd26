@@ -12,7 +12,9 @@
 # If you fail, the cells you used on that try come back. You only keep them once
 # you reach the goal. The level does all the counting; this script only draws
 # the cell and plays its animations.
+# @tool: the level's live preview shows it bobbing in the editor too.
 # ---------------------------------------------------------------------------
+@tool
 class_name PowerCell
 extends Node2D
 
@@ -30,6 +32,8 @@ func _ready() -> void:
 	LightFX.glow(self)         # the cell shines in the dark ship
 	z_index = 3                # above the pads, still under the player
 	_t = randf() * TAU
+	if Engine.is_editor_hint():
+		return                 # the editor has no darkness: no light needed
 	_light = LightFX.make(Color(1.0, 0.8, 0.35), 34.0, 0.5)   # a warm glow on the floor
 	add_child(_light)
 

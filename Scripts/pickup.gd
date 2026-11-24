@@ -7,7 +7,9 @@
 #            stands upright and the wire wraps round it like a pillar.
 # The level (level.gd, _check_dungeon / _try_clamp) decides when you get it; this
 # script only draws it and plays its little pick up animation (collect()).
+# @tool: the level's live preview shows it bobbing in the editor too.
 # ---------------------------------------------------------------------------
+@tool
 class_name Pickup
 extends Node2D
 
@@ -26,6 +28,8 @@ func _ready() -> void:
 	z_index = 6                   # relative to the tile layer: just under the player
 	LightFX.glow(self)            # it shines in the dark so you can spot it
 	_t = randf() * TAU
+	if Engine.is_editor_hint():
+		return                    # the editor has no darkness: no light needed
 	var light := LightFX.make(AMBER if kind == "fuse" else PURPLE, 40.0, 0.6)
 	add_child(light)
 

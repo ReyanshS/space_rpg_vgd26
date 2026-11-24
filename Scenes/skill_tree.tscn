@@ -1,6 +1,6 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bj2xpsmm241e3"]
 
-[ext_resource type="Script" path="res://Scripts/skill_tree.gd" id="1_tree"]
+[ext_resource type="Script" uid="uid://cpun4y0f6p1hm" path="res://Scripts/skill_tree.gd" id="1_tree"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_screen"]
 bg_color = Color(0.03, 0.055, 0.09, 0.96)
@@ -16,8 +16,9 @@ corner_radius_bottom_left = 6
 shadow_color = Color(0, 0, 0, 0.5)
 shadow_size = 6
 
-[node name="SkillTree" type="Control"]
+[node name="SkillTree" type="Control" unique_id=2037840550]
 process_mode = 3
+visible = false
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -26,7 +27,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_tree")
 
-[node name="Dim" type="ColorRect" parent="."]
+[node name="Dim" type="ColorRect" parent="." unique_id=555413001]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -36,7 +37,7 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0, 0, 0, 0.6)
 
-[node name="Frame" type="Panel" parent="."]
+[node name="Frame" type="Panel" parent="." unique_id=772848526]
 layout_mode = 0
 offset_left = 16.0
 offset_top = 8.0
@@ -45,7 +46,7 @@ offset_bottom = 262.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBox_screen")
 
-[node name="Board" type="Control" parent="."]
+[node name="Board" type="Control" parent="." unique_id=2099141889]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -54,7 +55,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Buttons" type="HBoxContainer" parent="."]
+[node name="Buttons" type="HBoxContainer" parent="." unique_id=1472934398]
 layout_mode = 0
 offset_left = 28.0
 offset_top = 238.0
@@ -62,12 +63,12 @@ offset_right = 228.0
 offset_bottom = 254.0
 theme_override_constants/separation = 6
 
-[node name="Unlock" type="Button" parent="Buttons"]
+[node name="Unlock" type="Button" parent="Buttons" unique_id=185825628]
 layout_mode = 2
 focus_mode = 0
 text = "UNLOCK"
 
-[node name="Back" type="Button" parent="Buttons"]
+[node name="Back" type="Button" parent="Buttons" unique_id=1258368366]
 layout_mode = 2
 focus_mode = 0
 text = "BACK"

@@ -21,6 +21,7 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | `sfx_intro.py` | Makes the three looping sounds under the intro cutscene (`intro_alarm.wav`, `intro_space.wav`, `intro_wake.wav`) | `python tools/sfx_intro.py` |
 | `maps/build_level1_dungeon.py` | How Level 1 became a dungeon (hub, three wings, main door). Reference only: edit Level 1 in Godot now | see the file |
 | `art_pillar.py` | Draws the POLE as a support pillar: `Assets/images/tiles/pillar.png` (the 32x64 column), `pillar_glow.png` (its purple ring, made to shine), the steel floor plate in `puzzle_tiles.png` frame 3 and the palette icon in `layout_tiles.png` frame 5 | `python tools/art_pillar.py` |
+| `art_test_start.py` | Draws the TEST START palette icon (a green flag on the floor icon) into `layout_tiles.png` frame 24 | `python tools/art_test_start.py` |
 | `art_barrier.py` | Draws the BARRIER tile (crate on a lift, hazard stripes) into `puzzle_tiles.png` frame 12 and its palette icon into `layout_tiles.png` frame 16 | `python tools/art_barrier.py` |
 | `art_ui.py` | Draws the OLD UI frames `Assets/ui/frame_screen.png` and `frame_plate.png` (no longer used: the UI is now drawn by `Scripts/ui_style.gd` and the theme) | `python tools/art_ui.py` |
 | `art_crate_icon.gd` | Draws the movable crate into the Layout palette (`layout_tiles.png` frame 23, kind "box") with the game's own crate drawing (push_crate.gd). A Godot script, not Python; needs a window | `godot --path . --script tools/art_crate_icon.gd` |
