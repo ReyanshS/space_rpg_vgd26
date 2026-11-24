@@ -398,16 +398,22 @@ def push_configs(g, room_cells, start):
     return res
 
 
-def walk_reaches(g, a, b):
+# The quick test before the slow wire check may only throw away layouts that can't
+# work, never one that can. Out on the hull you DRIFT across open space, so for it
+# open space ('~') isn't a wall. (Without this, every spacewalk room got 0 solutions.)
+QUICK_BLOCK = PLAYER_BLOCK.replace('~', '')
+
+
+def walk_reaches(g, a, b, block=PLAYER_BLOCK):
     """Can you walk (no wire) from tile a to a tile next to or on b? Round walls,
-    crates and red tiles. A quick test before the slow wire check."""
+    crates and red tiles (anything in `block`)."""
     seen = {a}; stack = [a]
     while stack:
         q = stack.pop()
         if abs(q[0] - b[0]) + abs(q[1] - b[1]) <= 1: return True
         for n in near4(*q):
             if n in seen or not (0 <= n[1] < len(g) and 0 <= n[0] < len(g[n[1]])): continue
-            if g[n[1]][n[0]] in PLAYER_BLOCK: continue
+            if g[n[1]][n[0]] in block: continue
             seen.add(n); stack.append(n)
     return False
 
@@ -598,8 +604,8 @@ if __name__ == '__main__':
             shorted_seen.add(shorted)
             if not new_short and (tried >= MAX_TRIES or (found_at is not None and tried >= found_at + 6)):
                 continue
-            # quick check first: can you even walk from the START to the goal?
-            if goals and not walk_reaches(gconf, st[0], goals[0]):
+            # quick check first: can you even get from the START to the goal?
+            if goals and not walk_reaches(gconf, st[0], goals[0], QUICK_BLOCK):
                 continue
             tried += 1
             Mc = M if not pushes else Map(gconf)
