@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 SkillManager="*res://Scripts/skill_manager.gd"
 Game="*res://Scripts/game_state.gd"
+Juice="*res://Scripts/juice.gd"
 
 [display]
 

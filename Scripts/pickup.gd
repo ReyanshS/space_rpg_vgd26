@@ -72,8 +72,9 @@ func _draw_clamp_post() -> void:
 	draw_rect(Rect2(-7, -21, 14, 1), Color(0.95, 0.85, 1.0, pulse))
 
 
-## Picked up: it jumps up, fades and is gone.
+## Picked up: it jumps up with a pop (Juice), fades and is gone.
 func collect() -> void:
+	Juice.punch_scale(self, Vector2(1.45, 1.45), 0.3)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(self, "position:y", position.y - 18.0, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(self, "modulate:a", 0.0, 0.35)

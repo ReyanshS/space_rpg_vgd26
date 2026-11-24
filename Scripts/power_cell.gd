@@ -19,7 +19,10 @@ extends Node2D
 var collected := false
 var _t := 0.0
 var _float_text := 0.0      # > 0 while the "+2s" floats up
+var _pop := 0.0             # > 0 while the battery pops up and vanishes (just charged)
 var _label := "+1"
+
+const POP_TIME := 0.3
 var _light: PointLight2D
 
 
@@ -33,6 +36,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	_pop = maxf(0.0, _pop - delta / POP_TIME)
 	if _float_text > 0.0:
 		# (stops at exactly 0, and the redraw at 0 wipes the last faint label)
 		_float_text = maxf(0.0, _float_text - delta)
@@ -63,6 +67,14 @@ func _draw() -> void:
 		# full: an amber battery whose bolt glows white-hot now and then
 		var bolt := Color(1.0, 0.95, 0.75).lerp(Color.WHITE, 0.5 + 0.5 * sin(_t * 5.0))
 		draw_battery(self, Vector2(-5, -9 + bob), Color(0.95, 0.62, 0.15), bolt)
+	elif _pop > 0.0:
+		# just charged: the battery jumps up, swells, then shrinks away to nothing
+		var k := 1.0 - _pop                       # goes 0 -> 1 during the pop
+		var up := roundf(-12.0 * (1.0 - (1.0 - k) * (1.0 - k)))   # fast at first, then slows
+		var s := lerpf(1.0, 1.45, k / 0.3) if k < 0.3 else lerpf(1.45, 0.0, (k - 0.3) / 0.7)
+		draw_set_transform(Vector2(0, up - 2), 0.0, Vector2(s, s))
+		draw_battery(self, Vector2(-5, -7), Color(1.0, 0.8, 0.3), Color.WHITE)
+		draw_set_transform(Vector2.ZERO)
 	if _float_text > 0.0:
 		var a := clampf(_float_text / 0.3, 0.0, 1.0)
 		var y := -14.0 - (0.9 - _float_text) * 26.0
@@ -75,6 +87,7 @@ func collect(label := "+1") -> void:
 	collected = true
 	_label = label
 	_float_text = 0.9
+	_pop = 1.0
 	var p := Wire.make_sparks(Color(1.0, 0.9, 0.35), 18, 0.5)
 	p.one_shot = true
 	p.explosiveness = 1.0
@@ -88,7 +101,9 @@ func collect(label := "+1") -> void:
 func restore() -> void:
 	collected = false
 	_float_text = 0.0
+	_pop = 0.0
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.4)
+	Juice.punch_scale(self, Vector2(1.3, 1.3), 0.3)     # it pops back into place
 	_light.energy = 0.5
 	queue_redraw()

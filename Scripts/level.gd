@@ -525,8 +525,6 @@ var _leaving := false
 var _dialogue_lock := false    # PIP is talking and the player has to read
 var _input_cooldown := 0.0     # ignore keys for a moment (so one E press doesn't do two things)
 var _cam_pos := Vector2.ZERO
-var _shake := 0.0
-var _shake_strength := 0.0
 var _sfx := {}
 var _music := {}               # "ship" / "space" -> AudioStreamPlayer
 var _music_tweens := {}
@@ -1070,6 +1068,7 @@ func _take_pickup(c: Vector2i, quiet := false) -> void:
 	else:
 		_play("pickup")
 		p.collect()
+		player.squash(Vector2(0.88, 1.14), 0.16)
 		item_picked.emit(p.kind, room_index_at(center_of(c)))
 
 
@@ -1117,6 +1116,7 @@ func _put_clamp(s: Vector2i) -> void:
 	_clamp_post.position = center_of(s)
 	_tile_root.add_child(_clamp_post)
 	_play("clank")
+	Juice.punch_scale(_clamp_post, Vector2(0.7, 1.35), 0.22)   # it springs up in the socket
 	if Game.first_time("clamp_placed"):
 		_pip_say(pip_clamp_placed)
 
@@ -1213,6 +1213,8 @@ func _push_crate(c: Vector2i, d: Vector2i) -> void:
 	k.cell = t
 	k.slide_to(center_of(t))
 	_play("push")
+	Juice.punch_scale(k, Vector2(1.12, 0.9), 0.14)   # shorter than SLIDE_TIME, so it's done before a crate sinks
+	player.squash(Vector2(1.1, 0.92), 0.12)
 	var r: Room = k.room
 	crate_pushed.emit(r.index if r else -1)
 	if Game.first_time("crate_push"):
@@ -1236,6 +1238,7 @@ func _short_out(k: PushCrate, t: Vector2i) -> void:
 	_play("shock")
 	_sparks_at(center_of(t))
 	_shake_cam(0.15, 1.5)
+	Juice.hitstop(0.05)
 	hud.show_toast(popup_crate_grounded, 2.0)
 	var r: Room = k.room
 	crate_grounded.emit(r.index if r else -1)
@@ -2626,9 +2629,20 @@ func _setup_audio() -> void:
 		_music[n] = p
 
 
-func _play(n: String) -> void:
+## Sounds you hear again and again get a slightly different pitch each time
+## (Juice.pitch), so they sound natural instead of like a recording on repeat.
+## Tunes (fanfare, power-up, the level's last chord) always play as written.
+const PITCH_VARIED := ["node", "bend", "clank", "push", "pickup", "grab", "puff", "door", "snap", "shock"]
+
+
+## Plays sound `n`. `pitch` > 0 plays it at that pitch instead.
+func _play(n: String, pitch := 0.0) -> void:
 	var p: AudioStreamPlayer = _sfx.get(n)
 	if p and p.stream:
+		if pitch > 0.0:
+			p.pitch_scale = pitch
+		elif n in PITCH_VARIED:
+			p.pitch_scale = Juice.pitch()
 		p.play()
 
 
@@ -3116,6 +3130,7 @@ func _reel_back() -> void:
 		_set_paused_node(c)                           # back on a node: it holds the timer again
 		_node_hold_left = _node_hold()
 	_play("clank")
+	player.squash(Vector2(1.2, 0.82), 0.18)          # a bump as the wire stops pulling
 
 
 ## Charge any power cell you're touching, but only with the live wire in hand.
@@ -3133,7 +3148,8 @@ func _check_cells() -> void:
 			_time_left = minf(_time_left + _cell_bonus(), _max_time())
 			hud.pulse_timer()
 			_cells_pending.append(c)
-			_play("pickup")
+			# each cell on the same try sounds a little higher: a rising "combo"
+			_play("pickup", 1.0 + 0.07 * (_cells_pending.size() - 1))
 			hud.set_cells(_cells_banked + _cells_pending.size(), _cells.size(), true)
 			if Game.first_time("cell_charged"):
 				hud.show_toast(popup_cell_bonus.format({"bonus": int(_cell_bonus())}), 2.5)
@@ -3158,6 +3174,7 @@ func _touch_pad(c: Vector2i, kind: String) -> void:
 			_set_paused_node(c)
 			_node_hold_left = _node_hold()    # it holds the timer for a moment
 			_play("node")
+			player.squash(Vector2(0.9, 1.12), 0.15)
 			hud.pulse_timer()
 		"goal":
 			_solve(_wire_room)
@@ -3212,6 +3229,8 @@ func drift_landing(from: Vector2, dir: Vector2, half: Vector2, wired: bool) -> V
 
 func player_drift_begin(dir: Vector2) -> void:
 	_play("puff")
+	# stretched out along the way he pushes off
+	player.squash(Vector2(1.25, 0.8) if absf(dir.x) > 0.5 else Vector2(0.8, 1.25), 0.25)
 	var puff := Wire.make_sparks(Color(0.85, 0.92, 1.0), 12, 0.45)   # suit thruster puff
 	puff.one_shot = true
 	puff.explosiveness = 0.9
@@ -3228,6 +3247,8 @@ func player_drift_begin(dir: Vector2) -> void:
 func player_drift_end() -> void:
 	_play("clank")                        # mag boots grab the hull
 	_shake_cam(0.08, 1.0)
+	player.squash(Vector2(1.3, 0.72), 0.2)
+	_dust_at(player.position)
 
 
 ## The player pushed towards open space but can't go. Show why.
@@ -3349,6 +3370,7 @@ func _try_grab() -> void:
 	_time_left = _wire_time()     # the timer starts right away on the START pad
 	_tick_accum = 0.0
 	_play("grab")
+	player.squash(Vector2(1.15, 0.87), 0.16)
 	_set_hum(true)
 	_tile_hit(r.start)
 	_show_shared_pads(r)
@@ -3432,6 +3454,8 @@ func _solve(r: Room) -> void:
 	hud.set_timer(false, 0.0, 0.0)
 	_play("powerup")
 	_shake_cam(0.2, 1.5)
+	Juice.hitstop(0.07)                       # a beat of stillness: you did it
+	player.squash(Vector2(0.85, 1.18), 0.25)  # ...and he stands up tall
 	var w := _wire
 	_wire = null
 	w.finish()
@@ -3515,9 +3539,12 @@ func _shock() -> void:
 	var saves := int(SkillManager.bonus("boots"))
 	if r != null and int(_boots_used.get(r, 0)) < saves and can_hop and _last_safe.is_finite():
 		_boots_used[r] = int(_boots_used.get(r, 0)) + 1
+		_sparks_at(player.position + Vector2(0, -4))     # sparks where the zap hit
 		player.position = _last_safe
 		_play("shock")
 		_shake_cam(0.2, 2.0)
+		Juice.hitstop(0.05)
+		player.flash()
 		hud.flash(Color(0.75, 0.95, 1.0), 0.3)
 		hud.show_toast(popup_boots, 2.0)
 		return
@@ -3579,6 +3606,7 @@ func _all_powered() -> void:
 	_play("fanfare")
 	hud.flash(Color(1.0, 0.95, 0.7), 0.5)
 	_shake_cam(0.4, 2.5)
+	Juice.hitstop(0.1)
 	hud.show_toast(popup_all_online, 2.5)
 	await get_tree().create_timer(0.8).timeout
 	if not is_inside_tree(): return
@@ -3704,6 +3732,22 @@ func _sparks_at(pos: Vector2) -> void:
 	get_tree().create_timer(1.0).timeout.connect(s.queue_free)
 
 
+## A puff of grey dust at your feet (landing a drift on the hull).
+func _dust_at(pos: Vector2) -> void:
+	var d := Wire.make_sparks(Color(0.78, 0.82, 0.9, 0.8), 10, 0.35)
+	d.one_shot = true
+	d.explosiveness = 1.0
+	d.gravity = Vector2.ZERO
+	d.spread = 70.0
+	d.initial_velocity_min = 15.0
+	d.initial_velocity_max = 40.0
+	d.position = pos
+	d.z_index = 1
+	_wire_root.add_child(d)
+	d.emitting = true
+	get_tree().create_timer(1.0).timeout.connect(d.queue_free)
+
+
 ## Little lights along every edge of a hull section, switching on in a wave that
 ## starts at its relay (GOAL). They stay on: the outside of the ship is lit too.
 func _hull_running_lights(r: Room) -> void:
@@ -3755,6 +3799,9 @@ func _fail(kind: String) -> void:
 		"shock":
 			_play("shock")
 			player.play_shock()
+			player.flash()
+			_sparks_at(player.position + Vector2(0, -8))
+			Juice.hitstop(0.12)           # the heaviest hit in the game: freeze for a moment
 			hud.flash(Color(0.75, 0.95, 1.0), 0.85)
 			_shake_cam(0.5, 4.0)
 			hud.show_toast(popup_zap)
@@ -3765,6 +3812,7 @@ func _fail(kind: String) -> void:
 			if not is_inside_tree(): return
 		"timeout":
 			_play("snap")
+			_sparks_at(player.hand_position())     # the wire burns out in your hands
 			hud.flash(Color(1.0, 0.45, 0.15), 0.45)
 			_shake_cam(0.25, 2.0)
 			hud.show_toast(popup_overload)
@@ -3779,6 +3827,8 @@ func _fail(kind: String) -> void:
 			# PIP's shutdown pulse (rogue_pip.gd) reached the wire
 			_play("pulse")
 			_play("snap")
+			_sparks_at(player.hand_position())
+			Juice.hitstop(0.06)
 			hud.flash(Color(1.0, 0.25, 0.2), 0.6)
 			_shake_cam(0.45, 3.5)
 			hud.show_toast(popup_pip_cut)
@@ -4280,9 +4330,11 @@ func _engine_flame(back: Vector2) -> CPUParticles2D:
 
 # ===================================================================== camera
 
+## Shake the camera for `duration` seconds, at most `strength` pixels.
+## The shaking itself is done by Juice.shake (juice.gd): it takes a strength
+## from 0 to 1 and moves the view by that squared, so this works it backwards.
 func _shake_cam(duration: float, strength: float) -> void:
-	_shake = duration
-	_shake_strength = strength
+	Juice.shake(sqrt(strength / Juice.MAX_SHAKE), duration)
 
 
 ## Follows the player but never shows outside the current area (all the stages
@@ -4317,8 +4369,4 @@ func _update_camera(delta: float, snap: bool) -> void:
 	else:
 		# Move part of the way each frame = a smooth "easing" camera.
 		_cam_pos = _cam_pos.lerp(target, 1.0 - exp(-delta * 7.0))
-	var shake := Vector2.ZERO
-	if _shake > 0.0:
-		_shake -= delta
-		shake = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake_strength
-	camera.position = (_cam_pos + below + shake).round()
+	camera.position = (_cam_pos + below).round()     # (Juice adds the shake on top, as camera.offset)

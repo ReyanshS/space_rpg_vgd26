@@ -61,14 +61,19 @@ enum Trigger {
 # The TOO LONG check measures with both of the game's fonts, at the console
 # size each one gets (game_state.gd CONSOLE_SIZE_PIXEL / CONSOLE_SIZE_DYSLEXIC):
 # the pixel font and OpenDyslexic (the DYSLEXIA FONT switch).
-const CONSOLE_SIZE := 8           # PIP's text size with either font
+const CONSOLE_SIZE_PIXEL := 10     # PIP's text size in each font (same as game_state.gd)
+const CONSOLE_SIZE_DYSLEXIC := 9
 const CONSOLE_WIDTH := 254.0      # pixels of text per row in PIP's console (hud.tscn)
+## Story text can say {cells}, {o2_bonus} or {o2_per_cell} (Game.story_values).
+## The check measures the line with the longest numbers those can become.
+const LONGEST_VALUES := {"cells": 20, "o2_bonus": 100, "o2_per_cell": 5}
 
 
 ## Editor only: too long for two rows in either font?
 func _too_long(line: String) -> bool:
-	for font in [UIStyle.pixel_font(), UIStyle.dyslexic_font()]:
-		if font != null and _rows(line, font, CONSOLE_SIZE) > 2:
+	line = line.format(LONGEST_VALUES)
+	for pair in [[UIStyle.pixel_font(), CONSOLE_SIZE_PIXEL], [UIStyle.dyslexic_font(), CONSOLE_SIZE_DYSLEXIC]]:
+		if pair[0] != null and _rows(line, pair[0], pair[1]) > 2:
 			return true
 	return false
 

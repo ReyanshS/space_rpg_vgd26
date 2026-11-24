@@ -58,6 +58,7 @@ var _anim_override := ""      # forces an animation ("shock", "burnt")
 var _lamp: PointLight2D       # helmet lamp, only on in rooms with no power
 var _lamp_tween: Tween
 var _hand_light: PointLight2D # yellow glow from the live wire in his hands
+var _sprite_y := 0.0          # the sprite's height above his feet (set in _ready)
 
 # @onready = fill this in once the scene is loaded. $AnimatedSprite2D is
 # shorthand for get_node("AnimatedSprite2D").
@@ -67,6 +68,7 @@ var _hand_light: PointLight2D # yellow glow from the live wire in his hands
 func _ready() -> void:
 	add_to_group("player")    # the tutorial finds the player with get_first_node_in_group("player")
 	sprite.play(_first_existing(["idle_down", "idle"]))
+	_sprite_y = sprite.position.y
 	_lamp = LightFX.make(Color(0.8, 0.9, 1.0), 100.0, LAMP_ENERGY)
 	_lamp.position = Vector2(0, -18)          # at the helmet
 	add_child(_lamp)
@@ -136,6 +138,17 @@ func play_shock() -> void:
 
 func play_burnt() -> void:
 	_anim_override = "burnt"
+
+
+## Squash and stretch (juice.gd), e.g. Vector2(1.3, 0.7) when his boots hit the
+## hull. It only changes the picture: his feet, the wire and the rules don't move.
+func squash(mult: Vector2, duration := 0.18) -> void:
+	Juice.punch_scale(sprite, mult, duration)
+
+
+## Flash white for a moment (the zap).
+func flash() -> void:
+	Juice.flash(sprite)
 
 
 ## Where the wire attaches: his hands, a bit above his feet.
@@ -300,6 +313,9 @@ func _update_anim() -> void:
 	sprite.speed_scale = 1.0
 	# floating in zero-G: tilt gently from side to side
 	sprite.rotation = sin(_drift_t * 5.0) * 0.14 if state == State.DRIFT else 0.0
+	# A sprite grows and shrinks round its middle. Move it with its height, so
+	# when it squashes it squashes down onto his feet instead of floating up.
+	sprite.position.y = _sprite_y * sprite.scale.y
 	if sprite.animation != anim or not sprite.is_playing():
 		sprite.play(anim)
 

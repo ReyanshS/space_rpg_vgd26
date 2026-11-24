@@ -62,10 +62,12 @@ const SETTINGS_PATH := "user://settings.cfg"
 ## own, they all use the theme's default font or ThemeDB.fallback_font, so
 ## changing those two changes all the text at once (apply_font). The fonts
 ## themselves: UIStyle.pixel_font() and UIStyle.dyslexic_font().
-## PIP's console text size for each font, so his lines fit in its two rows
-## (both fonts are wider than Godot's built-in one).
-const CONSOLE_SIZE_PIXEL := 8
-const CONSOLE_SIZE_DYSLEXIC := 8
+## PIP's console text size for each font: as big as it gets while every one of
+## his lines still fits in the console's two rows (measured Nov 2026: one size
+## bigger and OpenDyslexic pushes 34 lines onto a third row). If you change
+## them, change story_beat.gd's TOO LONG check to match.
+const CONSOLE_SIZE_PIXEL := 10
+const CONSOLE_SIZE_DYSLEXIC := 9
 const CONSOLE_SIZE_PLAIN := 9     # Godot's built-in font, if a font file is missing
 signal font_changed            # the switch was flipped (the HUD resizes PIP's text)
 var dyslexic_font := false

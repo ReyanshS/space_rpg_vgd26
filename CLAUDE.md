@@ -335,6 +335,17 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   (`save_game()` / `load_game()`, `user://save.cfg`, `has_save()`, `continue_level()`), `o2_bonus()`,
   `go_to_level()`, `first_time(tip)` (PIP explains things once), `story_values()` for `{cells}` /
   `{o2_bonus}` / `{o2_per_cell}` in story text.
+- `Scripts/juice.gd` (autoload **Juice**): game feel only, never rules. `hitstop(s)` (Engine.time_scale
+  0, restored by a timer that ignores time scale; the newest call restores it), `shake(0..1, s)`
+  (trauma: offset = MAX_SHAKE px x trauma squared, on the active Camera2D's `offset`, whole pixels;
+  level.gd `_shake_cam(duration, px)` converts to it), `punch_scale(node, Vector2 mult, s)`
+  (remembers the node's real scale in meta), `flash(item)` (modulate 4 back to normal in 0.08 s),
+  `pitch()` (0.92 to 1.08). Used in level.gd: zap = hitstop 0.12 + `player.flash()` + sparks;
+  room powered 0.07, all powered 0.1, boots save / crate shorts a tile 0.05, PIP's cut 0.06;
+  `player.squash(mult)` on grab, node, reel-back stop, crate push, pickup, drift push-off and landing
+  (+ `_dust_at`); `_play(n, pitch)` varies the sounds in `PITCH_VARIED`, and power cells charged on
+  one try rise in pitch (+0.07 each). `player.gd` keeps the squashing sprite on his feet
+  (`sprite.position.y = _sprite_y * sprite.scale.y`). Pickups pop in `pickup.gd` / `power_cell.gd`.
 - `Scripts/puzzle_tile.gd`: runtime visuals for pads/doors/gangways/airlock/barriers (glow, sparks,
   arrows; barriers shudder and sink, `open_door(delay)`).
 - `Scripts/power_cell.gd`: the collectible battery (draws itself, collect/restore animations).
@@ -447,6 +458,11 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   rogue_pip.gd's `_wait()` / `_until_quiet()` return false then (`if not await _wait(0.6): return`).
   (Nov 2026: quitting during PIP's malfunction crashed on `create_timer`; a bot that quits at
   54 moments per level now runs clean.)
+- `Juice.hitstop` sets `Engine.time_scale` to 0: during it there are NO physics frames, and normal
+  timers and tweens wait. Bots that measure time by counting physics frames just pause; to watch
+  a hitstop, sample on `process_frame` with `Time.get_ticks_msec()`.
+- `get_meta(key, null)` counts as "no default" and errors when the key is missing: check
+  `has_meta()` first.
 - Running a test script with `--script` loads before autoloads are registered: don't use the
   project's class names (Astronaut, SkillManager...) in such scripts at all, not even
   `Astronaut.State.LOCKED` (use the number: FREE 0, WIRED 1, LOCKED 2, DRIFT 3).
@@ -525,6 +541,8 @@ letter spacing).
 Nov 23 2026 (Claude, at Nilay's request): the skill point notification (popup, pinging dot on
 SKILLS, PIP's upgrade line, worded from Nilay's own) and PIP's autopilot timing the blinking
 grates. Also: the level scenes moved to `Levels/` and the game finds them by file name, so a
-new level needs no code change.
+new level needs no code change. And the game feel ("juice", `Scripts/juice.gd`): hitstop on the
+zap and on powering a room, a trauma camera shake, squash and stretch on the astronaut, popping
+pickups, pitch-varied sounds.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.
