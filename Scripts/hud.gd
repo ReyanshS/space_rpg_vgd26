@@ -138,6 +138,8 @@ var _stars_shown := 0
 var _points_earned := 0             # skill points this level gave (0 on a replay)
 
 # the skill tree screen
+var _skill_badge: Control           # the notification dot on SKILLS (_draw_skill_badge)
+var _badge_ping := 0.0              # seconds left of the dot's "look at me" ping
 var _tree_from_pause := false       # opened from the pause menu (go back to it on close)
 var _paused_before := false         # was the game paused before the tree opened?
 
@@ -189,6 +191,16 @@ func _ready() -> void:
 	corner_menu.pressed.connect(func() -> void: _set_paused(not pause_panel.visible))
 	SkillManager.points_changed.connect(func(_p: int) -> void: _update_corner())
 	_update_corner()
+	# The notification dot on SKILLS: it shows while you have points AND a skill
+	# you could buy with them. It pings for a while when points arrive (and when
+	# a level starts), and stops pinging once you open the skill tree.
+	_skill_badge = Control.new()
+	_skill_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_skill_badge.size = Vector2(12, 12)
+	corner_skills.add_child(_skill_badge)
+	_skill_badge.draw.connect(_draw_skill_badge)
+	if _can_upgrade():
+		_badge_ping = 6.0
 	_show_idle()
 	_update_keys()
 	for n in ["blip", "star"]:
@@ -203,6 +215,11 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	_badge_ping = maxf(0.0, _badge_ping - delta)
+	_skill_badge.visible = _can_upgrade()
+	if _skill_badge.visible:
+		_skill_badge.position = Vector2(-6.0, -5.0)   # its top left corner (the right one is at the screen's edge)
+		_skill_badge.queue_redraw()
 	_pulse = maxf(0.0, _pulse - delta * 2.5)
 	_power_flash = maxf(0.0, _power_flash - delta)
 	_cell_bump = maxf(0.0, _cell_bump - delta * 3.0)
@@ -273,6 +290,7 @@ func open_skill_tree() -> void:
 	_paused_before = get_tree().paused
 	pause_panel.visible = false
 	get_tree().paused = true
+	_badge_ping = 0.0                   # you've seen it: the dot stops pinging
 	skill_tree.open()
 
 
@@ -328,6 +346,31 @@ func _on_skill_tree_closed() -> void:
 	elif not _paused_before:
 		get_tree().set_deferred("paused", false)   # back to the game (see _set_paused)
 	_update_points_line()
+
+
+## The level calls this when you earn skill points (finishing a level): a popup,
+## and the dot on SKILLS pings again.
+func notify_skill_points(amount: int) -> void:
+	show_toast("+%d SKILL POINT%s: PRESS T TO UPGRADE" % [amount, "" if amount == 1 else "S"], 3.5)
+	_badge_ping = 8.0
+
+
+## You have points and at least one skill you could buy with them right now.
+func _can_upgrade() -> bool:
+	if SkillManager.points <= 0:
+		return false
+	return SkillManager.all_skills().any(func(s: SkillDef) -> bool: return SkillManager.can_unlock(s.id))
+
+
+## The notification dot: an amber dot with a "!", and while it's pinging, a
+## ring that grows out of it and fades, over and over (like a radar ping).
+func _draw_skill_badge() -> void:
+	var c := Vector2(6, 6)
+	if _badge_ping > 0.0:
+		var k := fmod(_t * 1.4, 1.0)
+		_skill_badge.draw_arc(c, 5.0 + k * 7.0, 0.0, TAU, 24, Color(AMBER, 0.9 * (1.0 - k)), 1.0)
+	_skill_badge.draw_circle(c, 5.0, AMBER)
+	UIStyle.text(_skill_badge, c + Vector2(0, 2.5), "!", Color(0.05, 0.07, 0.1), 7, HORIZONTAL_ALIGNMENT_CENTER)
 
 
 ## The SKILLS button in the corner: amber, with a count, when you have points to spend.

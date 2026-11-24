@@ -249,6 +249,11 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 - While walking a route, `autopilot_wraps` switches off `_update_wraps` and the route's `wraps`
   list decides the pillar wraps (`autopilot_sync_wraps`). Some solver routes only graze a
   pillar's centre (cross product exactly 0 on the 4 px lattice); steering a pixel off misses it.
+- Blinking grates (Nov 23 2026, Nilay: in judge mode PIP walked over lit grates and nothing
+  happened): before stepping from floor onto a run of grates, `_wait_for_grates` waits until
+  `_grates_clear` says he can cross the whole run at walking speed while each grate is dark
+  (`level.blinker_live_in(c, dt)` predicts the wave, `GRATE_MARGIN` 0.15 s either side). He
+  then walks in the gap behind the wave. Still no zaps during the autopilot, as a safety net.
 - `autopilot.debug = true` prints each step and where he got stuck.
 - Routes: `Data/routes/level_N.json` from `python tools/solver2.py Scenes/level_N.tscn --paths
   Data/routes/level_N.json --margin 3` (keyed by START tile; `clamp` = the socket used; `wraps`
@@ -374,7 +379,13 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   BIG SPOOL, SUPER CELLS, LONGER WIRE II), Suit (servos x3, RUBBER BOOTS, INSULATED SOLES),
   Life Support (tanks, CELL CHARGER, CALM BREATHING = nodes hold 1 s longer).
   Points: level.gd export `skill_points` (L1 2, L2 3, L3 3), given in `_finish_level()` only the
-  first time (`Game.has_finished()`), so replays can't farm them. The tree opens at any time
+  first time (`Game.has_finished()`), so replays can't farm them. New points (Nov 23 2026, Nilay:
+  "a noti when you get more skill points"): `hud.notify_skill_points()` = a popup "+n SKILL
+  POINTS: PRESS T TO UPGRADE" and an amber "!" dot on the SKILLS button that pings (a ring
+  grows out of it). The dot shows whenever you have points and a skill you can buy
+  (`_can_upgrade`), pings for 6 s at level start / 8 s when points arrive, and stops pinging
+  when the tree opens. The first time (and not after the last level) PIP says
+  `pip_skill_points` (level export, two lines). The tree opens at any time
   (T, the SKILLS corner button, or the SKILL TREE buttons); it pauses the game and draws itself (`skill_tree.gd`,
   layout computed from the parent links). Unlocks apply at once (level listens to
   `skills_changed` -> `_apply_skills()`). Rules read skills through `_wire_time()`,
@@ -507,5 +518,8 @@ Nov 22 2026 (Claude, at Nilay's request): picked the pixel font Departure Mono a
 FONT switch with OpenDyslexic (both fonts by other people, free under the SIL Open Font License:
 list them in the copyright checklist with their OFL.txt; Claude only wired them in and set the
 letter spacing).
+Nov 23 2026 (Claude, at Nilay's request): the skill point notification (popup, pinging dot on
+SKILLS, PIP's upgrade line, worded from Nilay's own) and PIP's autopilot timing the blinking
+grates.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

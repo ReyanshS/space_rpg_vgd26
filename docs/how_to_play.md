@@ -98,6 +98,7 @@ they leave behind. At the end of each level you get up to three stars.
 - A skill costs 1 or 2 points and needs the skill above it first. Grey = locked,
   amber = you can buy it, green = yours. Skills work straight away and last all game.
 - Every puzzle can be solved with no skills at all. They just make it easier.
+- When you have points to spend, the **SKILLS** button (top right) gets an amber **!**.
 - The game saves when you finish a level or unlock a skill. The title screen then offers
   **Continue** or **New game** (which deletes the save).
 

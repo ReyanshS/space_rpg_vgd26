@@ -18,6 +18,10 @@
 #   - movable crates: the route's "pushes" list says which crate to push which
 #     way, in order. He puts the room's crates back first (like R), then walks
 #     behind each crate and leans on it until it rolls (_push)
+#   - blinking grates: the solver doesn't know their timing, so before he steps
+#     onto a run of grates he waits until he can cross it while every grate is
+#     dark (_wait_for_grates). The wave is a clock (level.gd blinker_live_in),
+#     so he can work out ahead when each grate will be lit.
 # While it runs, the timer doesn't tick and nothing zaps him (level.gd checks
 # autopilot_on), so it can't fail. If a room has no route (someone changed the
 # map and didn't run the solver again) or he gets stuck, PIP powers the room
@@ -31,6 +35,7 @@ extends Node
 
 const ROUTES := "res://Data/routes/level_%d.json"
 const DRIFT_GAP := 8.0       # route points further apart than this = a drift across space
+const GRATE_MARGIN := 0.15   # seconds of safety either side when timing a blinking grate
 
 var level: WireLevel
 var running := false
@@ -152,6 +157,7 @@ func _do_next_room() -> void:
 		if i > 0 and pts[i].distance_to(pts[i - 1]) > DRIFT_GAP:
 			ok = await _drift(pts[i - 1], pts[i])
 		else:
+			await _wait_for_grates(pts, i)
 			ok = await _steer_to(pts[i], 2.0)
 		if not ok:
 			_note("stuck on the route at point %d of %d, wanted %s" % [i, pts.size(), pts[i]])
@@ -332,8 +338,46 @@ func _walk_to_cell(goal: Vector2i) -> bool:
 	var path: Array[Vector2i] = level.walk_path(here, goal)
 	if path.is_empty():
 		return false
-	for c in path:
-		if not await _steer_to(level.center_of(c), 3.0):
+	var pts: Array = path.map(func(c: Vector2i) -> Vector2: return level.center_of(c))
+	for i in pts.size():
+		await _wait_for_grates(pts, i)
+		if not await _steer_to(pts[i], 3.0):
+			return false
+	return true
+
+
+## Blinking grates: about to step from safe floor onto a grate? Then first wait
+## until the whole run of grates ahead can be crossed while each one is dark,
+## the way a player watches the wave and walks in the gap behind it. (Nothing
+## zaps him while the autopilot runs anyway, but judges should see him do it
+## right.) pts = the points he walks, i = the next one.
+func _wait_for_grates(pts: Array, i: int) -> void:
+	if not level.is_blinker(level.cell_of(pts[i])) or level.is_blinker(level.cell_of(level.player.position)):
+		return
+	var waited := 0.0
+	while is_inside_tree() and not _grates_clear(pts, i) and waited < level.grate_cycle * 2.0:
+		level.player.auto_dir = Vector2.ZERO
+		await get_tree().physics_frame
+		waited += get_physics_process_delta_time()
+	if waited > 0.0:
+		_note("waited %.2f s for the grates" % waited)
+
+
+## If he set off now at walking speed, would every grate he stands on (from
+## point i until he's off the grates again) be dark when he's on it?
+func _grates_clear(pts: Array, i: int) -> bool:
+	var p := level.player
+	var speed := p.walk_speed * p.speed_mult
+	var at: Vector2 = p.position
+	var t := 0.0
+	for k in range(i, pts.size()):
+		t += at.distance_to(pts[k]) / speed
+		at = pts[k]
+		var c := level.cell_of(at)
+		if not level.is_blinker(c):
+			return true                         # off the grates: safe from here on
+		# a little early and a little late too, since steering isn't exact
+		if level.blinker_live_in(c, t - GRATE_MARGIN) or level.blinker_live_in(c, t + GRATE_MARGIN):
 			return false
 	return true
 

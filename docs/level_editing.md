@@ -266,6 +266,9 @@ On the title screen, top left: **JUDGE MODE**. When it's on:
   "Press R and I'll walk you through it" instead of offering a hint.
 - If the Output panel says **"Autopilot couldn't walk room N"**, PIP gave up and just
   powered the room. Almost always the map changed: make the routes again (section 8).
+- Blinking grates: PIP waits at the edge until he can cross while every grate under him
+  is dark, then walks in the gap behind the wave, like a player should. You don't have to
+  do anything for this in a new room with grates.
 
 ## Common mistakes
 

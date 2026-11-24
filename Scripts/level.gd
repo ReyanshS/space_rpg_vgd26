@@ -119,6 +119,8 @@
 # The RPG side (skill points and the skill tree; see skill_manager.gd)
 #   - Finishing a level for the first time gives `skill_points` (an export, so
 #     harder levels can give more). Replays give nothing (_finish_level).
+#     You're told: a popup, a pinging dot on the SKILLS button
+#     (hud.notify_skill_points), and the first time, PIP's pip_skill_points.
 #   - You spend them on the skill tree (T or the SKILLS button, at any time).
 #     Skills change the rules through _wire_time(), _cell_bonus(), _shock() and
 #     the player's speed_mult, and apply the moment you unlock them
@@ -295,6 +297,12 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var pip_shared := "That node from the last machine is still live. Wrap this wire round it."
 ## After a fail, when there's no way back to the START without crossing red tiles or grates.
 @export var pip_stranded := "No safe way back from there. Press R and I'll bring you to the start."
+## The first time you earn skill points (the results screen of a level that has
+## a next one). One entry = one speech bubble.
+@export var pip_skill_points: PackedStringArray = [
+	"Oh! Some power's restored, so you can upgrade your equipment now.",
+	"Restore more power and you can upgrade more gear. Press T to look.",
+]
 
 # The short messages that pop up at the top of the screen.
 @export_group("Popup texts")
@@ -3939,8 +3947,18 @@ func blinker_live(c: Vector2i) -> bool:
 	return _blinker_phase(c) < grate_live
 
 
-func _blinker_phase(c: Vector2i) -> float:
-	return fposmod(_light_t + c.x * grate_wave, grate_cycle)
+## Will the grate at c be lit `dt` seconds from now? The wave is just a clock,
+## so it can be worked out ahead. PIP's autopilot uses this to wait for the gap.
+func blinker_live_in(c: Vector2i, dt: float) -> bool:
+	return _blinker_phase(c, dt) < grate_live
+
+
+func is_blinker(c: Vector2i) -> bool:
+	return kind_at(c) == "blinker"
+
+
+func _blinker_phase(c: Vector2i, dt := 0.0) -> float:
+	return fposmod(_light_t + dt + c.x * grate_wave, grate_cycle)
 
 
 ## Would standing on tile c zap you right now? (red grates always, blinking ones when lit)
@@ -4100,6 +4118,13 @@ func _finish_level() -> void:
 	Game.record_level(level_number, stats)          # (this also saves the game)
 	hud.show_summary(level_number, complete_message, stats, Game.has_level(level_number + 1))
 	_play("complete")
+	# New skill points: a popup, the dot on SKILLS pings, and the first time,
+	# PIP explains them (not after the last level: there's nothing left to use them on)
+	if points > 0:
+		hud.notify_skill_points(points)
+		if Game.has_level(level_number + 1) and Game.first_time("skill_points"):
+			hud.say(PackedStringArray(Array(pip_skill_points).map(
+				func(l: String) -> String: return l.format(Game.story_values()))), "PIP")
 	level_completed.emit()
 
 
