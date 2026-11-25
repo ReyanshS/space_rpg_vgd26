@@ -799,6 +799,7 @@ func _power_quietly(o: Room) -> void:
 		var t: PuzzleTile = _tiles.get(c)
 		if t:
 			t.powered = true
+	_show_goal_art(o.goal, true)
 	if o.conduit:
 		o.conduit.set_powered()
 	if o.outside:
@@ -1773,12 +1774,16 @@ func _is_void(c: Vector2i) -> bool:
 
 
 ## A door with no wall beside it is out in space: a gangway (catwalk).
+## The whole door counts, not just this tile: in a door 3 or more tiles tall,
+## the middle tile only touches other door tiles and floor, but the door is
+## still in a wall (before Nov 2026 that middle tile was drawn as a catwalk).
 func _is_gangway(c: Vector2i) -> bool:
 	if kind_at(c) != "door":
 		return false
-	for d in DIRS4:
-		if kind_at(c + d) == "wall":
-			return false
+	for t in _door_group(c):
+		for d in DIRS4:
+			if kind_at(t + d) == "wall":
+				return false
 	return true
 
 
@@ -1852,6 +1857,8 @@ func _build_visuals() -> void:
 					continue                  # the team's floor instead of ours
 				"box":
 					pass                      # a crate you push draws itself (push_crate.gd): just floor here
+				"goal":
+					_show_goal_art(c, false)  # grey until its room has power
 				_:
 					_art_props.set_cell(c, a[0], a[1], a[2])   # pads, crates: drawn over our floor
 		if kind == "wall":
@@ -2136,6 +2143,8 @@ func _wall_piece(c: Vector2i) -> Vector2i:
 		# wall_sides.json (written with the picture) lists each piece's floor sides
 		var list = JSON.parse_string(FileAccess.get_file_as_string("res://Assets/images/tiles/team/wall_sides.json"))
 		for p in list:
+			if p.has("panel_top") or p.has("panel"):
+				continue                      # pieces next to a front panel: only painted by tools/retile_walls.py
 			var bits := 0
 			for d in p["open"]:
 				bits |= 1 << WALL_NAMES.find(d)
@@ -2150,6 +2159,20 @@ func _wall_piece(c: Vector2i) -> Vector2i:
 		if bits & (1 << corner[1]) or bits & (1 << corner[2]):
 			bits &= ~(1 << corner[0])
 	return _wall_pieces.get(bits, Vector2i.ZERO)
+
+
+## A goal painted with the team's art: the grey block while its room has no
+## power, the animated blue goal once it has. (Any of the team's goal tiles,
+## grey, blue or animated, works the same: the level picks the picture.)
+const GOAL_OFF := [4, Vector2i(1, 7)]   # objects.png: the grey goal
+const GOAL_ON := [6, Vector2i.ZERO]     # goal_anim.png
+
+
+func _show_goal_art(c: Vector2i, powered: bool) -> void:
+	if not _art.has(c) or _art[c][3] != "goal" or _art_props == null:
+		return
+	var look: Array = GOAL_ON if powered else GOAL_OFF
+	_art_props.set_cell(c, look[0], look[1])
 
 
 ## The picture of the team's art tile painted at c (null if it isn't one).
@@ -3646,6 +3669,7 @@ func _solve(r: Room) -> void:
 		var t: PuzzleTile = _tiles.get(c)
 		if t:
 			t.set_powered(true)
+	_show_goal_art(r.goal, true)
 	if r.outside:
 		_light_hull(r)              # beacons start blinking
 		_refill_o2()                # ...and the relay tops up your suit

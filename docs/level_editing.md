@@ -66,6 +66,7 @@ left picks which one you paint from:
 | layout_tiles | the plain palette above | see the table |
 | ground | floor plates in different sizes | floor: walk on it |
 | wall | the front wall faces (power strip, windows, computers), 3 tiles tall | wall: solid |
+| wall_strip | the power strip front wall without the lightning bolt, 6 x 3 | wall: solid |
 | wall_sides | 47 wall pieces: every way a wall can touch floor (sides, corners, thin walls, solid dark) | wall: solid |
 | objects | start, goal and extra time blocks, a grey block, a small and a big crate | start / goal / node; grey block and big crate = fixed cargo (solid); small crate = movable crate |
 | start_anim, goal_anim, node_anim | one animated tile each: paint one square and the whole animation plays | start / goal / node |

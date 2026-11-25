@@ -14,7 +14,8 @@
 #   - EVERY OTHER WALL: one of the 47 wall pieces (wall_sides.png, drawn by
 #     tools/art_wall_sides.py), picked by which of its 8 neighbours are floor,
 #     so the edge always follows the floor and everything else fades to dark.
-# Walls the team painted as front panels themselves (source 2) are kept.
+# Walls the team painted as front panels themselves (source 2) are kept, unless
+# you add --all (then every wall is repainted, front panels too).
 # Floor under a face isn't touched: once the wall above is a team tile, the
 # game draws plain floor there (no more light strip).
 # Run it again after big map changes: it only rewrites walls.
@@ -22,7 +23,10 @@ import base64, json, re, struct, sys
 sys.path.insert(0, 'tools')
 
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
-SRC_FACE, SRC_SIDES = 2, 3
+SRC_FACE, SRC_SIDES, SRC_CAP, SRC_STRIP = 2, 3, 8, 9
+PANELS = (SRC_FACE, SRC_CAP, SRC_STRIP)        # front panel tiles: kept as painted
+# panel ends with the skirting round the corner (tools/art_wall_caps.py): index = style * 2 + side
+CAP_STYLES = [(0, 5), (3, 9), (6, 9)]          # (first row in wall.png, right end column) per panel
 # what isn't floor for a wall's edge: nothing, other walls and open space
 # (space stays dark, the starfield shows round it)
 CLOSED = {'', 'wall', 'space', '?'}
@@ -88,7 +92,50 @@ def panel_columns(style, w):
     return [0] + [1 if min(i, n - 1 - i) % 2 == parity else 2 for i in range(n)] + [9]
 
 
+def mixed_columns(w):
+    """The team's own way of building a front panel (Nov 2026, the panels they
+    painted in Level 1): a windows panel top row, a power strip through the
+    middle broken by a feature (a window or a monitor, taking turns) between
+    the strip's pointed ends, strip bottoms below, and their cap tiles at both
+    ends. Returns, per column, the three tiles [source, x, y] top to bottom."""
+    W, S = SRC_FACE, SRC_STRIP
+    top = lambda i: [W, 1 + i % 2, 3]                          # windows panel top, plain
+    strip = lambda i: [top(i), [S, 4, 1], [S, 4, 2]]
+    cols = [[[W, 0, 3], [S, 0, 1], [W, 0, 5]]]                  # left end
+    n = w - 2
+    # features about every 5 tiles, spread evenly, each with room for the strip's
+    # pointed ends either side (so never next to an end or another feature)
+    k = max(1, round(n / 5)) if n >= 3 else 0
+    spots = sorted({round((j + 0.5) * n / k - 0.5) for j in range(k)}) if k else []
+    spots = [p for p in spots if 1 <= p <= n - 2]
+    body = [strip(i) for i in range(n)]
+    for j, p in enumerate(spots):
+        if j % 2 == 0:
+            body[p] = [[W, 1, 3], [W, 1, 4], [W, 1, 5]]       # a window (windows panel, column 1)
+        else:
+            body[p] = [[W, 1, 6], [W, 1, 7], [W, 1, 8]]       # a monitor with its wire (computers panel)
+        body[p - 1][1] = [S, 2, 1]                            # the strip ends in a point...
+        body[p + 1][1] = [S, 3, 1]                            # ...and starts again after it
+    cols += body
+    cols.append([[W, 9, 3], [S, 5, 1], [W, 9, 5]])            # right end
+    return cols
+
+
+def panel_valid(cells, kind, c):
+    """A painted front panel tile still faces a room: right under the panel's
+    bottom row there's floor (it isn't left hanging after a map change)."""
+    src, ax, ay = cells[c][:3]
+    row = 0 if src == SRC_CAP else (ay if src == SRC_STRIP else ay % 3)   # 0 top, 1, 2 bottom
+    for i in range(1, 3 - row):
+        if kind.get((c[0], c[1] + i), '') != 'wall':
+            return False
+    below = kind.get((c[0], c[1] + 3 - row), '')
+    return below not in CLOSED and below not in DOORS
+
+
 def pick_style(w, x, y):
+    if w >= 4:
+        return 'mixed'                           # new panels: built the team's way
     if w == 6 or w == 4:
         return 'power'                           # (4 wide: too narrow for windows to show)
     if w == 10:
@@ -101,15 +148,20 @@ def pick_style(w, x, y):
     return 'windows'
 
 
-def retile(cells, kinds_of):
+def retile(cells, kinds_of, keep_faces=True):
     kind = {c: kinds_of.get(tuple(v[:3]), '?') for c, v in cells.items()}
+    # painted panels left hanging (no room under them any more): plain wall again
+    for c in list(cells):
+        if cells[c][0] in PANELS and not panel_valid(cells, kind, c):
+            cells[c] = [0, 1, 0, 0]
+    keep = lambda c: keep_faces and cells[c][0] in PANELS      # a front panel painted by hand
     k = lambda c: kind.get(c, '')
     # 1. front faces: depth 1 = wall right above floor (not a door, not space), up to 3
     depth = {}
     ys = sorted({c[1] for c in kind}, reverse=True)
     for y in ys:
         for c in [c for c in kind if c[1] == y]:
-            if k(c) != 'wall' or cells[c][0] == SRC_FACE:
+            if k(c) != 'wall' or keep(c):
                 continue
             below = k((c[0], c[1] + 1))
             if below not in CLOSED and below not in DOORS:
@@ -128,25 +180,92 @@ def retile(cells, kinds_of):
         if w < 2:
             continue                                  # one column alone: no room for a panel's two caps
         style = pick_style(w, c[0], c[1])
-        for i, col in enumerate(panel_columns(style, w)):
-            for r in range(3):
-                faces[(c[0] + i, c[1] - 2 + r)] = [SRC_FACE, col, PANEL_ROW[style] + r, 0]
-        runs += 1
-    # 2. every other wall: the piece whose edges match the floor round it
-    pieces = {frozenset(p['open']): (p['x'], p['y']) for p in json.load(open('Assets/images/tiles/team/wall_sides.json'))}
-    from art_wall_sides import canonical
-    changed = 0
-    for c in list(cells):
-        if k(c) != 'wall' or cells[c][0] == SRC_FACE:
-            continue
-        if c in faces:
-            cells[c] = faces[c]
+        if style == 'mixed':
+            for i, tiles in enumerate(mixed_columns(w)):
+                for r in range(3):
+                    faces[(c[0] + i, c[1] - 2 + r)] = tiles[r] + [0]
         else:
-            open_dirs = [d for d, (dx, dy) in NEIGHBOURS.items() if k((c[0] + dx, c[1] + dy)) not in CLOSED]
-            x, y = pieces[canonical(open_dirs)]
-            cells[c] = [SRC_SIDES, x, y, 0]
+            for i, col in enumerate(panel_columns(style, w)):
+                for r in range(3):
+                    faces[(c[0] + i, c[1] - 2 + r)] = [SRC_FACE, col, PANEL_ROW[style] + r, 0]
+        runs += 1
+    # 2. every other wall: the piece whose edges match the floor (and the front
+    # panels) round it
+    if not keep_faces:
+        for c in cells:
+            if cells[c][0] in PANELS and c not in faces:
+                cells[c] = [0, 1, 0, 0]          # was a panel, isn't any more: a plain wall for now
+    for c, v in faces.items():
+        cells[c] = v
+    _wrap_panel_ends(cells, kind)
+    pieces = {}
+    from art_wall_sides import canonical, FLOOR
+    for p in json.load(open('Assets/images/tiles/team/wall_sides.json')):
+        what = {d: FLOOR for d in p['open']}
+        for kind in ('panel_top', 'panel'):
+            what.update({d: kind for d in p.get(kind, [])})
+        pieces[canonical(what)] = (p['x'], p['y'])
+    changed = 0
+    missing = 0
+    for c, key in wall_keys(cells, kinds_of, keep_faces).items():
+        if key not in pieces:
+            # a combination the sheet doesn't have yet: use the plain one (run
+            # tools/art_wall_sides.py and build_team_tiles.gd to add it)
+            key = canonical({d: FLOOR for d, w in key if w == FLOOR})
+            missing += 1
+        x, y = pieces[key]
+        cells[c] = [SRC_SIDES, x, y, 0]
         changed += 1
+    changed += len(faces)
+    if missing:
+        print(f'  {missing} walls next to front panels used a plain piece: run tools/art_wall_sides.py, '
+              'then tools/build_team_tiles.gd, then this again')
     return changed, runs, len(faces)
+
+
+def _wrap_panel_ends(cells, kind):
+    """A panel end with floor (or a doorway) beside it gets the end tile whose
+    top skirting wraps round the corner; one without goes back to the plain end."""
+    for (x, y), v in list(cells.items()):
+        if v[0] == SRC_CAP:
+            style, side = divmod(v[1], 2)
+            row, right = CAP_STYLES[style]
+            v = cells[(x, y)] = [SRC_FACE, right if side else 0, row, 0]
+        if v[0] == SRC_STRIP and v[2] == 0 and v[1] in (0, 5):
+            v = [SRC_FACE, v[1], 0, 0]          # the bolt-less strip has the power strip's ends
+        if v[0] != SRC_FACE:
+            continue
+        for style, (row, right) in enumerate(CAP_STYLES):
+            if v[2] != row:
+                continue
+            for side, col, dx in ((0, 0, -1), (1, right, 1)):
+                if v[1] == col and kind.get((x + dx, y), '') not in CLOSED:
+                    cells[(x, y)] = [SRC_CAP, style * 2 + side, 0, 0]
+
+
+def wall_keys(cells, kinds_of, keep_faces=True):
+    """Every wall that isn't a front panel -> which of its neighbours are
+    floor or front panel (a key from art_wall_sides.canonical)."""
+    from art_wall_sides import canonical, FLOOR, PANEL_TOP, PANEL
+    kind = {c: kinds_of.get(tuple(v[:3]), '?') for c, v in cells.items()}
+    out = {}
+    for c, v in cells.items():
+        if kind[c] != 'wall' or v[0] in PANELS:
+            continue
+        what = {}
+        for d, (dx, dy) in NEIGHBOURS.items():
+            n = (c[0] + dx, c[1] + dy)
+            nk = kind.get(n, '')
+            if nk not in CLOSED:
+                what[d] = FLOOR
+            elif nk == 'wall' and cells[n][0] == SRC_FACE:
+                what[d] = PANEL_TOP if cells[n][2] % 3 == 0 else PANEL    # rows 0, 3, 6 = a panel's top row
+            elif nk == 'wall' and cells[n][0] == SRC_CAP:
+                what[d] = PANEL_TOP
+            elif nk == 'wall' and cells[n][0] == SRC_STRIP:
+                what[d] = PANEL_TOP if cells[n][2] == 0 else PANEL
+        out[c] = canonical(what)
+    return out
 
 
 def preview(cells, kinds_of, out):
@@ -156,7 +275,8 @@ def preview(cells, kinds_of, out):
     sheets = {0: 'Assets/images/tiles/layout_tiles.png', 1: 'Assets/images/tiles/team/ground.png',
               2: 'Assets/images/tiles/team/wall.png', 3: 'Assets/images/tiles/team/wall_sides.png',
               4: 'Assets/images/tiles/team/objects.png', 5: 'Assets/images/tiles/team/start_anim.png',
-              6: 'Assets/images/tiles/team/goal_anim.png', 7: 'Assets/images/tiles/team/node_anim.png'}
+              6: 'Assets/images/tiles/team/goal_anim.png', 7: 'Assets/images/tiles/team/node_anim.png',
+              8: 'Assets/images/tiles/team/wall_caps.png', 9: 'Assets/images/tiles/team/wall_strip.png'}
     img = {s: Image.open(p).convert('RGBA') for s, p in sheets.items()}
     floor = Image.open('Assets/images/tiles/floor.png').convert('RGBA').crop((0, 0, T, T))
     xs = [c[0] for c in cells]
@@ -181,7 +301,7 @@ if __name__ == '__main__':
     scene = open(path, encoding='utf-8').read()
     kinds_of = tileset_kinds(TILESET)
     cells, header, m = read_layout(scene)
-    changed, runs, face_cells = retile(cells, kinds_of)
+    changed, runs, face_cells = retile(cells, kinds_of, keep_faces='--all' not in sys.argv)
     print(f'{path}: {changed} walls repainted ({runs} front panels, {face_cells} face tiles)')
     if '--preview' in sys.argv:
         preview(cells, kinds_of, sys.argv[sys.argv.index('--preview') + 1])

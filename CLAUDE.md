@@ -249,7 +249,8 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   palette): 1 ground (floor), 2 wall (front faces, wall), 3 wall_sides (Claude-made: all 47
   "blob" wall pieces, one light edge where floor touches then dark, `wall_sides.json` lists
   each piece's floor sides), 4 objects (node, goal, start, grey block = crate, small crate =
-  box, big 2x2 crate = 4 crate tiles; the purple bend block is left out on purpose), 5-7
+  box, big 2x2 crate = 4 crate tiles; the purple bend block is left out on purpose; the grey
+  block became the unpowered goal, see "Grey goals"), 5-7
   start / goal / node animations (one animated tile each, 0.1 s a frame). Built by
   `tools/build_team_tiles.gd` (keeps the tileset uid). `_read_layout()` stores every
   source > 0 tile in `_art` (with its kind); `_build_visuals()` copies them onto the
@@ -262,6 +263,47 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   identical: PIL's getbbox() on an RGBA difference only looks at alpha. Compare pixels.)
   The 47 wall pieces are wall TOPS in the same style: 2 px rim at the floor, the 3D panels'
   shadow steps, then the dark top colour, so side walls continue the panels' top band.
+  After the 47 come pieces next to FRONT PANELS (Nov 25 2026, team: "the top edge skirting
+  wraps round the corner"): a panel neighbour counts like floor for the rim (from y 16 next
+  to a panel's top row, where its skirting is), so the panel's top edge turns the corner and
+  runs down to the floor rim. Only combinations the levels use are drawn (`art_wall_sides.py`
+  scans Levels/), so after map changes run: art_wall_sides.py, build_team_tiles.gd (Godot
+  headless), retile_walls.py. JSON entries have "panel_top" / "panel" lists; level.gd's
+  plain-wall fallback ignores those entries.
+- **Panel ends** (Nov 25 2026, team: corners where a front panel ends next to a doorway
+  corridor): source 8 `wall_caps.png` (`tools/art_wall_caps.py`) = each panel's left / right
+  end tile (power strip, windows, computers) with the top band redrawn so the skirting turns
+  the corner up the open side (distance field: face from row 18, open side; same steps as the
+  team's band). `retile_walls.py` (`_wrap_panel_ends`) swaps a panel end to its cap when the
+  tile beside it isn't wall / empty / space, and back when it is. Wall pieces next to a
+  panel's top row start their rim at row 16 (`PANEL_EDGE` 18), lining up with the skirting.
+- **More space for rooms 7, 8, 9** (Nov 25 2026, team: Cable Store, Main Breaker, Reactor
+  Access "need much more space", walls modelled on theirs): `tools/move_rooms.py` moved the
+  Generator Room area + exit 2 right / 3 down and Reactor Access 3 down, rigidly (the doors to
+  rooms that stay went with them; halls grow to meet them: Main Breaker 2x2 -> 4x5, Service
+  Duct 4x2 -> 4x5). Solver results identical, every room / marker kept its room, autopilot ok.
+  New front walls use the "mixed" panel style (`retile_walls.mixed_columns()`, copied from the
+  panels the team painted: windows-panel top row, a no-bolt strip broken by a window or a
+  monitor between pointed strip ends, strip bottoms, their caps). Painted panels are kept
+  while valid (`panel_valid()`: floor right under the panel's bottom row), else cleared.
+  **Coolant Pumps (stage 5) has 0 solver solutions** since the team's crate edit there
+  (fixed + pushable crates at (37-46, 16-20), before the moves too): check it in the game;
+  the autopilot force-powers it until it solves again.
+- **Conduit Hall door** (Level 1 room 3, Nov 25 2026, team: "make that 3 tall"): door tiles
+  (12, 8)-(12, 10) (was 2 tall), and (13, 8) became floor so it opens into the room. Solver
+  results identical (lowest timers and solution counts), autopilot plays the level clean.
+  The team also made the two Storage crates at (9, 8) and (5, 10) pushable (map char c).
+- **Plain strip panel** (Nov 25 2026, team: the power strip panel "without the lightning
+  bolt"): source 9 `wall_strip.png` (`tools/art_wall_strip.py`: wall.png's panel A with only
+  the bolt painted out in the panel colour; the strip keeps its gap and pointed ends. The bolt
+  = the yellow shape that doesn't reach the end columns). Kind wall, 6x3. `retile_walls.py`
+  keeps it where painted (`PANELS`), wraps its ends like panel A's, and side walls line up
+  with its skirting. It isn't picked automatically for new walls.
+- **Grey goals** (Nov 25 2026): objects.png's grey block (1, 7) is the goal WITHOUT power
+  (kind "goal"). Every team-art goal shows grey until its room is powered, then the animated
+  blue goal (`_show_goal_art()`, called from `_build_visuals`, `_solve` and `_power_quietly`).
+- **Animated pads** (Nov 25 2026): `tools/use_team_pads.py` repaints START / GOAL / NODE pads
+  with the animated tiles (sources 5-7, same kinds, rules unchanged). Done for Level 1.
 - **Old walls are gone** (Nov 24 2026, team: "delete all the old walls"): every wall in
   levels 1-3 is a team tile on the Layout, painted by `tools/retile_walls.py` (front panels
   where a wall is 3 tall above non-door floor, runs of 2+ columns: 6 = power strip, 4 = power,
@@ -271,6 +313,17 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   the old auto wall faces, roofs and the light strip under them were removed from level.gd.
   The rule maps (solver input) were identical before and after. Godot's terrain brush was
   tried and dropped: it treats empty space past the map edge as floor (rims facing nothing).
+- **Spaced-out rooms** (Nov 25 2026, team: "space out the rooms so the walls look smoother"):
+  `tools/space_rooms.py` (Level 1 only, the team asked for just that one) doubled 6 seams of wall
+  (2 columns, 4 rows; map 56x47 -> 58x51). A seam runs edge to edge through wall / empty /
+  doorways only and zig-zags only inside tiles solid in both lines, so rooms move rigidly: the
+  solver's lowest timers were identical before and after (same `--margin`), every room kept its
+  number and every marker its room. Doorways on a seam got a corridor floor tile (so rooms 0, 2,
+  3, 4, 5 grew by 2 to 8 tiles). Left thin (no seam can reach them, doors block every path): the
+  wall between the Cable Store area and the room below it on the right (2 rows), and the
+  interlocking corner of the room left of the Generator Room. Walls inside one area (barrier
+  stages) are never thickened. **Tile coordinates in older notes for Level 1 (like (13,26)) are
+  from before this.** Levels 2 and 3 not spaced yet (the script fixes all their thin walls).
 - **Room labels** (editor only, `show_room_info`, `_update_room_info()` / `_draw_room_info()`):
   every room shows its number, name, START time ("level's" = the default) and crate count, and
   red warnings (needs a START, 2 STARTs, needs a GOAL). Labels step down so they never overlap.
@@ -314,7 +367,9 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 - Feet can't stand on space. Walking (cardinally) into a hull edge asks `drift_landing()`: if there
   is hull straight ahead (and the wire won't snag), the player **drifts** (`State.DRIFT`,
   `drift_speed` 150) until fully back on hull. No landing = refused with red dots + PIP tip.
-- A door with no wall beside it is a **gangway** (catwalk that slides out). A crate with no floor or
+- A door with no wall beside it is a **gangway** (catwalk that slides out). The whole door
+  group counts (`_is_gangway()`): a door 3+ tiles long in a wall is never a gangway, even its
+  middle tile (Nov 25 2026: the 3 tall Conduit Hall door's middle tile was drawn as a catwalk). A crate with no floor or
   hull beside it is floating debris. A cell with open space on both opposite sides floats in space
   (that tile counts as space).
 - `airlock` pad: stepping on it (once) closes the door behind, vents the air, opens the outer door
@@ -589,6 +644,7 @@ zap and on powering a room, a trauma camera shake, squash and stretch on the ast
 pickups, pitch-varied sounds.
 Nov 24 2026 (Claude, at the team's request): the editor's live preview (painted tiles come alive
 in the editor) and the paintable test start tile with its palette icon (`tools/art_test_start.py`).
+Nov 25 2026 (Claude, at the team's request): spaced out Level 1's rooms (`tools/space_rooms.py`).
 Nov 24 2026: the team's new art (ground, front walls, objects, start / goal / extra time
 animations) is the TEAM's own (from their Drive; record who drew it); Claude only cut it into
 tiles, gave each tile its rule and wired it in. Claude drew the side, bottom and corner walls to

@@ -1,13 +1,15 @@
 [gd_resource type="TileSet" format=3 uid="uid://cxjo4rkuhroux"]
 
 [ext_resource type="Texture2D" uid="uid://dvywds1wc5kww" path="res://Assets/images/tiles/layout_tiles.png" id="1_layout"]
-[ext_resource type="Texture2D" uid="uid://c0v3rf0iglgan" path="res://Assets/images/tiles/team/ground.png" id="2_77i18"]
-[ext_resource type="Texture2D" uid="uid://dlpuxsdv86848" path="res://Assets/images/tiles/team/wall.png" id="3_hpsgi"]
-[ext_resource type="Texture2D" uid="uid://b7p8pvdub7a0n" path="res://Assets/images/tiles/team/wall_sides.png" id="4_61g1r"]
-[ext_resource type="Texture2D" uid="uid://dy534fexq5wed" path="res://Assets/images/tiles/team/objects.png" id="5_b4nyo"]
-[ext_resource type="Texture2D" uid="uid://brdj8wlm3o6hk" path="res://Assets/images/tiles/team/start_anim.png" id="6_csbji"]
-[ext_resource type="Texture2D" uid="uid://d0wmf7055gx2i" path="res://Assets/images/tiles/team/goal_anim.png" id="7_aic8t"]
-[ext_resource type="Texture2D" uid="uid://drr2tf7jmtkif" path="res://Assets/images/tiles/team/node_anim.png" id="8_fywdf"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/ground.png" id="2_77i18"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/wall.png" id="3_hpsgi"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/wall_sides.png" id="4_61g1r"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/objects.png" id="5_b4nyo"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/start_anim.png" id="6_csbji"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/goal_anim.png" id="7_aic8t"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/node_anim.png" id="8_fywdf"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/wall_caps.png" id="9_hpsgi"]
+[ext_resource type="Texture2D" path="res://Assets/images/tiles/team/wall_strip.png" id="10_61g1r"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_layout"]
 texture = ExtResource("1_layout")
@@ -63,7 +65,7 @@ texture_region_size = Vector2i(32, 32)
 24:0/0 = 0
 24:0/0/custom_data_0 = "test_start"
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_77i18"]
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_61g1r"]
 texture = ExtResource("2_77i18")
 texture_region_size = Vector2i(32, 32)
 0:0/0 = 0
@@ -133,7 +135,7 @@ texture_region_size = Vector2i(32, 32)
 1:5/0 = 0
 1:5/0/custom_data_0 = "floor"
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_hpsgi"]
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_b4nyo"]
 texture = ExtResource("3_hpsgi")
 texture_region_size = Vector2i(32, 32)
 0:0/0 = 0
@@ -293,7 +295,7 @@ texture_region_size = Vector2i(32, 32)
 9:8/0 = 0
 9:8/0/custom_data_0 = "wall"
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_61g1r"]
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_csbji"]
 texture = ExtResource("4_61g1r")
 texture_region_size = Vector2i(32, 32)
 0:0/0 = 0
@@ -390,8 +392,72 @@ texture_region_size = Vector2i(32, 32)
 5:5/0/custom_data_0 = "wall"
 6:5/0 = 0
 6:5/0/custom_data_0 = "wall"
+7:5/0 = 0
+7:5/0/custom_data_0 = "wall"
+0:6/0 = 0
+0:6/0/custom_data_0 = "wall"
+1:6/0 = 0
+1:6/0/custom_data_0 = "wall"
+2:6/0 = 0
+2:6/0/custom_data_0 = "wall"
+3:6/0 = 0
+3:6/0/custom_data_0 = "wall"
+4:6/0 = 0
+4:6/0/custom_data_0 = "wall"
+5:6/0 = 0
+5:6/0/custom_data_0 = "wall"
+6:6/0 = 0
+6:6/0/custom_data_0 = "wall"
+7:6/0 = 0
+7:6/0/custom_data_0 = "wall"
+0:7/0 = 0
+0:7/0/custom_data_0 = "wall"
+1:7/0 = 0
+1:7/0/custom_data_0 = "wall"
+2:7/0 = 0
+2:7/0/custom_data_0 = "wall"
+3:7/0 = 0
+3:7/0/custom_data_0 = "wall"
+4:7/0 = 0
+4:7/0/custom_data_0 = "wall"
+5:7/0 = 0
+5:7/0/custom_data_0 = "wall"
+6:7/0 = 0
+6:7/0/custom_data_0 = "wall"
+7:7/0 = 0
+7:7/0/custom_data_0 = "wall"
+0:8/0 = 0
+0:8/0/custom_data_0 = "wall"
+1:8/0 = 0
+1:8/0/custom_data_0 = "wall"
+2:8/0 = 0
+2:8/0/custom_data_0 = "wall"
+3:8/0 = 0
+3:8/0/custom_data_0 = "wall"
+4:8/0 = 0
+4:8/0/custom_data_0 = "wall"
+5:8/0 = 0
+5:8/0/custom_data_0 = "wall"
+6:8/0 = 0
+6:8/0/custom_data_0 = "wall"
+7:8/0 = 0
+7:8/0/custom_data_0 = "wall"
+0:9/0 = 0
+0:9/0/custom_data_0 = "wall"
+1:9/0 = 0
+1:9/0/custom_data_0 = "wall"
+2:9/0 = 0
+2:9/0/custom_data_0 = "wall"
+3:9/0 = 0
+3:9/0/custom_data_0 = "wall"
+4:9/0 = 0
+4:9/0/custom_data_0 = "wall"
+5:9/0 = 0
+5:9/0/custom_data_0 = "wall"
+6:9/0 = 0
+6:9/0/custom_data_0 = "wall"
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_b4nyo"]
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_aic8t"]
 texture = ExtResource("5_b4nyo")
 texture_region_size = Vector2i(32, 32)
 2:6/0 = 0
@@ -401,7 +467,7 @@ texture_region_size = Vector2i(32, 32)
 6:6/0 = 0
 6:6/0/custom_data_0 = "crate"
 1:7/0 = 0
-1:7/0/custom_data_0 = "crate"
+1:7/0/custom_data_0 = "goal"
 2:7/0 = 0
 2:7/0/custom_data_0 = "goal"
 3:7/0 = 0
@@ -413,7 +479,7 @@ texture_region_size = Vector2i(32, 32)
 6:7/0 = 0
 6:7/0/custom_data_0 = "crate"
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_csbji"]
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_fywdf"]
 texture = ExtResource("6_csbji")
 texture_region_size = Vector2i(32, 32)
 0:0/animation_columns = 16
@@ -436,7 +502,7 @@ texture_region_size = Vector2i(32, 32)
 0:0/0 = 0
 0:0/0/custom_data_0 = "start"
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_aic8t"]
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_rg0sn"]
 texture = ExtResource("7_aic8t")
 texture_region_size = Vector2i(32, 32)
 0:0/animation_columns = 16
@@ -459,7 +525,7 @@ texture_region_size = Vector2i(32, 32)
 0:0/0 = 0
 0:0/0/custom_data_0 = "goal"
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_fywdf"]
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_kf705"]
 texture = ExtResource("8_fywdf")
 texture_region_size = Vector2i(32, 32)
 0:0/animation_columns = 24
@@ -490,15 +556,73 @@ texture_region_size = Vector2i(32, 32)
 0:0/0 = 0
 0:0/0/custom_data_0 = "node"
 
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_4vct8"]
+texture = ExtResource("9_hpsgi")
+texture_region_size = Vector2i(32, 32)
+0:0/0 = 0
+0:0/0/custom_data_0 = "wall"
+1:0/0 = 0
+1:0/0/custom_data_0 = "wall"
+2:0/0 = 0
+2:0/0/custom_data_0 = "wall"
+3:0/0 = 0
+3:0/0/custom_data_0 = "wall"
+4:0/0 = 0
+4:0/0/custom_data_0 = "wall"
+5:0/0 = 0
+5:0/0/custom_data_0 = "wall"
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_fli4x"]
+texture = ExtResource("10_61g1r")
+texture_region_size = Vector2i(32, 32)
+0:0/0 = 0
+0:0/0/custom_data_0 = "wall"
+1:0/0 = 0
+1:0/0/custom_data_0 = "wall"
+2:0/0 = 0
+2:0/0/custom_data_0 = "wall"
+3:0/0 = 0
+3:0/0/custom_data_0 = "wall"
+4:0/0 = 0
+4:0/0/custom_data_0 = "wall"
+5:0/0 = 0
+5:0/0/custom_data_0 = "wall"
+0:1/0 = 0
+0:1/0/custom_data_0 = "wall"
+1:1/0 = 0
+1:1/0/custom_data_0 = "wall"
+2:1/0 = 0
+2:1/0/custom_data_0 = "wall"
+3:1/0 = 0
+3:1/0/custom_data_0 = "wall"
+4:1/0 = 0
+4:1/0/custom_data_0 = "wall"
+5:1/0 = 0
+5:1/0/custom_data_0 = "wall"
+0:2/0 = 0
+0:2/0/custom_data_0 = "wall"
+1:2/0 = 0
+1:2/0/custom_data_0 = "wall"
+2:2/0 = 0
+2:2/0/custom_data_0 = "wall"
+3:2/0 = 0
+3:2/0/custom_data_0 = "wall"
+4:2/0 = 0
+4:2/0/custom_data_0 = "wall"
+5:2/0 = 0
+5:2/0/custom_data_0 = "wall"
+
 [resource]
 tile_size = Vector2i(32, 32)
 custom_data_layer_0/name = "kind"
 custom_data_layer_0/type = 4
 sources/0 = SubResource("TileSetAtlasSource_layout")
-sources/1 = SubResource("TileSetAtlasSource_77i18")
-sources/2 = SubResource("TileSetAtlasSource_hpsgi")
-sources/3 = SubResource("TileSetAtlasSource_61g1r")
-sources/4 = SubResource("TileSetAtlasSource_b4nyo")
-sources/5 = SubResource("TileSetAtlasSource_csbji")
-sources/6 = SubResource("TileSetAtlasSource_aic8t")
-sources/7 = SubResource("TileSetAtlasSource_fywdf")
+sources/1 = SubResource("TileSetAtlasSource_61g1r")
+sources/2 = SubResource("TileSetAtlasSource_b4nyo")
+sources/3 = SubResource("TileSetAtlasSource_csbji")
+sources/8 = SubResource("TileSetAtlasSource_4vct8")
+sources/9 = SubResource("TileSetAtlasSource_fli4x")
+sources/4 = SubResource("TileSetAtlasSource_aic8t")
+sources/5 = SubResource("TileSetAtlasSource_fywdf")
+sources/6 = SubResource("TileSetAtlasSource_rg0sn")
+sources/7 = SubResource("TileSetAtlasSource_kf705")

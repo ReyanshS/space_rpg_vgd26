@@ -29,14 +29,16 @@ const FRAME_TIME := 0.1        # seconds per animation frame (change it in the T
 const SHEETS := {
 	1: ["ground.png", "floor"],
 	2: ["wall.png", "wall"],          # the front faces (the team's)
-	3: ["wall_sides.png", "wall"],    # the 47 wall pieces (tools/art_wall_sides.py)
+	3: ["wall_sides.png", "wall"],    # the wall pieces (tools/art_wall_sides.py)
+	8: ["wall_caps.png", "wall"],     # front panel ends with the skirting round the corner (tools/art_wall_caps.py)
+	9: ["wall_strip.png", "wall"],    # the power strip panel without the bolt (tools/art_wall_strip.py)
 	4: ["objects.png", ""],
 }
 # objects.png, tile by tile (column, row) -> kind. The purple bend block (3, 6)
 # is left out on purpose: the team doesn't use it.
 const OBJECTS := {
 	Vector2i(2, 6): "node",    # orange extra time block
-	Vector2i(1, 7): "crate",   # grey block: solid decoration (change the kind if it gets a job)
+	Vector2i(1, 7): "goal",    # grey block: a goal without power (level.gd shows every goal like this until it's powered)
 	Vector2i(2, 7): "goal",    # blue goal block
 	Vector2i(3, 7): "start",   # yellow start block
 	Vector2i(4, 7): "box",     # small crate: you can push it

@@ -18,9 +18,12 @@
 # wall (otherwise the side's rim already covers it). That gives exactly 47
 # different pieces: the classic "blob" tile set. Every pixel is coloured by how
 # far it is from the nearest floor, so all 47 join up with each other.
-# The JSON lists each tile's open (floor) neighbours. tools/build_team_tiles.gd
-# reads it to set up Godot's terrain (paint walls with one brush), and
-# tools/retile_walls.py reads it to pick pieces when it converts a level.
+# After those 47 come the pieces that sit next to a front panel (see FLOOR /
+# PANEL below): only the ones the levels use, so run this again after big map
+# changes, then tools/build_team_tiles.gd and tools/retile_walls.py.
+# The JSON lists each tile's open neighbours: "open" = floor, and "panel_top" /
+# "panel" = a front panel's top row / lower rows. tools/retile_walls.py reads
+# it to pick the piece for every wall.
 # Run from the project folder:  python3 tools/art_wall_sides.py
 import json
 from PIL import Image
@@ -41,43 +44,74 @@ DIRS = {'N': (1, 0), 'NE': (2, 0), 'E': (2, 1), 'SE': (2, 2),
 CORNER_SIDES = {'NE': ('N', 'E'), 'SE': ('S', 'E'), 'SW': ('S', 'W'), 'NW': ('N', 'W')}
 
 
+# A neighbour that isn't wall is one of these. A front panel (the team's wall
+# faces) counts like floor for the rim, so the top edge skirting of a front wall
+# wraps round the corner and runs down beside it to the floor. Next to a
+# panel's TOP row the rim lines up with the panel's own skirting line (wall.png:
+# rows 16 and 17 of each panel's first row; its face starts at PANEL_EDGE).
+FLOOR, PANEL_TOP, PANEL = 'floor', 'panel_top', 'panel'
+PANEL_EDGE = 18
+
+
 def canonical(open_dirs):
-    """Drop the corners that don't matter: a corner counts as floor only when
-    both sides next to it are wall."""
-    out = set()
-    for d in open_dirs:
+    """Drop the corners that don't matter: a corner counts only when both sides
+    next to it are wall. `open_dirs` is a dict direction -> what's there
+    (or a list of directions, all floor). Returns a hashable key."""
+    if not isinstance(open_dirs, dict):
+        open_dirs = {d: FLOOR for d in open_dirs}
+    out = {}
+    for d, what in open_dirs.items():
         if d in CORNER_SIDES:
             a, b = CORNER_SIDES[d]
             if a in open_dirs or b in open_dirs:
                 continue
-        out.add(d)
-    return frozenset(out)
+        out[d] = what
+    return frozenset(out.items())
 
 
-def all_pieces():
-    """Every different wall piece, in sheet order: solid first, then fewer
-    open sides before more."""
+def base_pieces():
+    """The 47 pieces with only floor round them, in sheet order: solid first,
+    then fewer open sides before more."""
     seen = set()
     for bits in range(256):
         names = [d for i, d in enumerate(DIRS) if bits >> i & 1]
         seen.add(canonical(names))
     order = list(DIRS)
-    return sorted(seen, key=lambda s: (len(s), sorted(order.index(d) for d in s)))
+    return sorted(seen, key=lambda s: (len(s), sorted(order.index(d) for d, _ in s)))
 
 
-def tile(open_dirs):
-    """Draws one wall tile whose `open_dirs` neighbours are floor.
-    Every pixel looks at how far it is from the nearest floor (counting diagonal
-    steps as 1: "Chebyshev distance"), so neighbouring tiles always line up."""
+def needed_pieces(levels):
+    """Pieces next to front panels that these levels use (after the 47 basic
+    ones, in a fixed order)."""
+    from retile_walls import tileset_kinds, read_layout, wall_keys, TILESET
+    kinds_of = tileset_kinds(TILESET)
+    keys = set()
+    for path in levels:
+        cells = read_layout(open(path, encoding='utf-8').read())[0]
+        keys |= set(wall_keys(cells, kinds_of).values())
+    order = list(DIRS)
+    extra = [k for k in keys if any(w != FLOOR for _, w in k)]
+    return sorted(extra, key=lambda s: sorted((order.index(d), w) for d, w in s))
+
+
+def tile(key):
+    """Draws one wall tile. `key` lists its open neighbours and what they are.
+    Every pixel looks at how far it is from the nearest floor or panel face
+    (counting diagonal steps as 1: "Chebyshev distance"), so neighbouring
+    tiles always line up."""
     im = Image.new('RGBA', (T, T), TOP)
     px = im.load()
-    squares = [(DIRS[d][0] * T - T, DIRS[d][1] * T - T) for d in open_dirs]   # floor tiles, in this tile's pixels
+    rects = []                         # open neighbours, in this tile's pixels: (x0, y0, x1, y1)
+    for d, what in key:
+        sx, sy = DIRS[d][0] * T - T, DIRS[d][1] * T - T
+        top = sy + (PANEL_EDGE if what == PANEL_TOP else 0)
+        rects.append((sx, top, sx + T - 1, sy + T - 1))
 
     def dist(x, y):
         best = 99
-        for (sx, sy) in squares:
-            dx = max(sx - x, x - (sx + T - 1), 0)
-            dy = max(sy - y, y - (sy + T - 1), 0)
+        for (x0, y0, x1, y1) in rects:
+            dx = max(x0 - x, x - x1, 0)
+            dy = max(y0 - y, y - y1, 0)
             best = min(best, max(dx, dy))
         return best
 
@@ -90,14 +124,21 @@ def tile(open_dirs):
 
 
 if __name__ == '__main__':
-    pieces = all_pieces()
+    import glob, sys
+    sys.path.insert(0, 'tools')
+    pieces = base_pieces() + needed_pieces(sorted(glob.glob('Levels/level_*.tscn')))
     rows = (len(pieces) + COLS - 1) // COLS
     sheet = Image.new('RGBA', (COLS * T, rows * T), (0, 0, 0, 0))
     info = []
     for i, p in enumerate(pieces):
         x, y = i % COLS, i // COLS
         sheet.paste(tile(p), (x * T, y * T))
-        info.append({'x': x, 'y': y, 'open': [d for d in DIRS if d in p]})
+        what = dict(p)
+        entry = {'x': x, 'y': y, 'open': [d for d in DIRS if what.get(d) == FLOOR]}
+        for kind in (PANEL_TOP, PANEL):
+            if kind in what.values():
+                entry[kind] = [d for d in DIRS if what.get(d) == kind]
+        info.append(entry)
     sheet.save(OUT)
     json.dump(info, open(OUT_JSON, 'w'), indent=1)
-    print(f'{OUT}: {len(pieces)} wall pieces ({sheet.width}x{sheet.height}), {OUT_JSON}')
+    print(f'{OUT}: {len(pieces)} wall pieces ({len(pieces) - 47} next to front panels), {OUT_JSON}')
