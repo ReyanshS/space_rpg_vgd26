@@ -554,6 +554,12 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   astronaut_frames.tres` (original art: idle, walk_down/left/right, carry, shock, burnt) and
   `astronaut_v2_frames.tres` (adds walk_up and idle_<dir>). `player.gd` picks the first animation
   the current sprite has (`_first_existing`), so either file works. v2 wants sprite y = -19.
+  **In use since Nov 25 2026: `astronaut_p4_frames.tres`**, built by `tools/art_astronaut_p4.py`
+  from the team's `astronautp4.png` (6 x 5 frames of 32 x 48: walk down, down-right, right,
+  up-right, up; the left walks come from the mirrored `astronautp4_flipped.png`). Walking
+  diagonally plays `walk_<up|down>_<side>`. idle / carry / shock / burnt still come from the old
+  `astronaut.png` (Nilay: keep those for now, fix later); the new figure is 45 px tall vs 36, and
+  each new frame gets 8 px of AtlasTexture margin below so the feet line up (sprite y stays -18).
 
 ## Gotchas
 - Children run `_ready()` before parents: nodes that need the level use `call_deferred`.
@@ -659,7 +665,8 @@ Nov 25 2026 (Claude, at the team's request): spaced out Level 1's rooms (`tools/
 Nov 25 2026 (Claude, at Nilay's request): the clamp drops in while you stand on its socket, PIP
 points out movable crates, judge mode's P key for PIP (R restarts), the boss loop's wire end
 plugs into the core, and the team's animated pads in Levels 2 and 3. Also the draft demo video
-script (`docs/demo_video_script.md`).
+script (`docs/demo_video_script.md`). The team's new astronaut walk sheet (`astronautp4.png`)
+is the TEAM's art; Claude only mirrored it for the left walks and wired it into the game.
 Nov 24 2026: the team's new art (ground, front walls, objects, start / goal / extra time
 animations) is the TEAM's own (from their Drive; record who drew it); Claude only cut it into
 tiles, gave each tile its rule and wired it in. Claude drew the side, bottom and corner walls to

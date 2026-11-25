@@ -293,7 +293,8 @@ func _drift_step(delta: float) -> void:
 ## Which animation to play. The sprite's animations live in a SpriteFrames file
 ## (Assets/images/astronaut/*_frames.tres). Different sprites have different
 ## animations: the original astronaut has "idle", "walk_down", "walk_left",
-## "walk_right"; the v2 one also has "walk_up" and an idle for every direction.
+## "walk_right"; the v2 one also has "walk_up" and an idle for every direction;
+## the p4 one (the team's sheet) adds three-quarter diagonal walks ("walk_up_left"...).
 ## So for each situation we list what we'd like, best first, and play the first
 ## one this sprite actually has. Swap the sprite and this code still works.
 func _update_anim() -> void:
@@ -303,7 +304,12 @@ func _update_anim() -> void:
 	if _anim_override != "":
 		anim = _anim_override                                   # "shock" / "burnt"
 	elif _moving:
-		anim = _first_existing(["walk_" + dir, "walk_" + side])  # no walk_up? walk sideways
+		# walking diagonally: a three-quarter view if the sprite has one
+		# ("walk_down_right"...), else the side view as before
+		var diag := ""
+		if facing.x != 0 and facing.y != 0:
+			diag = "walk_%s_%s" % ["down" if facing.y > 0 else "up", side]
+		anim = _first_existing([diag, "walk_" + dir, "walk_" + side])  # no walk_up? walk sideways
 	elif _carrying and dir == "down":
 		anim = "carry"                                          # facing the camera, plug in hands
 	elif _carrying:
