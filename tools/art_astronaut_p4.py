@@ -10,8 +10,11 @@
 # The sheet only faces right, so this also writes astronautp4_flipped.png (the
 # whole sheet mirrored) for the left-facing walks.
 #
-# Everything the new sheet doesn't have (idle, carry, shock, burnt) still comes
-# from the old astronaut.png, so those look the same as before.
+# astronautp4_idle.png (the team's second sheet, 6 x 2 frames of 32 x 48):
+#   row 0 idle (6 frames, facing the camera)
+#   row 1 shock (frames 0-3: sparks, skeleton, sparks, skeleton), burnt (frames 4-5)
+# Only "carry" (standing with the plug in his hands) still comes from the old
+# astronaut.png, because neither new sheet has it.
 #
 # Feet line up: the old frames are 40 tall, the new ones 48. Each new frame gets
 # 8 px of empty space below it (AtlasTexture margin), so with the sprite centred
@@ -25,6 +28,7 @@ from PIL import Image
 HERE = 'Assets/images/astronaut/'
 SHEET = HERE + 'astronautp4.png'
 FLIPPED = HERE + 'astronautp4_flipped.png'
+IDLE_SHEET = HERE + 'astronautp4_idle.png'
 OUT = HERE + 'astronaut_p4_frames.tres'
 FW, FH, COLS = 32, 48, 6
 SPEED = 8.0          # frames a second while walking
@@ -40,12 +44,15 @@ WALKS = {
     'walk_left': (2, True),
     'walk_up_left': (3, True),
 }
+# from the idle sheet: name -> ([(row, column)...], speed, loop)
+EXTRA = {
+    'idle': ([(0, c) for c in range(6)], 6.0, True),
+    'shock': ([(1, c) for c in range(4)], 12.0, True),
+    'burnt': ([(1, 4), (1, 5)], 6.0, False),       # chars, then stays on the darkest frame
+}
 # animations kept from the old sheet: name -> (frame x positions, speed, loop)
 OLD = {
-    'idle': ([0, 32], 7.0, True),
     'carry': ([576], 1.0, True),
-    'shock': ([608, 640], 14.0, True),
-    'burnt': ([672], 1.0, False),
 }
 
 
@@ -76,6 +83,13 @@ def main() -> None:
             atlas(sid, '1_old', x, 0, 32, 40, 0)
             ids.append(sid)
         anim(name, ids, speed, loop)
+    for name, (cells, speed, loop) in EXTRA.items():
+        ids = []
+        for row, col in cells:
+            sid = f'{name}_{row}_{col}'
+            atlas(sid, '4_idle', col * FW, row * FH, FW, FH, 8)
+            ids.append(sid)
+        anim(name, ids, speed, loop)
     for name, (row, mirrored) in WALKS.items():
         ids = []
         for c in range(COLS):
@@ -89,11 +103,12 @@ def main() -> None:
     head = ('[gd_resource type="SpriteFrames" format=3]\n\n'
             '[ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronaut.png" id="1_old"]\n'
             '[ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronautp4.png" id="2_new"]\n'
-            '[ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronautp4_flipped.png" id="3_flip"]\n\n')
+            '[ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronautp4_flipped.png" id="3_flip"]\n'
+            '[ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronautp4_idle.png" id="4_idle"]\n\n')
     body = '\n'.join(subs) + '\n[resource]\nanimations = [' + ', '.join(anims) + ']\n'
     with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
         f.write(head + body)
-    print(f'wrote {FLIPPED} and {OUT}: {len(OLD)} old + {len(WALKS)} walk animations')
+    print(f'wrote {FLIPPED} and {OUT}: {len(OLD)} old + {len(EXTRA)} idle sheet + {len(WALKS)} walk animations')
 
 
 if __name__ == '__main__':

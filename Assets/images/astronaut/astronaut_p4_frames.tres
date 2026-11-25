@@ -3,30 +3,71 @@
 [ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronaut.png" id="1_old"]
 [ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronautp4.png" id="2_new"]
 [ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronautp4_flipped.png" id="3_flip"]
-
-[sub_resource type="AtlasTexture" id="old_idle_0"]
-atlas = ExtResource("1_old")
-region = Rect2(0, 0, 32, 40)
-
-[sub_resource type="AtlasTexture" id="old_idle_32"]
-atlas = ExtResource("1_old")
-region = Rect2(32, 0, 32, 40)
+[ext_resource type="Texture2D" path="res://Assets/images/astronaut/astronautp4_idle.png" id="4_idle"]
 
 [sub_resource type="AtlasTexture" id="old_carry_576"]
 atlas = ExtResource("1_old")
 region = Rect2(576, 0, 32, 40)
 
-[sub_resource type="AtlasTexture" id="old_shock_608"]
-atlas = ExtResource("1_old")
-region = Rect2(608, 0, 32, 40)
+[sub_resource type="AtlasTexture" id="idle_0_0"]
+atlas = ExtResource("4_idle")
+region = Rect2(0, 0, 32, 48)
+margin = Rect2(0, 0, 0, 8)
 
-[sub_resource type="AtlasTexture" id="old_shock_640"]
-atlas = ExtResource("1_old")
-region = Rect2(640, 0, 32, 40)
+[sub_resource type="AtlasTexture" id="idle_0_1"]
+atlas = ExtResource("4_idle")
+region = Rect2(32, 0, 32, 48)
+margin = Rect2(0, 0, 0, 8)
 
-[sub_resource type="AtlasTexture" id="old_burnt_672"]
-atlas = ExtResource("1_old")
-region = Rect2(672, 0, 32, 40)
+[sub_resource type="AtlasTexture" id="idle_0_2"]
+atlas = ExtResource("4_idle")
+region = Rect2(64, 0, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="idle_0_3"]
+atlas = ExtResource("4_idle")
+region = Rect2(96, 0, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="idle_0_4"]
+atlas = ExtResource("4_idle")
+region = Rect2(128, 0, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="idle_0_5"]
+atlas = ExtResource("4_idle")
+region = Rect2(160, 0, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="shock_1_0"]
+atlas = ExtResource("4_idle")
+region = Rect2(0, 48, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="shock_1_1"]
+atlas = ExtResource("4_idle")
+region = Rect2(32, 48, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="shock_1_2"]
+atlas = ExtResource("4_idle")
+region = Rect2(64, 48, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="shock_1_3"]
+atlas = ExtResource("4_idle")
+region = Rect2(96, 48, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="burnt_1_4"]
+atlas = ExtResource("4_idle")
+region = Rect2(128, 48, 32, 48)
+margin = Rect2(0, 0, 0, 8)
+
+[sub_resource type="AtlasTexture" id="burnt_1_5"]
+atlas = ExtResource("4_idle")
+region = Rect2(160, 48, 32, 48)
+margin = Rect2(0, 0, 0, 8)
 
 [sub_resource type="AtlasTexture" id="walk_down_0"]
 atlas = ExtResource("2_new")
@@ -272,18 +313,6 @@ margin = Rect2(0, 0, 0, 8)
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("old_idle_0")
-},
-{
-"duration": 1.0,
-"texture": SubResource("old_idle_32")
-}],
-"loop": true,
-"name": &"idle",
-"speed": 7.0
-}, {
-"frames": [{
-"duration": 1.0,
 "texture": SubResource("old_carry_576")
 }],
 "loop": true,
@@ -292,23 +321,63 @@ animations = [{
 }, {
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("old_shock_608")
+"texture": SubResource("idle_0_0")
 },
 {
 "duration": 1.0,
-"texture": SubResource("old_shock_640")
+"texture": SubResource("idle_0_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("idle_0_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("idle_0_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("idle_0_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("idle_0_5")
 }],
 "loop": true,
-"name": &"shock",
-"speed": 14.0
+"name": &"idle",
+"speed": 6.0
 }, {
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("old_burnt_672")
+"texture": SubResource("shock_1_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("shock_1_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("shock_1_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("shock_1_3")
+}],
+"loop": true,
+"name": &"shock",
+"speed": 12.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("burnt_1_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("burnt_1_5")
 }],
 "loop": false,
 "name": &"burnt",
-"speed": 1.0
+"speed": 6.0
 }, {
 "frames": [{
 "duration": 1.0,
