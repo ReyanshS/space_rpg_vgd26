@@ -1,56 +1,80 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://Scripts/hud.gd" id="1_hud"]
-[ext_resource type="Texture2D" path="res://Assets/ui/frame_screen.png" id="2_screen"]
-[ext_resource type="Texture2D" path="res://Assets/ui/frame_plate.png" id="3_plate"]
+[ext_resource type="PackedScene" path="res://Scenes/skill_tree.tscn" id="4_tree"]
+[ext_resource type="Script" path="res://Scripts/key_hint.gd" id="5_key"]
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxFlat_toast"]
-content_margin_left = 9.0
-content_margin_top = 5.0
-content_margin_right = 9.0
-content_margin_bottom = 6.0
-texture = ExtResource("3_plate")
-texture_margin_left = 6.0
-texture_margin_top = 6.0
-texture_margin_right = 6.0
-texture_margin_bottom = 6.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_toast"]
+content_margin_left = 10.0
+content_margin_top = 3.0
+content_margin_right = 10.0
+content_margin_bottom = 3.0
+bg_color = Color(0.03, 0.055, 0.09, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.85, 1, 0.7)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 4
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxFlat_complete"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_complete"]
 content_margin_left = 14.0
-content_margin_top = 11.0
+content_margin_top = 10.0
 content_margin_right = 14.0
-content_margin_bottom = 11.0
-texture = ExtResource("2_screen")
-texture_margin_left = 6.0
-texture_margin_top = 6.0
-texture_margin_right = 6.0
-texture_margin_bottom = 6.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
+content_margin_bottom = 10.0
+bg_color = Color(0.03, 0.055, 0.09, 0.94)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.82, 1, 0.5)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 6
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxFlat_objective"]
-texture = ExtResource("3_plate")
-texture_margin_left = 6.0
-texture_margin_top = 6.0
-texture_margin_right = 6.0
-texture_margin_bottom = 6.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_objective"]
+bg_color = Color(0.03, 0.055, 0.09, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.82, 1, 0.4)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 4
 
-[sub_resource type="StyleBoxTexture" id="StyleBoxFlat_dialogue"]
-content_margin_left = 6.0
+[sub_resource type="StyleBoxEmpty" id="StyleBoxFlat_dialogue"]
+content_margin_left = 5.0
 content_margin_top = 5.0
+content_margin_right = 4.0
+content_margin_bottom = 3.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tile"]
+content_margin_left = 6.0
+content_margin_top = 3.0
 content_margin_right = 6.0
 content_margin_bottom = 4.0
-texture = ExtResource("2_screen")
-texture_margin_left = 6.0
-texture_margin_top = 6.0
-texture_margin_right = 6.0
-texture_margin_bottom = 6.0
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
+bg_color = Color(0.07, 0.12, 0.19, 0.94)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.82, 1, 0.25)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [node name="HUD" type="CanvasLayer"]
 process_mode = 3
@@ -65,14 +89,15 @@ anchor_right = 0.5
 offset_left = -60.0
 offset_top = 6.0
 offset_right = 60.0
-offset_bottom = 28.0
+offset_bottom = 24.0
 grow_horizontal = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
 
 [node name="Text" type="Label" parent="Toast"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 9
 text = "ROOM 1"
 horizontal_alignment = 1
 
@@ -97,9 +122,10 @@ offset_bottom = 10.0
 mouse_filter = 2
 
 [node name="Console" type="Panel" parent="."]
-offset_top = 222.0
-offset_right = 480.0
-offset_bottom = 270.0
+offset_left = 4.0
+offset_top = 224.0
+offset_right = 476.0
+offset_bottom = 267.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_objective")
 
@@ -112,20 +138,20 @@ offset_right = 474.0
 offset_bottom = 267.0
 mouse_filter = 2
 
-[node name="Keys" type="Label" parent="."]
+[node name="Keys" type="HBoxContainer" parent="."]
 offset_left = 312.0
-offset_top = 246.0
-offset_right = 474.0
-offset_bottom = 264.0
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 0.85)
-text = "[Esc] menu"
-horizontal_alignment = 2
+offset_top = 247.0
+offset_right = 472.0
+offset_bottom = 263.0
+mouse_filter = 2
+theme_override_constants/separation = 8
+alignment = 2
 
 [node name="Dialogue" type="PanelContainer" parent="."]
-offset_left = 4.0
+offset_left = 6.0
 offset_top = 225.0
 offset_right = 306.0
-offset_bottom = 267.0
+offset_bottom = 266.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_dialogue")
 
@@ -143,10 +169,11 @@ mouse_filter = 2
 [node name="Text" type="RichTextLabel" parent="Dialogue/Row"]
 custom_minimum_size = Vector2(256, 0)
 layout_mode = 2
+theme_override_font_sizes/normal_font_size = 9
 size_flags_horizontal = 3
 mouse_filter = 2
 bbcode_enabled = true
-text = "[color=#ffc24d]PIP>[/color] [color=#a8f0a0]Hello![/color]"
+text = "[color=#ffc24d]PIP[/color]  [color=#e6f2ff]Hello![/color]"
 fit_content = true
 scroll_active = false
 autowrap_mode = 3
@@ -192,18 +219,19 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_complete")
 [node name="VBox" type="VBoxContainer" parent="Complete"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 5
 alignment = 1
 
 [node name="Title" type="Label" parent="Complete/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 18
 text = "LEVEL 1 COMPLETE"
 horizontal_alignment = 1
 
 [node name="Sub" type="Label" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
+theme_override_colors/font_color = Color(0.56, 0.66, 0.78, 1)
 text = "Power restored to this part of the ship!"
 horizontal_alignment = 1
 
@@ -212,218 +240,248 @@ custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="Stats" type="Label" parent="Complete/VBox"]
+[node name="Stats" type="HBoxContainer" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
-text = "TIME 0:00  |  CELLS 0/0  |  RETRIES 0"
+mouse_filter = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Time" type="PanelContainer" parent="Complete/VBox/Stats"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_tile")
+
+[node name="VBox" type="VBoxContainer" parent="Complete/VBox/Stats/Time"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Caption" type="Label" parent="Complete/VBox/Stats/Time/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.56, 0.66, 0.78, 1)
+theme_override_font_sizes/font_size = 6
+text = "TIME"
 horizontal_alignment = 1
 
-[node name="Xp" type="Label" parent="Complete/VBox"]
+[node name="Value" type="Label" parent="Complete/VBox/Stats/Time/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "0:00"
+horizontal_alignment = 1
+
+[node name="Cells" type="PanelContainer" parent="Complete/VBox/Stats"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_tile")
+
+[node name="VBox" type="VBoxContainer" parent="Complete/VBox/Stats/Cells"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Caption" type="Label" parent="Complete/VBox/Stats/Cells/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.56, 0.66, 0.78, 1)
+theme_override_font_sizes/font_size = 6
+text = "CELLS"
+horizontal_alignment = 1
+
+[node name="Value" type="Label" parent="Complete/VBox/Stats/Cells/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "0/0"
+horizontal_alignment = 1
+
+[node name="Retries" type="PanelContainer" parent="Complete/VBox/Stats"]
+custom_minimum_size = Vector2(84, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_tile")
+
+[node name="VBox" type="VBoxContainer" parent="Complete/VBox/Stats/Retries"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Caption" type="Label" parent="Complete/VBox/Stats/Retries/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.56, 0.66, 0.78, 1)
+theme_override_font_sizes/font_size = 6
+text = "RETRIES"
+horizontal_alignment = 1
+
+[node name="Value" type="Label" parent="Complete/VBox/Stats/Retries/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "0"
+horizontal_alignment = 1
+
+[node name="Points" type="Label" parent="Complete/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "LV 1   |   +0 XP"
+text = "+2 SKILL POINTS   [T] skill tree"
 horizontal_alignment = 1
 
 [node name="Bonus" type="Label" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
-text = "Suit upgrade: +0 s of oxygen"
+theme_override_colors/font_color = Color(0.4, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 7
+text = "Kept batteries: +0 s of oxygen"
 horizontal_alignment = 1
 
 [node name="StarHelp" type="Label" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
+theme_override_colors/font_color = Color(0.56, 0.66, 0.78, 1)
+theme_override_font_sizes/font_size = 6
 text = "Stars for finishing, every cell, and few retries"
 horizontal_alignment = 1
 
-[node name="Again" type="Label" parent="Complete/VBox"]
+[node name="Buttons" type="HBoxContainer" parent="Complete/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "[E] next level    [R] play again"
-horizontal_alignment = 1
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Next" type="Button" parent="Complete/VBox/Buttons"]
+layout_mode = 2
+text = "NEXT LEVEL"
+
+[node name="Again" type="Button" parent="Complete/VBox/Buttons"]
+layout_mode = 2
+text = "PLAY AGAIN"
+
+[node name="Skills" type="Button" parent="Complete/VBox/Buttons"]
+layout_mode = 2
+text = "SKILL TREE"
 
 [node name="Pause" type="PanelContainer" parent="."]
 visible = false
-offset_left = 104.0
+offset_left = 120.0
 offset_top = 34.0
-offset_right = 376.0
-offset_bottom = 236.0
+offset_right = 360.0
+offset_bottom = 218.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_complete")
 
 [node name="VBox" type="VBoxContainer" parent="Pause"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 6
 alignment = 1
 
 [node name="Title" type="Label" parent="Pause/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-theme_override_font_sizes/font_size = 32
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 18
 text = "PAUSED"
 horizontal_alignment = 1
 
 [node name="Level" type="Label" parent="Pause/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.9, 1, 1)
+theme_override_colors/font_color = Color(0.4, 0.85, 1, 1)
 text = "LEVEL 1: ENGINEERING DECK"
 horizontal_alignment = 1
 
-[node name="Controls" type="Label" parent="Pause/VBox"]
+[node name="Buttons" type="HBoxContainer" parent="Pause/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
-text = "Move ............ WASD / arrows
-Grab the wire ... E / Space
-Reel back ....... E (holding wire)
-Back to START ... R
-Show a hint ..... H
-Resume .......... Esc
-Quit to title ... Q"
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Resume" type="Button" parent="Pause/VBox/Buttons"]
+layout_mode = 2
+text = "RESUME"
+
+[node name="Skills" type="Button" parent="Pause/VBox/Buttons"]
+layout_mode = 2
+text = "SKILL TREE"
+
+[node name="Quit" type="Button" parent="Pause/VBox/Buttons"]
+layout_mode = 2
+text = "QUIT"
+
+[node name="Controls" type="VBoxContainer" parent="Pause/VBox"]
+layout_mode = 2
+size_flags_horizontal = 4
+mouse_filter = 2
+theme_override_constants/separation = 3
+
+[node name="Move" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("WASD")
+text = "move (or the arrow keys)"
+
+[node name="Grab" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("E")
+text = "grab the wire, or reel it back"
+
+[node name="Back" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("R")
+text = "back to the START"
+
+[node name="Hint" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("H")
+text = "show a hint"
+
+[node name="Tree" type="Control" parent="Pause/VBox/Controls"]
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("5_key")
+keys = PackedStringArray("T")
+text = "skill tree, any time"
 
 [node name="Suit" type="Label" parent="Pause/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "LV 1: no upgrades yet"
+theme_override_font_sizes/font_size = 7
+text = "SKILLS 0/15"
 horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="CellTip" type="Label" parent="Pause/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
+theme_override_colors/font_color = Color(0.56, 0.66, 0.78, 1)
+theme_override_font_sizes/font_size = 6
 text = "Batteries add time to the wire. Keep them!"
 horizontal_alignment = 1
 
-[node name="LevelUp" type="PanelContainer" parent="."]
-visible = false
-offset_left = 30.0
-offset_top = 30.0
-offset_right = 450.0
-offset_bottom = 210.0
+[node name="Corner" type="HBoxContainer" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -150.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = 21.0
+grow_horizontal = 0
 mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_complete")
+theme_override_constants/separation = 4
+alignment = 2
 
-[node name="VBox" type="VBoxContainer" parent="LevelUp"]
+[node name="Skills" type="Button" parent="Corner"]
 layout_mode = 2
-mouse_filter = 2
-alignment = 1
+focus_mode = 0
+theme_override_font_sizes/font_size = 7
+text = "SKILLS"
 
-[node name="Title" type="Label" parent="LevelUp/VBox"]
+[node name="Menu" type="Button" parent="Corner"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-theme_override_font_sizes/font_size = 32
-text = "LEVEL UP!  LV 2"
-horizontal_alignment = 1
+focus_mode = 0
+theme_override_font_sizes/font_size = 7
+text = "MENU"
 
-[node name="Sub" type="Label" parent="LevelUp/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.66, 0.94, 0.63, 1)
-text = "Your suit learned something. Pick ONE upgrade."
-horizontal_alignment = 1
-
-[node name="Cards" type="HBoxContainer" parent="LevelUp/VBox"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 6
-alignment = 1
-
-[node name="Card0" type="PanelContainer" parent="LevelUp/VBox/Cards"]
-custom_minimum_size = Vector2(124, 84)
-layout_mode = 2
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
-
-[node name="VBox" type="VBoxContainer" parent="LevelUp/VBox/Cards/Card0"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 0
-
-[node name="Name" type="Label" parent="LevelUp/VBox/Cards/Card0/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "LONGER WIRE"
-horizontal_alignment = 1
-
-[node name="Text" type="Label" parent="LevelUp/VBox/Cards/Card0/VBox"]
-custom_minimum_size = Vector2(106, 0)
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_colors/font_color = Color(0.92, 0.94, 0.97, 1)
-text = "+0.5 s on the wire timer"
-horizontal_alignment = 1
-autowrap_mode = 3
-
-[node name="Count" type="Label" parent="LevelUp/VBox/Cards/Card0/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.06, 0.07, 0.1, 1)
-text = "0 / 2"
-horizontal_alignment = 1
-
-[node name="Card1" type="PanelContainer" parent="LevelUp/VBox/Cards"]
-custom_minimum_size = Vector2(124, 84)
-layout_mode = 2
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
-
-[node name="VBox" type="VBoxContainer" parent="LevelUp/VBox/Cards/Card1"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 0
-
-[node name="Name" type="Label" parent="LevelUp/VBox/Cards/Card1/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "SUPER CELLS"
-horizontal_alignment = 1
-
-[node name="Text" type="Label" parent="LevelUp/VBox/Cards/Card1/VBox"]
-custom_minimum_size = Vector2(106, 0)
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_colors/font_color = Color(0.92, 0.94, 0.97, 1)
-text = "Batteries add 1 s more"
-horizontal_alignment = 1
-autowrap_mode = 3
-
-[node name="Count" type="Label" parent="LevelUp/VBox/Cards/Card1/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.06, 0.07, 0.1, 1)
-text = "0 / 2"
-horizontal_alignment = 1
-
-[node name="Card2" type="PanelContainer" parent="LevelUp/VBox/Cards"]
-custom_minimum_size = Vector2(124, 84)
-layout_mode = 2
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_toast")
-
-[node name="VBox" type="VBoxContainer" parent="LevelUp/VBox/Cards/Card2"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 0
-
-[node name="Name" type="Label" parent="LevelUp/VBox/Cards/Card2/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "RUBBER BOOTS"
-horizontal_alignment = 1
-
-[node name="Text" type="Label" parent="LevelUp/VBox/Cards/Card2/VBox"]
-custom_minimum_size = Vector2(106, 0)
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_colors/font_color = Color(0.92, 0.94, 0.97, 1)
-text = "Shrug off the first zap in each room"
-horizontal_alignment = 1
-autowrap_mode = 3
-
-[node name="Count" type="Label" parent="LevelUp/VBox/Cards/Card2/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.06, 0.07, 0.1, 1)
-text = "0 / 1"
-horizontal_alignment = 1
-
-[node name="Help" type="Label" parent="LevelUp/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.42, 0.62, 0.45, 1)
-text = "[A] [D] choose      [E] take it"
-horizontal_alignment = 1
+[node name="SkillTree" parent="." instance=ExtResource("4_tree")]

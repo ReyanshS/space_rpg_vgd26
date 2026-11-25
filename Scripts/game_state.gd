@@ -9,21 +9,26 @@
 #
 # Any script can use it by its name, e.g.  Game.o2_bonus()  or  Game.go_to_level(2)
 #
-# It also holds the RPG side of the game: your XP, your level (LV) and the suit
-# upgrades you picked. The level gives XP (level.gd _award_xp), and when you
-# level up it opens the level up screen (hud.gd pick_upgrade). Upgrades change
-# the rules through the small helpers here: wire_bonus(), cell_bonus_extra(),
-# walk_multiplier(), o2_bonus() and perk("boots").
+# The RPG side (skill points and the skill tree) lives in its own autoload,
+# SkillManager (skill_manager.gd). This script saves it, together with which
+# levels you've finished, to one save file (save_game / load_game), so the
+# title screen can offer "Continue".
 # ---------------------------------------------------------------------------
 extends Node
 
-## The levels in the order you play them.
-const LEVELS: Array[String] = [
-	"res://Scenes/level_1.tscn",
-	"res://Scenes/level_2.tscn",
-	"res://Scenes/level_3.tscn",
-]
+## The folder the levels live in. Every scene in it called level_<number>.tscn
+## is a level, played in number order. To add a level, save its scene there
+## with the next number (level_4.tscn): the level select, the dev menu and
+## Continue find it by themselves, there's no list to update. Other scenes in
+## the folder (a test room, say) are left alone.
+const LEVEL_FOLDER := "res://Levels/"
+## The levels in the order you play them, found in LEVEL_FOLDER once when the
+## game starts (_find_levels). It's written in capitals like a constant because
+## nothing changes it after that.
+var LEVELS: Array[String] = _find_levels()
 const TITLE_SCENE := "res://Scenes/title.tscn"
+## The opening cutscene, played when you start a new game (before Level 1).
+const INTRO_SCENE := "res://Scenes/intro.tscn"
 
 ## The music: the team's own tracks, as Assets/audio/music_<name>.ogg.
 ## The number is each track's volume in dB (0 = as loud as the file, -6 = about
@@ -41,34 +46,32 @@ const MUSIC := {
 }
 
 ## Extra seconds of oxygen on a spacewalk for every power cell you charged so far.
-## This is the RPG "upgrade": exploring earlier levels makes later ones easier.
+## A small RPG reward: exploring earlier levels makes later ones easier.
 const O2_PER_CELL := 5.0
 
-# ---- RPG: experience (XP), levels and suit upgrades --------------------------
-# You earn XP for what you do well. Enough XP means a level up: you pick one upgrade
-# for your suit, and it stays with you for the rest of the game. Change the
-# numbers here to make levelling faster or slower.
-const XP_ROOM := 30         ## for powering a room
-const XP_CLEAN := 15        ## extra, if you powered it without failing there first
-const XP_CELL := 10         ## for each battery you keep
-const XP_FINISH := 50       ## for reaching the exit of a level
-const XP_FIRST_LEVEL := 100 ## XP needed to go from LV 1 to LV 2...
-const XP_MORE_PER_LEVEL := 60  ## ...and each level after that needs this much more
+## The save file. "user://" is a folder Godot keeps for this game on the
+## player's computer (in a web build: inside the browser's storage).
+const SAVE_PATH := "user://save.cfg"
+## Settings live in their own file, so NEW GAME (which deletes the save) keeps them.
+const SETTINGS_PATH := "user://settings.cfg"
 
-## The upgrades you can pick when you level up. "max" = how many times you can take it.
-## The level reads these through the helper functions below (wire_bonus() etc.).
-const UPGRADES := {
-	"wire": {"name": "LONGER WIRE", "text": "+0.5 s on the wire timer", "max": 2},
-	"cells": {"name": "SUPER CELLS", "text": "Batteries add 1 s more", "max": 2},
-	"servos": {"name": "LEG SERVOS", "text": "Walk 10% faster", "max": 2},
-	"boots": {"name": "RUBBER BOOTS", "text": "Shrug off the first zap in each room", "max": 1},
-	"tank": {"name": "BIG TANK", "text": "+15 s of air on spacewalks", "max": 2},
-}
-
-var xp := 0                 # all the XP you've earned this game
-var lv := 1                 # your level (shown as LV in the console)
-var upgrades_waiting := 0   # level ups you haven't picked an upgrade for yet
-var perks := {}             # upgrade id -> how many times you took it
+## The game's font: the pixel font Departure Mono. The DYSLEXIA FONT switch
+## (title screen, pause menu) changes it to OpenDyslexic, whose letters are
+## heavier at the bottom so b, d, p and q don't seem to flip: that helps
+## players with dyslexia. How the switch works: no scene picks a font of its
+## own, they all use the theme's default font or ThemeDB.fallback_font, so
+## changing those two changes all the text at once (apply_font). The fonts
+## themselves: UIStyle.pixel_font() and UIStyle.dyslexic_font().
+## PIP's console text size for each font: as big as it gets while every one of
+## his lines still fits in the console's two rows (measured Nov 2026: one size
+## bigger and OpenDyslexic pushes 34 lines onto a third row). If you change
+## them, change story_beat.gd's TOO LONG check to match.
+const CONSOLE_SIZE_PIXEL := 10
+const CONSOLE_SIZE_DYSLEXIC := 9
+const CONSOLE_SIZE_PLAIN := 9     # Godot's built-in font, if a font file is missing
+signal font_changed            # the switch was flipped (the HUD resizes PIP's text)
+var dyslexic_font := false
+var _plain_font: Font          # Godot's built-in font (Open Sans), only if a file is missing
 
 # One entry per level number, e.g. results[1] = {"time": 140.2, "cells": 7, ...}
 var results := {}
@@ -76,98 +79,106 @@ var results := {}
 ## Stays false when you run one level scene straight from the editor with F6:
 ## that's the only time a level's TestStart marker is used.
 var playing_through := false
+## Judge mode (switched on at the title screen): every level can be picked from
+## the title, and in a level R makes PIP walk the room for you (autopilot.gd).
+## It's for the TSA judges, who must be able to see all three levels.
+var judge_mode := false
+## The dev menu (dev_menu.gd) sets this to the room to start in when the next
+## level loads (-1 = the normal start). The level reads it once and resets it.
+var dev_room := -1
+## NODE REST, a rule to try out (the dev menu switches it on and off): while the
+## wire is latched on a node and you stand close to it, the timer waits.
+## level.gd _node_rest() reads it. Not saved: every run starts with it off.
+var node_rest := false
 # Tips PIP already gave (so he explains something only once, even across levels)
 var _tips_seen := {}
 
 
-## Forget everything (the title screen calls this when you start a new game).
+## Forget everything and delete the save (the title screen's "new game").
 func new_game() -> void:
 	results.clear()
-	xp = 0
-	lv = 1
-	upgrades_waiting = 0
-	perks.clear()
+	SkillManager.reset()
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
 
 
-# ------------------------------------------------------------------ XP and levels
-
-## XP needed to get from level `level` to the next one: 100, 160, 220, 280...
-func xp_for_next(level: int) -> int:
-	return XP_FIRST_LEVEL + XP_MORE_PER_LEVEL * (level - 1)
-
-
-## Add XP. Returns how many times you levelled up (usually 0 or 1).
-## Each level up also leaves an upgrade waiting to be picked.
-func add_xp(amount: int) -> int:
-	xp += amount
-	var ups := 0
-	while xp >= xp_total_for(lv + 1):
-		lv += 1
-		ups += 1
-		upgrades_waiting += 1
-	return ups
-
-
-## Total XP you need to reach level `level` (LV 2 = 100, LV 3 = 260, ...).
-func xp_total_for(level: int) -> int:
-	var total := 0
-	for l in range(1, level):
-		total += xp_for_next(l)
-	return total
+func _ready() -> void:
+	_plain_font = ThemeDB.fallback_font
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK:
+		dyslexic_font = cfg.get_value("settings", "dyslexic_font", false)
+	apply_font()
+	# Buying a skill saves straight away, so quitting mid level doesn't lose it.
+	SkillManager.skill_unlocked.connect(func(_id: String) -> void: save_game())
+	# Menu buttons react to the "ui_accept" action (Enter and Space). Add E to it
+	# too, so E presses the selected button, like it moves PIP's lines on.
+	var e := InputEventKey.new()
+	e.physical_keycode = KEY_E
+	if not InputMap.action_has_event("ui_accept", e):
+		InputMap.action_add_event("ui_accept", e)
+	# The dev menu (the ` key): only when the game runs from the Godot editor,
+	# never in an exported or web build, so judges can't open it by accident.
+	if OS.has_feature("editor"):
+		add_child(preload("res://Scripts/dev_menu.gd").new())
 
 
-## How far you are towards the next level: 0 = just levelled up, 1 = about to.
-func level_progress() -> float:
-	var start := xp_total_for(lv)
-	return clampf(float(xp - start) / float(xp_for_next(lv)), 0.0, 1.0)
+## Puts the chosen font on every piece of text (see the notes above dyslexic_font).
+func apply_font() -> void:
+	var f := _current_font()
+	# Labels and Buttons ask the project theme (Assets/ui/theme.tres) for a font
+	# first, so it goes there (only while the game runs; the file isn't changed).
+	# Text drawn in code (UIStyle.text, the console's pages) uses the fallback font.
+	var theme := ThemeDB.get_project_theme()
+	if theme:
+		theme.default_font = f
+	ThemeDB.fallback_font = f
+	font_changed.emit()
 
 
-## Up to `count` different upgrades you could still take, in a random order.
-func upgrade_choices(count := 3) -> Array:
-	var open: Array = []
-	for id in UPGRADES:
-		if perk(id) < int(UPGRADES[id]["max"]):
-			open.append(id)
-	open.shuffle()
-	return open.slice(0, count)
+## The font in use: OpenDyslexic with the switch on, else Departure Mono (or
+## Godot's built-in font if that file is missing).
+func _current_font() -> Font:
+	if dyslexic_font and UIStyle.dyslexic_font():
+		return UIStyle.dyslexic_font()
+	if UIStyle.pixel_font():
+		return UIStyle.pixel_font()
+	return _plain_font
 
 
-func take_upgrade(id: String) -> void:
-	perks[id] = perk(id) + 1
-	upgrades_waiting = maxi(0, upgrades_waiting - 1)
+## PIP's console text size for the font in use (hud.gd), so his lines fit.
+func console_font_size() -> int:
+	var f := _current_font()
+	if f == UIStyle.dyslexic_font():
+		return CONSOLE_SIZE_DYSLEXIC
+	if f == UIStyle.pixel_font():
+		return CONSOLE_SIZE_PIXEL
+	return CONSOLE_SIZE_PLAIN
 
 
-## How many times you took upgrade `id` (0 = not at all).
-func perk(id: String) -> int:
-	return int(perks.get(id, 0))
+## The DYSLEXIA FONT switch: change the font now and remember it.
+func set_dyslexic_font(on: bool) -> void:
+	dyslexic_font = on
+	apply_font()
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)              # (keeps any other settings in the file)
+	cfg.set_value("settings", "dyslexic_font", on)
+	cfg.save(SETTINGS_PATH)
 
 
-## The upgrade list for the pause menu, like "LONGER WIRE x2, RUBBER BOOTS".
-func perks_text() -> String:
-	var parts: PackedStringArray = []
-	for id in UPGRADES:
-		var n := perk(id)
-		if n > 0:
-			parts.append(UPGRADES[id]["name"] + (" x%d" % n if n > 1 else ""))
-	return ", ".join(parts) if not parts.is_empty() else "no upgrades yet"
+## The text on the switch's button.
+func font_switch_text() -> String:
+	return "DYSLEXIA FONT: " + ("ON" if dyslexic_font else "OFF")
 
 
-# What each upgrade does. The level asks these:
-func wire_bonus() -> float:        ## extra seconds on the wire timer
-	return 0.5 * perk("wire")
-
-
-func cell_bonus_extra() -> float:  ## extra seconds a battery adds
-	return 1.0 * perk("cells")
-
-
-func walk_multiplier() -> float:   ## 1.0 = normal walking speed
-	return 1.0 + 0.1 * perk("servos")
-
-
-## The level calls this when you finish it.
+## The level calls this when you finish it. It also saves the game.
 func record_level(number: int, stats: Dictionary) -> void:
 	results[number] = stats
+	save_game()
+
+
+## True if you've finished level `number` before (in this save).
+func has_finished(number: int) -> bool:
+	return results.has(number)
 
 
 ## Power cells charged in every level finished so far.
@@ -178,9 +189,14 @@ func cells_collected() -> int:
 	return n
 
 
-## Extra oxygen on spacewalks: from batteries you kept, and the big tank upgrade.
+## Seconds of oxygen each kept battery gives (CELL CHARGER skill adds to it).
+func o2_per_cell() -> float:
+	return O2_PER_CELL + SkillManager.bonus("o2_per_cell")
+
+
+## Extra oxygen on spacewalks: from batteries you kept, and the Life Support skills.
 func o2_bonus() -> float:
-	return cells_collected() * O2_PER_CELL + 15.0 * perk("tank")
+	return cells_collected() * o2_per_cell() + SkillManager.bonus("o2")
 
 
 ## True the first time it's asked about `tip`, false every time after that.
@@ -204,11 +220,36 @@ func load_music(track_name: String) -> AudioStream:
 	return s
 
 
+## Looks in LEVEL_FOLDER for level_1.tscn, level_2.tscn ... and returns their
+## paths in number order. The numbers must go 1, 2, 3 with none missing,
+## because a level's number is its place in this list (go_to_level(2) loads
+## the 2nd one). So a file after a gap is left out, with a warning.
+static func _find_levels() -> Array[String]:
+	var by_number := {}
+	var name_rule := RegEx.create_from_string("^level_(\\d+)\\.tscn$")
+	# ResourceLoader.list_directory, not DirAccess: it also works in the exported
+	# web build, where Godot stores scenes converted, under other file names.
+	for file in ResourceLoader.list_directory(LEVEL_FOLDER):
+		var m := name_rule.search(file)
+		if m:
+			by_number[int(m.get_string(1))] = LEVEL_FOLDER + file
+	var found: Array[String] = []
+	while by_number.has(found.size() + 1):
+		found.append(by_number[found.size() + 1])
+	for n in by_number:
+		if n > found.size():
+			push_warning("%s is left out: there's no level_%d.tscn before it." % [by_number[n], found.size() + 1])
+	if found.is_empty():
+		push_warning("No levels found. Save them in %s as level_1.tscn, level_2.tscn ..." % LEVEL_FOLDER)
+	return found
+
+
 func has_level(number: int) -> bool:
 	return number >= 1 and number <= LEVELS.size()
 
 
 func go_to_level(number: int) -> void:
+	get_tree().paused = false       # pausing survives a scene change, so make sure it's off
 	if has_level(number):
 		playing_through = true
 		get_tree().change_scene_to_file(LEVELS[number - 1])
@@ -216,11 +257,68 @@ func go_to_level(number: int) -> void:
 		go_to_title()
 
 
+## Dev menu: load level `number` and start in room `room` (0 = the normal start),
+## with every room before it already powered.
+func dev_jump(number: int, room: int) -> void:
+	dev_room = room
+	go_to_level(number)
+
+
 func go_to_title() -> void:
 	get_tree().paused = false
 	get_tree().change_scene_to_file(TITLE_SCENE)
 
 
+## The opening cutscene (it loads Level 1 itself when it's over).
+func go_to_intro() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file(INTRO_SCENE)
+
+
 ## Values that story text can use: write {cells}, {o2_bonus} or {o2_per_cell} inside a line.
 func story_values() -> Dictionary:
-	return {"cells": cells_collected(), "o2_bonus": int(o2_bonus()), "o2_per_cell": int(O2_PER_CELL)}
+	return {"cells": cells_collected(), "o2_bonus": int(o2_bonus()), "o2_per_cell": int(o2_per_cell())}
+
+
+# ------------------------------------------------------------------ the save file
+# A ConfigFile is a simple text file with [sections] and key = value lines,
+# like project.godot. Godot can store dictionaries and arrays in it directly.
+
+func save_game() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("progress", "results", results)
+	var skills := SkillManager.to_save()
+	cfg.set_value("skills", "points", skills["points"])
+	cfg.set_value("skills", "unlocked", skills["unlocked"])
+	cfg.set_value("settings", "judge_mode", judge_mode)
+	var err := cfg.save(SAVE_PATH)
+	if err != OK:
+		push_warning("Couldn't save the game (error %d)" % err)
+
+
+## Loads the save file if there is one. Returns false if there isn't.
+func load_game() -> bool:
+	var cfg := ConfigFile.new()
+	if cfg.load(SAVE_PATH) != OK:
+		return false
+	results = cfg.get_value("progress", "results", {})
+	judge_mode = cfg.get_value("settings", "judge_mode", false)
+	SkillManager.from_save({
+		"points": cfg.get_value("skills", "points", 0),
+		"unlocked": cfg.get_value("skills", "unlocked", []),
+	})
+	return true
+
+
+## There's a game to continue: you finished at least one level.
+func has_save() -> bool:
+	return FileAccess.file_exists(SAVE_PATH) and not results.is_empty()
+
+
+## The level "Continue" goes to: the one after the last you finished
+## (or the last level again, if you've finished them all).
+func continue_level() -> int:
+	var last := 0
+	for n in results:
+		last = maxi(last, int(n))
+	return clampi(last + 1, 1, LEVELS.size())

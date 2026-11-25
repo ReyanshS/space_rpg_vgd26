@@ -5,29 +5,48 @@
 # Close the scene in Godot first (or pick "Reload" when Godot asks), or Godot may save
 # its old copy over the new map.
 #
-#   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
+#   # wall   . floor   S start   G goal   N node   B pole   X red (discharge)
 #   x blinking grate   C crate   D door   P spawn   E exit
 #   * power cell   , hull (outside floor)   ~ open space   A airlock pad   = barrier
-#   @ core (Level 3: wrap the wire round it)   (space) = nothing
+#   @ core (Level 3: wrap the wire round it)   f fuse   F fuse door   M main door
+#   o clamp socket   k clamp   c movable crate (push it)   (space) = nothing
 #
-# Run from the project folder:   python tools/map_to_scene.py tools/maps/level2.txt Scenes/level_2.tscn
+# Run from the project folder:   python tools/map_to_scene.py tools/maps/level2.txt Levels/level_2.tscn
 #
 # The top-left character of the text file becomes tile (0, 0) in Godot.
 import re, struct, sys
 
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
-SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
+SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'pole': 'B',
           'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
-          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@'}
+          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@',
+          'fuse': 'f', 'fuse_door': 'F', 'main_door': 'M', 'socket': 'o', 'clamp': 'k', 'box': 'c'}
+
+def tileset_kinds(path):
+    """(source id, atlas x, atlas y) -> kind, from the tileset's Custom Data.
+    The tileset has several sources (the Layout palette is source 0, the team's
+    art sheets are 1 and up), each in its own [sub_resource] block."""
+    text = open(path, encoding='utf-8').read()
+    ids = {m.group(2): int(m.group(1)) for m in re.finditer(r'sources/(\d+) = SubResource\("([^"]+)"\)', text)}
+    out = {}
+    for block in re.split(r'\n(?=\[sub_resource )', text):
+        m = re.match(r'\[sub_resource type="TileSetAtlasSource" id="([^"]+)"\]', block)
+        if not m or m.group(1) not in ids:
+            continue
+        for k in re.finditer(r'(\d+):(\d+)/0/custom_data_0 = "(\w*)"', block):
+            out[(ids[m.group(1)], int(k.group(1)), int(k.group(2)))] = k.group(3)
+    return out
+
 
 if len(sys.argv) < 3:
     sys.exit('usage: python tools/map_to_scene.py <map.txt> <scene.tscn>')
 text_path, scene_path = sys.argv[1], sys.argv[2]
 
-# kind -> atlas coords, from the tileset's Custom Data
+# kind -> atlas coords in the Layout palette (source 0), from the tileset's Custom Data
 atlas = {}
-for k in re.finditer(r'(\d+):(\d+)/0/custom_data_0 = "(\w*)"', open(TILESET, encoding='utf-8').read()):
-    atlas[k.group(3)] = (int(k.group(1)), int(k.group(2)))
+for (src, ax, ay), kind in tileset_kinds(TILESET).items():
+    if src == 0:
+        atlas[kind] = (ax, ay)
 char_to_atlas = {}
 for kind, ch in SYMBOL.items():
     if kind in atlas:

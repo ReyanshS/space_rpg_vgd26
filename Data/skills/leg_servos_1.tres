@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillDef" format=3]
+
+[ext_resource type="Script" path="res://Scripts/skill_def.gd" id="1_skill"]
+
+[resource]
+script = ExtResource("1_skill")
+id = "leg_servos_1"
+display_name = "LEG SERVOS I"
+short_name = "SERVOS I"
+description = "You walk 8% faster. Every route takes less time."
+branch = 1
+cost = 1
+parent_id = ""
+effect = "walk_speed"
+amount = 0.08

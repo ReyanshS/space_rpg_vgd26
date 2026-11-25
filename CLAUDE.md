@@ -4,8 +4,10 @@ Godot 4.7 top-down puzzle game for the TSA Video Game Design event (2026-27; AI 
 must be documented). Title **STAR CIRCUIT** (the team's name). The player is an astronaut restoring
 power to a dead spaceship by carrying a live wire from pad to pad, helped by PIP, the ship's
 maintenance AI. `Scenes/title.tscn` is the main scene (logo: `Assets/images/ui/logo.png`) ->
-`level_1.tscn` (Engineering Deck: the team's 4 rooms joined by doors, then the Generator Room: 3
-stages split by cargo barriers, ending in blinking grates) -> `level_2.tscn` (Main Deck: bridge,
+`Levels/level_1.tscn` (Engineering Deck: the team's 3 tutorial rooms, then a small dungeon: the Reactor
+Hall hub (the cable clamp sits in a live reactor ring: roll a crate in to short a way through) with 3
+wings and a main door, then the Generator Room: 3 stages split by cargo barriers, ending in
+blinking grates; see "Dungeon parts" and "Movable crates") -> `level_2.tscn` (Main Deck: bridge,
 airlock, spacewalk across one open hull) -> `level_3.tscn` (The Core: PIP malfunctions and you
 reboot him by looping the wire round his core three times; the team's idea, see "The core" below).
 - The team works in `D:\Godot\tsa-project\space_rpg_vgd26` (GitHub `ReyanshS/space_rpg_vgd26`,
@@ -27,8 +29,8 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Writing (PIP, tutorial, popups):** the team wants it to sound natural, not AI-written. Short
   plain sentences, contractions, no dashes of any kind as punctuation, few exclamation marks, no
   ALL-CAPS words inside PIP's lines. PIP is a slightly nervous maintenance bot with dry humour.
-  Each line MUST fit the console: **two rows at 16 px** (about 70 characters; the speaker name
-  counts too). One text size everywhere (the team tried 12 px for long lines and said no).
+  Each line MUST fit the console: **two rows** of the console text (size 9, about 90
+  characters; the speaker name counts too). Keep lines short anyway: about 70 reads best.
 - **Code comments** follow the same style: plain sentences, no dashes as punctuation (use a
   comma, colon, full stop or brackets), no ALL-CAPS words for emphasis, script headers written as
   `# name.gd: what it does`. Caps are fine for real names: enum values, constants, START/GOAL/NODE
@@ -51,39 +53,82 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - Rating form: Creativity x2, Technical skill x2, Storyline/flow between levels x1, Overall appeal x2
   (game design 70); video, portfolio, directions/controls, storyboard, AI reflection (50).
 - 2026-27 theme: *"Create a deep space-themed RPG where the primary method of progression is
-  puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), XP + character
-  levels (LV) with a pick-one-of-three suit upgrade on every level up, collectibles (power cells:
-  XP, +5 s oxygen each on spacewalks), results/stars per level. See "RPG" below.
-- Wire timer check (Nov 2026, solver): the tightest stretch of each room needs at most 3.4 s of
-  the 5 s with a perfect route (Generator B, Level 2's bridge); most need 1.5-3 s. Feels easy to
-  someone who knows the routes, about right for first-time players (judges). Left at 5 s.
+  puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), a skill tree
+  (3 branches, points for finishing levels), collectibles (power cells: +5 s oxygen each on
+  spacewalks), results/stars per level, a save file with Continue. See "RPG" below.
+- **Balance (Nov 2026, "too easy")**: timer rules per level (Inspector, Rules group):
+  L1 START 4.5 / node +3.5 / max 6 / hold 2 s, own START times 5.5, -, 6, 3.5, 3.2, -, 5;
+  L2 3.5 / +3 / 5 / 1 s, room 3 = 4.2, room 5 = 5, `o2_seconds` 50; L3 3.5 / +2.5 / 5.2 / 1 s,
+  PIP's `shutdown_seconds` 14 / 13.5 / 9.5 (about 1.5x the best route: after the Nov 21 map
+  the best routes take 9.3 / 8.9 / 5.4 s plus grate waits; 10 s for stage A was too tight). Target "lowest timer"
+  on the most forgiving perfect route: tutorial rooms (L1 1-3) 2.3-3 s, rest of L1 1-1.8 s,
+  L2 0.7-1.3 s (hard but fair), L3 rooms are timed mostly by PIP's meter. A bot replayed the
+  solver's route in every room in the real game: all solvable, lowest timer within ~0.1 s of
+  the solver. Re-check after ANY change: `python tools/solver2.py Levels/level_N.tscn`.
 - Level 3 exists (the guide says judges play to level 3). A full bot run of it takes ~75 s of play.
 - Judges play from a link, so the game needs a **web export**. Web builds run on WebGL 2 (Godot's
   Compatibility renderer); this project is set to Forward+, so test a web export early and check
   that the lighting still looks right.
 
 ## Display
-480x270 viewport scaled 3x, nearest filtering, 32x32 tiles. UI font: m6x11 (`Assets/fonts`) via
-`Assets/ui/theme.tres` at size 16 — only use multiples of 16 or the pixel font blurs.
+480x270 game pixels, 1440x810 window, nearest filtering, 32x32 tiles. Stretch mode
+**canvas_items** (Nov 2026, "scale up" + sharper UI): positions and sizes are still in game
+pixels, but everything is drawn at the window's real resolution, so text and panels are sharp
+while the pixel art keeps its pixels (movement is a bit smoother: sub pixel steps show).
+UI font (Nov 22 2026, Nilay: "find a good pixelated font", plus a dyslexia option):
+**Departure Mono** (`Assets/fonts/departure_mono/`, a monospace pixel font on an 11 px grid,
+Helena Zhang, SIL OFL: credit it). At size 11 one font pixel = one game pixel. Its import has
+`subpixel_positioning=0` and `keep_rounding_remainders=false`, so every letter steps the same
+whole number of screen pixels (with remainders on, spacing alternated: "ME NU").
+**DYSLEXIA FONT** switch (title top left, bottom of the pause menu; `Game.set_dyslexic_font`,
+saved in `user://settings.cfg`, which NEW GAME doesn't delete; off by default): OpenDyslexic
+(`Assets/fonts/opendyslexic/`, Abbie Gonzalez, SIL OFL), as a FontVariation with letter spacing
+-1 (its built-in gaps looked s p a c e d out at our sizes). How: no scene sets a font, so
+`Game.apply_font()` sets the project theme's `default_font` (Labels, Buttons) and
+`ThemeDB.fallback_font` (draw_string, `UIStyle.font()`) at runtime; the theme file is unchanged,
+so the editor previews show Godot's font. Both fonts load at runtime (`UIStyle.pixel_font()`,
+`dyslexic_font()`), not preload: a preload fails before the first import.
+Sizes in game pixels (x3 on screen): `UIStyle.SMALL` 6, `BODY` 8 (theme default), `HEAD` 11,
+`TITLE` 18. PIP's console: `Game.console_font_size()` = 8 for both fonts (both are wider than
+Open Sans; at 8 every line fits two rows). StoryBeats' TOO LONG check measures both fonts.
+Tried and rejected: Pixelify Sans, Jersey 10, VT323 (uneven gaps or cramped at our small sizes).
+m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky because the old
+"viewport" stretch forced it to size 16.
 
 ## Game rules (level.gd enforces them)
-- START pad: stand on it, press **E/Space** to grab the wire. The 5 s timer (`wire_time`) starts.
+- START pad: stand on it, press **E/Space** to grab the wire. The timer starts with `wire_time`
+  seconds (or that room's `room_wire_time`). Nothing ever pushes it above `max_wire_time`.
 - Free movement while carrying. The wire is a taut straight line from the LAST pad touched to the
   player's hands; it can't pass through walls, crates, doors or live red tiles, so steps that would
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
-- NODE (orange): wraps the wire, refills the timer, pauses it while you stand on it. Touch radius 22 px.
-- BEND (purple): stops you, shows two arrows AND a dotted preview of where each one throws you
-  (`predict_fling()`, same 2 px steps as the real fling), you press one and get flung 90 deg
-  (`bend_pauses_timer`). The fling stops at a wall, a node, or a hull edge.
-- REEL BACK: **E while walking with the wire** pulls you back along it to the last pad it's
-  wrapped round (`_reel_back()`); onto a bend = choose again, onto a node = timer paused. Costs
+- NODE (orange): wraps the wire and ADDS `node_time` (no full refill), capped at `max_wire_time`.
+  Standing on it holds the clock, but only for `node_hold` s. Touch radius 22 px. "Standing on
+  it" uses the same test as touching (feet or `BODY_UP` higher), so a node reached from below
+  holds too (before Nov 22 2026 it didn't).
+- NODE REST (being tried out; dev menu switch `Game.node_rest`, off by default, not saved):
+  wire latched on a node (`_anchor_cells[-1]` is a node) and feet within `node_rest_radius`
+  (48 px) of it = the timer waits with no limit (`_node_rest()` in `_tick_timer`). The solver
+  ignores it (it only makes rooms easier). To make it a real rule, set it on and test the rooms.
+- POLE (a steel support pillar with a purple cable ring, map char `B`, tile kind `pole`; was the
+  "bend" until Nov 2026): solid for
+  feet, not for the wire. Looks: `Assets/images/tiles/pillar.png` (32x64, foot on the tile's
+  centre) + `pillar_glow.png` (the ring, glow channel), drawn by `tools/art_pillar.py`;
+  `PuzzleTile._make_pillar()` / `_update_pillar()` draw it over the wires, under the player, but
+  over him and see-through while he walks behind it. level.gd draws the same picture in the
+  editor (`_draw_pillar_preview`). The column covers the tile above the pole. The wire wraps round its centre when it sweeps across it and unwraps when
+  you sweep back (`_update_wraps()` / `_swept_over()`: the swung triangle anchor->old hands->new
+  hands must contain the pole, with real width). Gives no time. Anchors list = pads AND poles
+  (`_anchor_cells` + `_anchor_signs`), so `_winding()` counts poles too. The solver uses the exact
+  same rule (`rewrap()` / `swept_over()`); keep them identical.
+- REEL BACK: **E while walking with the wire** pulls you back along it (past each pole) to the last
+  pad it's wrapped round (`_reel_back()`), unwrapping the poles; onto a node = it holds again. Costs
   the flying time. After 0.7 s standing still away from that pad, an [E] key shows above you.
 - Pads/cells count as touched from the feet OR from BODY_UP (10 px) higher (`_touching()`),
-  because the sprite is taller than a tile. Radii: start 20, node 22, goal 22, bend 20, cell 14.
+  because the sprite is taller than a tile. Radii: start 20, node 22, goal 22, cell 14.
 - GOAL (blue): powers the stage — lights on, conduit fills, its doors open and every BARRIER
   GROUP touching the stage sinks into the floor (a wave, nearest the goal first).
 - Stages in the same area (joined by barriers) SHARE pads: a later stage's wire can wrap round
-  the nodes and bends of stages already powered there (`_stage_pads()`).
+  the nodes of stages already powered there (`_stage_pads()`). Poles work anywhere (they're posts).
 - BLINKING GRATE (`blinker`, map char `x`): lit for `grate_live` of every `grate_cycle` seconds,
   each column `grate_wave` s behind the one to its left (a wave); flickers just before lighting.
   Lit = zaps your feet (also if you stand still); the wire is never blocked by it.
@@ -103,6 +148,215 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `Game` (autoload, `game_state.gd`) stores results; cells from earlier levels = extra oxygen.
 - **H** shows the room's hint route (a FloorGuide with `hint_only`); PIP offers it after 2 fails.
   **Esc** pauses (the HUD runs with process mode Always), **Q** on the pause menu = title.
+- **Menus use real Buttons** (pause: RESUME / SKILL TREE / QUIT; results: NEXT LEVEL /
+  PLAY AGAIN / SKILL TREE; title: START or CONTINUE + NEW GAME; skill tree: UNLOCK / BACK).
+  Their look is in the project theme (`Assets/ui/theme.tres`, textures `Assets/ui/button_*.png`
+  drawn by `tools/art_ui.py`), so new Buttons match on their own. Keys: arrows move the focus,
+  E / Space / Enter press it (Game._ready adds E to `ui_accept`). The top right corner always
+  has SKILLS (opens the tree, shows "+n" when you have points) and MENU (pause); they have
+  `focus_mode` none so Space never presses them while you play. Unpausing is deferred to the
+  end of the frame so the E that pressed RESUME doesn't also grab the wire.
+
+## Dungeon parts (Nov 2026: "make it less linear, like a Zelda dungeon")
+- Level 1 is a dungeon: tutorial rooms 1-3 (the team's), then the REACTOR HALL hub with three
+  wings, two chains you can do in any order:
+  - hub reactor ring (crate puzzle) -> the CABLE CLAMP -> COOLANT PUMPS (needs it: `needs the
+    clamp` in the solver).
+  - CABLE STORE (open) -> its PowerLink `CableStoreDuct` lights the one lamp of the red lamp door
+    to the SERVICE DUCT -> REACTOR ACCESS (the team's old room 4).
+  Each wing's goal also has a PowerLink UNLOCK to the MAIN DOOR (3 lamps), which opens onto the
+  Generator Room finale. Rooms: 13 (halls count), so room_titles / room_wire_time are 13 long.
+- Nov 22 2026 rework (Nilay: "the clamp and the fuse don't make sense, they're right next to each
+  other"): the fuse is gone from Level 1 (the fuse door became a one-lamp main door), the clamp
+  moved from the Cable Store's barrier stash into the reactor ring, so you see it the moment you
+  walk into the hub, and the stash was walled up (it was its own room, so the rooms after it
+  moved down one: Generator Room is 10-12, walkthrough 1,2,3,7,5,9,10,11,12). Each item now has
+  one job, found in one place and used in another. Fuse tiles still work if a level wants them.
+- A **hall** = a room with no START and no goal/core (`is_hall()`): never a puzzle, its doors open
+  at the start (`_setup_dungeon`), it never sinks barriers.
+- Tiles (map char): `fuse` f (pickup), `fuse_door` F (opens if you carry a fuse; no level uses
+  them now), `main_door` M (the red lamp door: lamps = UNLOCK links pointing at it, one link = one
+  lamp; walking into it shows `popup_lamps` and PIP's `pip_lamps` once), `socket` o, `clamp` k
+  (pickup, one per level). Art:
+  `tools/art_dungeon.py` (puzzle frames 14-16, palette 18-22). Pickups draw themselves
+  (`Scripts/pickup.gd`).
+- **PowerLink** (`Scripts/power_link.gd`, @tool Marker2D under a "Links" node): sits on a goal,
+  child markers = targets, `action` OPEN / CLOSE / RED_OFF / RED_ON / UNLOCK, `message`,
+  `show_camera` (`_glance_at`). Applied in `_solve()` after `_open_exit_doors` (`_apply_links`),
+  and quietly by `_power_quietly`. Red floors switched off live in `_red_off`; use `_is_red(c)`.
+- **Clamp**: E next to a socket (no wire) drops / takes it (`_try_clamp`); in a socket it's added
+  to `_poles`, so the wrap rule is the pole rule. The solver tries every socket. Near a socket
+  without the clamp: `popup_socket_empty` + PIP's `pip_socket_empty` once per level (Level 1
+  sets it to "...There's one in the reactor ring.").
+- **Ship map** (M): `Scripts/ship_map.gd`, drawn from `level.map_info()`; only in levels with
+  halls / fuse doors / main doors / links (`hud.set_map_available`).
+- Console: fuse count and clamp icon (hud.gd `set_fuses`, `set_clamp`).
+
+## Movable crates (Nov 22 2026, team: "add movable crates")
+- Tile kind `box`, map char `c` (palette frame 23, drawn by `tools/art_crate_icon.gd` from the
+  game's own drawing code). `_read_layout()` turns each into floor + a home in `_crate_homes`;
+  at runtime each is a `PushCrate` (`Scripts/push_crate.gd`, draws itself: steel with hazard
+  stripes, so it never looks like the fixed wooden cargo). In the editor `_crate_preview` draws them.
+- Rules (level.gd, "movable crates"): walk straight into one (player.gd `_slide` ->
+  `lean_on_crate()`), lean `PUSH_LEAN` 0.14 s, it rolls one tile (`_push_crate`) onto floor, the
+  spawn or a red tile, never onto pads, items, cells, sockets, another crate, you or the wire you
+  carry (`_wire_crosses`). Solid for feet and wire (`is_solid_for_walk` / `is_solid_for_wire`
+  check `_crates` first). Onto a LIVE red tile = `_short_out()`: sparks, it sinks, the tile goes
+  in `_grounded` (`_is_red()` says no: walkable, and the wire crosses it). Won't move = a shudder
+  + tick, PIP says `pip_crate_stuck` once.
+- R (`_respawn`): `reset_crates(room)` puts the room's crates home (shorted tiles turn red
+  again), unless the room has power. In a HALL with crates, R resets them and puts you back at
+  the door you came in by (`_entered_at`, else `_dev_spot`), so the reactor ring can't trap you.
+- Signals `crate_pushed`, `crate_grounded`; story/tutorial triggers PUSH_CRATE, GROUND_CRATE (at
+  the end of both enums). Texts: `popup_crate_grounded`, `popup_crates_reset`, `pip_crate`,
+  `pip_crate_ground`, `pip_crate_stuck`. Sound `push.wav` (`tools/sfx_crate.py`, plain Python).
+- Solver: `push_configs()` = every layout you can push a room's crates into (BFS, fewest pushes
+  first; you start on the START). It checks the wire in the first `--crate-tries` (24) layouts
+  AND in every layout that shorts out a new set of red tiles, after a quick "can you walk from
+  START to the goal" test (`walk_reaches`). Prints "needs the crates moved: at least n pushes".
+  Halls with crates get a plan instead (`hall_plan()`: fewest pushes so every door and item is
+  reachable), written to the routes JSON under "halls". The chosen layout is carried on to
+  later stages. Crates are only pushed before grabbing the wire (in the game you may push while
+  wired). A route's "pushes" = [[x, y, dx, dy], ...].
+- Autopilot: resets the room's crates, does the route's pushes (`_push`: walk behind, lean),
+  then the wire; hall plans run once, as soon as he can walk into that hall (`_do_hall_plans`).
+- Level 1 uses: REACTOR HALL (the clamp in a 2 thick red ring, 2 crates: the one under the
+  entrance pushed down twice is the way in), CABLE STORE (rebuilt bigger: a red strip across the
+  room; short out the one tile (13,26) on the line START -> node; 2 crates, at least 3 pushes;
+  lowest timer 1.52 s), COOLANT PUMPS (a crate on the clamp's line). Built by
+  `tools/maps/build_level1_crates.py` (from the dungeon map), then the clamp / fuse rework above.
+
+## Making levels in the editor (Nov 22 2026, team: "it should be very easy to create levels")
+- Painting is all it takes: each palette tile's `kind` gives it its art and its rules live.
+- **Live preview** (Nov 24 2026, team: "like the Geometry Dash editor"): level export
+  `live_preview` (on). In the editor `_build_live_preview()` makes the same PuzzleTile /
+  PowerCell / Pickup nodes the game makes, under a `LivePreview` node with no owner (never
+  saved), rebuilt on every paint. Godot 4.7's TileMapLayer does NOT emit `changed` when you
+  paint, so `_watch_painting()` hashes `layout.tile_map_data` 5x a second and rebuilds when it
+  changes (the old redraw-on-paint never worked in 4.7). Those three scripts are `@tool` (no PointLight2D in the
+  editor). `_tick_live_preview()` (level `_process` in the editor) runs the grate wave;
+  main doors show one lamp per UNLOCK link. `LiveMarks` (z 55) draws SPAWN / EXIT / TEST
+  START markers and stars on space. With the preview on, the Props layer and the pillar
+  preview skip pads (the preview has them). `show_layout_in_editor` now defaults to off.
+- **Test start tile** (kind `test_start`, palette frame 24, `tools/art_test_start.py`, no map
+  char: `map_from_scene.py` writes it as floor): `_read_layout()` keeps it in `_test_cells`
+  and makes it floor. F6 (editor build, not `Game.playing_through`) starts there with earlier
+  rooms powered and the intro skipped; it wins over an active TestStart node. 2+ painted = red
+  flags + a warning. Kept as nodes on purpose (the team chose this): story beats,
+  tutorial steps, hint guides, power links (they hold text or connections).
+- **Team art tiles** (Nov 24 2026, team: "update all the assets"): the team's PNGs live in
+  `Assets/images/tiles/team/` and are sources 1-7 of the Layout tileset (0 = the plain
+  palette): 1 ground (floor), 2 wall (front faces, wall), 3 wall_sides (Claude-made: all 47
+  "blob" wall pieces, one light edge where floor touches then dark, `wall_sides.json` lists
+  each piece's floor sides), 4 objects (node, goal, start, grey block = crate, small crate =
+  box, big 2x2 crate = 4 crate tiles; the purple bend block is left out on purpose; the grey
+  block became the unpowered goal, see "Grey goals"), 5-7
+  start / goal / node animations (one animated tile each, 0.1 s a frame). Built by
+  `tools/build_team_tiles.gd` (keeps the tileset uid). `_read_layout()` stores every
+  source > 0 tile in `_art` (with its kind); `_build_visuals()` copies them onto the
+  ArtFloor / ArtWalls / ArtProps layers (same tileset, so animations play) and skips our own
+  picture there. PuzzleTile `art_from_map` hides its sprite + glow (light, sparks, [E] stay);
+  PushCrate `art` draws the painted crate. Rules come only from the kind. The map tools key
+  kinds by (source, x, y) (`tileset_kinds()`); map_to_scene writes source 0 only.
+  `team/wall.png` is the team's **"Wall-tilemap3d v2"** (each panel has a dark top band, 53/55/59,
+  so walls look 3D); the flat "Wall-tilemap v2" isn't used. (A first check wrongly called them
+  identical: PIL's getbbox() on an RGBA difference only looks at alpha. Compare pixels.)
+  The 47 wall pieces are wall TOPS in the same style: 2 px rim at the floor, the 3D panels'
+  shadow steps, then the dark top colour, so side walls continue the panels' top band.
+  After the 47 come pieces next to FRONT PANELS (Nov 25 2026, team: "the top edge skirting
+  wraps round the corner"): a panel neighbour counts like floor for the rim (from y 16 next
+  to a panel's top row, where its skirting is), so the panel's top edge turns the corner and
+  runs down to the floor rim. Only combinations the levels use are drawn (`art_wall_sides.py`
+  scans Levels/), so after map changes run: art_wall_sides.py, build_team_tiles.gd (Godot
+  headless), retile_walls.py. JSON entries have "panel_top" / "panel" lists; level.gd's
+  plain-wall fallback ignores those entries.
+- **Panel ends** (Nov 25 2026, team: corners where a front panel ends next to a doorway
+  corridor): source 8 `wall_caps.png` (`tools/art_wall_caps.py`) = each panel's left / right
+  end tile (power strip, windows, computers) with the top band redrawn so the skirting turns
+  the corner up the open side (distance field: face from row 18, open side; same steps as the
+  team's band). `retile_walls.py` (`_wrap_panel_ends`) swaps a panel end to its cap when the
+  tile beside it isn't wall / empty / space, and back when it is. Wall pieces next to a
+  panel's top row start their rim at row 16 (`PANEL_EDGE` 18), lining up with the skirting.
+- **More space for rooms 7, 8, 9** (Nov 25 2026, team: Cable Store, Main Breaker, Reactor
+  Access "need much more space", walls modelled on theirs): `tools/move_rooms.py` moved the
+  Generator Room area + exit 2 right / 3 down and Reactor Access 3 down, rigidly (the doors to
+  rooms that stay went with them; halls grow to meet them: Main Breaker 2x2 -> 4x5, Service
+  Duct 4x2 -> 4x5). Solver results identical, every room / marker kept its room, autopilot ok.
+  New front walls use the "mixed" panel style (`retile_walls.mixed_columns()`, copied from the
+  panels the team painted: windows-panel top row, a no-bolt strip broken by a window or a
+  monitor between pointed strip ends, strip bottoms, their caps). Painted panels are kept
+  while valid (`panel_valid()`: floor right under the panel's bottom row), else cleared.
+  **Coolant Pumps (stage 5) has 0 solver solutions** since the team's crate edit there
+  (fixed + pushable crates at (37-46, 16-20), before the moves too): check it in the game;
+  the autopilot force-powers it until it solves again.
+- **Conduit Hall door** (Level 1 room 3, Nov 25 2026, team: "make that 3 tall"): door tiles
+  (12, 8)-(12, 10) (was 2 tall), and (13, 8) became floor so it opens into the room. Solver
+  results identical (lowest timers and solution counts), autopilot plays the level clean.
+  The team also made the two Storage crates at (9, 8) and (5, 10) pushable (map char c).
+- **Plain strip panel** (Nov 25 2026, team: the power strip panel "without the lightning
+  bolt"): source 9 `wall_strip.png` (`tools/art_wall_strip.py`: wall.png's panel A with only
+  the bolt painted out in the panel colour; the strip keeps its gap and pointed ends. The bolt
+  = the yellow shape that doesn't reach the end columns). Kind wall, 6x3. `retile_walls.py`
+  keeps it where painted (`PANELS`), wraps its ends like panel A's, and side walls line up
+  with its skirting. It isn't picked automatically for new walls.
+- **Grey goals** (Nov 25 2026): objects.png's grey block (1, 7) is the goal WITHOUT power
+  (kind "goal"). Every team-art goal shows grey until its room is powered, then the animated
+  blue goal (`_show_goal_art()`, called from `_build_visuals`, `_solve` and `_power_quietly`).
+- **Animated pads** (Nov 25 2026): `tools/use_team_pads.py` repaints START / GOAL / NODE pads
+  with the animated tiles (sources 5-7, same kinds, rules unchanged). Done for Level 1.
+- **Old walls are gone** (Nov 24 2026, team: "delete all the old walls"): every wall in
+  levels 1-3 is a team tile on the Layout, painted by `tools/retile_walls.py` (front panels
+  where a wall is 3 tall above non-door floor, runs of 2+ columns: 6 = power strip, 4 = power,
+  10 = computers / windows, else stretched; everything else the wall piece for its 8
+  neighbours, where '', wall and space count as not floor). Painted walls show exactly as
+  painted. A plain grey palette wall borrows the same piece at draw time (`_wall_piece()`);
+  the old auto wall faces, roofs and the light strip under them were removed from level.gd.
+  The rule maps (solver input) were identical before and after. Godot's terrain brush was
+  tried and dropped: it treats empty space past the map edge as floor (rims facing nothing).
+- **Spaced-out rooms** (Nov 25 2026, team: "space out the rooms so the walls look smoother"):
+  `tools/space_rooms.py` (Level 1 only, the team asked for just that one) doubled 6 seams of wall
+  (2 columns, 4 rows; map 56x47 -> 58x51). A seam runs edge to edge through wall / empty /
+  doorways only and zig-zags only inside tiles solid in both lines, so rooms move rigidly: the
+  solver's lowest timers were identical before and after (same `--margin`), every room kept its
+  number and every marker its room. Doorways on a seam got a corridor floor tile (so rooms 0, 2,
+  3, 4, 5 grew by 2 to 8 tiles). Left thin (no seam can reach them, doors block every path): the
+  wall between the Cable Store area and the room below it on the right (2 rows), and the
+  interlocking corner of the room left of the Generator Room. Walls inside one area (barrier
+  stages) are never thickened. **Tile coordinates in older notes for Level 1 (like (13,26)) are
+  from before this.** Levels 2 and 3 not spaced yet (the script fixes all their thin walls).
+- **Room labels** (editor only, `show_room_info`, `_update_room_info()` / `_draw_room_info()`):
+  every room shows its number, name, START time ("level's" = the default) and crate count, and
+  red warnings (needs a START, 2 STARTs, needs a GOAL). Labels step down so they never overlap.
+- Paint a new room and `room_titles` / `room_wire_time` grow to match by themselves (a new
+  "ROOM n" / 0). They never shrink (no data lost); if a room is added in the middle, the labels
+  show at once which names moved.
+
+## Judge mode and PIP's autopilot
+- Title, top left: JUDGE MODE toggle (`Game.judge_mode`, saved) + LEVEL n buttons. In a level,
+  R = `start_autopilot()` instead of restart; after 2 fails PIP says `pip_hint_judge`.
+- `Scripts/autopilot.gd`: walks to the next room (`autopilot_target()`: current unsolved room,
+  then the level's `walkthrough` export, then number order), fetches / places the clamp,
+  collects fuses, steps on airlock pads, drifts across space (`walk_path()` has drift edges),
+  grabs the wire and steers to every point of the solver's route (`player.autopilot` +
+  `auto_dir`, so the normal rules run). A jump between route points = a drift (`_drift`: line
+  up, straight push). Blocked diagonally by a corner = one axis at a time (`_free_axis`).
+  While `autopilot_on`: timer frozen, no zaps, no O2 drain, no PIP shutdown meter, blocking
+  beats don't block. Falls back to `autopilot_force_solve()` (+ a warning: treat it as a bug).
+- While walking a route, `autopilot_wraps` switches off `_update_wraps` and the route's `wraps`
+  list decides the pillar wraps (`autopilot_sync_wraps`). Some solver routes only graze a
+  pillar's centre (cross product exactly 0 on the 4 px lattice); steering a pixel off misses it.
+- Blinking grates (Nov 23 2026, Nilay: in judge mode PIP walked over lit grates and nothing
+  happened): before stepping from floor onto a run of grates, `_wait_for_grates` waits until
+  `_grates_clear` says he can cross the whole run at walking speed while each grate is dark
+  (`level.blinker_live_in(c, dt)` predicts the wave, `GRATE_MARGIN` 0.15 s either side). He
+  then walks in the gap behind the wave. Still no zaps during the autopilot, as a safety net.
+- `autopilot.debug = true` prints each step and where he got stuck.
+- Routes: `Data/routes/level_N.json` from `python tools/solver2.py Levels/level_N.tscn --paths
+  Data/routes/level_N.json --margin 3` (keyed by START tile; `clamp` = the socket used; `wraps`
+  = [point index, pads touched, [[pole x, pole y, side]...]] where the wraps change). Godot
+  lists `.json` as a resource, so exports include them without a filter.
+  **Regenerate after any map change.** Test: a bot that only presses R (see Verification below);
+  it must print no "Autopilot couldn't walk room" warnings.
 
 ## Spacewalk rules (Level 2)
 - `hull` = floor outside the ship, `space` = open space (nothing drawn: the Starfield shows). A room
@@ -113,7 +367,9 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - Feet can't stand on space. Walking (cardinally) into a hull edge asks `drift_landing()`: if there
   is hull straight ahead (and the wire won't snag), the player **drifts** (`State.DRIFT`,
   `drift_speed` 150) until fully back on hull. No landing = refused with red dots + PIP tip.
-- A door with no wall beside it is a **gangway** (catwalk that slides out). A crate with no floor or
+- A door with no wall beside it is a **gangway** (catwalk that slides out). The whole door
+  group counts (`_is_gangway()`): a door 3+ tiles long in a wall is never a gangway, even its
+  middle tile (Nov 25 2026: the 3 tall Conduit Hall door's middle tile was drawn as a catwalk). A crate with no floor or
   hull beside it is floating debris. A cell with open space on both opposite sides floats in space
   (that tile counts as space).
 - `airlock` pad: stepping on it (once) closes the door behind, vents the air, opens the outer door
@@ -128,7 +384,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - Story: Level 3's first room (CORE ACCESS) teaches the loop on a harmless "sync pylon". Powering
   it overloads PIP (`RoguePip.malfunction_room`): red alert (`set_alert`: `alert_light` tint,
   every emergency light flashes, boss music `music_core.ogg`), he talks as "P!P", and hides in the core
-  chamber: 3 stages joined by barriers, one core each (open ring / behind cargo + bend / between
+  chamber: 3 stages joined by barriers, one core each (open ring / behind cargo + pole / between
   blinking grates). Each loop reboots him a bit; he flies to the next socket. The last one shuts
   him down, he reboots, then the normal lights-on cutscene plays.
 - `Scripts/rogue_pip.gd` (`RoguePip`, node in level_3.tscn) is NOT a rule: it listens to
@@ -136,7 +392,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `cut_wire()` (fail kind "cut"), `set_alert()`, `shake()`, `hold()`/`let_go()` (`_solve()`
   waits for every hold before opening doors / the cutscene). Its SHUTDOWN METER (12 red LEDs over
   his head) fills only while you carry the wire in his stage: `shutdown_seconds` per phase
-  (18, 15, 19). Full = pulse that cuts the wire. A Mood enum (ASLEEP, ROGUE, HIT, OFF, BOOT, AWAKE)
+  (see Balance above). Full = pulse that cuts the wire. A Mood enum (ASLEEP, ROGUE, HIT, OFF, BOOT, AWAKE)
   drives how he's drawn (code-drawn monitor, 2x scale via `draw_set_transform`).
 - HUD: `set_rogue(on)` turns PIP's console face red and angry; any line with speaker
   `GameHUD.ROGUE_SPEAKER` ("P!P") is red.
@@ -146,7 +402,7 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 ## Architecture (data -> logic -> visuals)
 - **The map is painted**, not coded: the `Layout` TileMapLayer uses
   `Assets/images/tiles/layout_tileset.tres`; each tile has Custom Data `kind` (floor, wall, start,
-  goal, node, bend, discharge, blinker, crate, door, spawn, exit, cell, hull, space, airlock,
+  goal, node, pole, discharge, blinker, crate, door, spawn, exit, cell, hull, space, airlock,
   barrier, core). Rooms (= puzzle STAGES) are found by flood fill (walls/doors/barriers separate them;
   space and void separate hull sections) and numbered in walking order from the spawn. Each needs
   exactly one START (airlocks none). Doors open when the room before them is solved; touching
@@ -166,12 +422,28 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `pad_touched(kind, index)`, `level_completed`, `cell_collected`, `empty_cell_touched`,
   `hint_shown`, `drift_started`, `airlock_cycling`, `ship_lighting_up` (cutscene starts),
   `all_rooms_powered` (cutscene over).
-- `Scripts/player.gd` (`Astronaut`): state machine FREE / WIRED / CHOOSING / FLUNG / LOCKED / DRIFT.
+- `Scripts/player.gd` (`Astronaut`): state machine FREE / WIRED / LOCKED / DRIFT (no fling any more).
   Only movement + animation; asks the level for rules (`player_moved()`, `wire_reaches()`,
   `drift_landing()`...).
-- `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`), results, `o2_bonus()`,
+- `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`, found at start by
+  `_find_levels()`: every `Levels/level_<n>.tscn`, in number order, numbers 1, 2, 3 with no gap;
+  `ResourceLoader.list_directory` so it works in the web build too. A new level = save the next
+  `level_<n>.tscn` in `Levels/`, nothing else to edit; the level warns if its `level_number`
+  doesn't match its file name), results, the save file
+  (`save_game()` / `load_game()`, `user://save.cfg`, `has_save()`, `continue_level()`), `o2_bonus()`,
   `go_to_level()`, `first_time(tip)` (PIP explains things once), `story_values()` for `{cells}` /
   `{o2_bonus}` / `{o2_per_cell}` in story text.
+- `Scripts/juice.gd` (autoload **Juice**): game feel only, never rules. `hitstop(s)` (Engine.time_scale
+  0, restored by a timer that ignores time scale; the newest call restores it), `shake(0..1, s)`
+  (trauma: offset = MAX_SHAKE px x trauma squared, on the active Camera2D's `offset`, whole pixels;
+  level.gd `_shake_cam(duration, px)` converts to it), `punch_scale(node, Vector2 mult, s)`
+  (remembers the node's real scale in meta), `flash(item)` (modulate 4 back to normal in 0.08 s),
+  `pitch()` (0.92 to 1.08). Used in level.gd: zap = hitstop 0.12 + `player.flash()` + sparks;
+  room powered 0.07, all powered 0.1, boots save / crate shorts a tile 0.05, PIP's cut 0.06;
+  `player.squash(mult)` on grab, node, reel-back stop, crate push, pickup, drift push-off and landing
+  (+ `_dust_at`); `_play(n, pitch)` varies the sounds in `PITCH_VARIED`, and power cells charged on
+  one try rise in pitch (+0.07 each). `player.gd` keeps the squashing sprite on his feet
+  (`sprite.position.y = _sprite_y * sprite.scale.y`). Pickups pop in `pickup.gd` / `power_cell.gd`.
 - `Scripts/puzzle_tile.gd`: runtime visuals for pads/doors/gangways/airlock/barriers (glow, sparks,
   arrows; barriers shudder and sink, `open_door(delay)`).
 - `Scripts/power_cell.gd`: the collectible battery (draws itself, collect/restore animations).
@@ -181,13 +453,17 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   (`say(lines, speaker, blocking, point_at)`, typewriter; when quiet it shows the tutorial
   objective dimmed), ship power LEDs, cell counter, O2 bar (outside) or key reminders. The wire
   timer is a 5-LED bar floating above the astronaut's head. Also: tutorial/PIP arrows, toasts
-  (top), fades, results with stars + suit upgrade, pause menu, cutscene film bar (top).
-- **UI look** (the team asked for "less AI"): ship hardware outside, old green terminal inside.
-  Panels are 9-slice `StyleBoxTexture`s of `Assets/ui/frame_screen.png` (riveted bezel + green
-  scanline screen) and `frame_plate.png` (riveted plate), drawn by `tools/art_ui.py`, margin 6.
-  Colours: amber `#ffc24d` (names, keys, headings), phosphor green `#a8f0a0` (text), dim green for
-  hints. Meters are LED segments (`_led()` in hud.gd). Keep new UI in this style - no flat
-  translucent boxes with thin glowing borders.
+  (top), fades, results with stars + skill points, pause menu, the skill tree screen (an
+  instance of `Scenes/skill_tree.tscn`, `hud.open_skill_tree()`), cutscene film bar (top).
+- **UI look** ("clean sci-fi", Nov 22 2026; replaced the green terminal at the team's request:
+  "polished, modern ish"): dark glass panels with rounded corners and a thin cyan edge
+  (`StyleBoxFlat`), white text, amber for names / keys / things to buy, green = done, red =
+  danger. Everything lives in `Scripts/ui_style.gd` (`UIStyle`: colours, font sizes, `box()`,
+  `draw_box()`, `text()`, `draw_key()`, `draw_led()`) and the theme (`Assets/ui/theme.tres`:
+  Button, Panel, PanelContainer, Label, RichTextLabel). Code-drawn UI (console, timer, skill
+  tree, map, keycaps, dev menu) uses UIStyle, so a colour changed there changes everywhere.
+  PIP's face stays a little green screen (his character). Toasts slide in, the pause menu fades
+  in, results scale in. The old frame PNGs (`frame_*.png`, `button_*.png`) are no longer used.
 - **Story** (`Scripts/story.gd` on the `Story` node + `Scripts/story_beat.gd` Marker2D children):
   each beat has `trigger` (LEVEL_START, ENTER_ROOM, SOLVE_ROOM, REACH_HERE, GRAB_WIRE, FAIL_IN_ROOM,
   AIRLOCK, ALL_POWERED, FIRST_DRIFT, TOUCH_EMPTY_CELL, SHIP_LIGHTS_UP), `lines`, `pause_game`,
@@ -200,21 +476,36 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   `pip_o2_low`, `pip_no_landing`, `pip_cell_kept`, `pip_cell_lost`, `pip_strain`, `pip_shared`;
   said via `_pip_say()`, `{cells}`-style values, empty = silent) and "Popup texts" (`popup_...`).
   Don't hard-code new player-facing text in level.gd: add an export in one of those groups.
-  (Also `pip_stranded`, `pip_level_up`, `popup_stranded`, `popup_level_up`, `popup_boots`.)
+  (Also `pip_stranded`, `popup_stranded`, `popup_boots`.)
 - **Stranded after a fail**: `_check_stranded()` runs a tile BFS from the player to the room's
   START avoiding red tiles and grates; no path = an [R] key floats over him, the console says
   "[R] back to start", PIP explains once. Cleared by R, by grabbing the wire, or when a path appears.
-- **RPG** (`game_state.gd` holds it: `xp`, `lv`, `perks`, `upgrades_waiting`, tuning constants
-  XP_ROOM 30 / XP_CLEAN 15 / XP_CELL 10 / XP_FINISH 50, levels need 100, 160, 220... XP).
-  level.gd `_award_xp()` in `_solve()` and `_finish_level()`; a level up only queues an upgrade,
-  `_offer_upgrades()` opens the LEVEL UP screen at a safe moment (end of `_solve`, before the
-  results). `hud.pick_upgrade(choices, lv)` pauses the tree and is awaited for the chosen id.
-  Upgrades (`Game.UPGRADES`): wire (+0.5 s, x2), cells (+1 s per battery, x2), servos (+10% walk,
-  x2, `player.speed_mult`), boots (first zap per room absorbed: `_shock()` hops you back to
-  `_last_safe`, you keep the wire), tank (+15 s O2, x2). Rules read them through `_wire_time()`,
-  `_cell_bonus()`, `Game.o2_bonus()` - never read `wire_time` / `cell_bonus` directly in rules.
-  Bot runs: Levels 1+2 reach LV 5 (4 upgrades), Level 3 alone ~250 XP. Bots must press E when
-  `hud.is_picking()`.
+- **RPG = skill tree** (replaced the old XP / LV / pick-an-upgrade system, Nov 2026).
+  Autoload **SkillManager** (`Scripts/skill_manager.gd`, registered BEFORE Game) holds `points`
+  and the unlocked skills; `has_skill(id)`, `can_unlock(id)`, `unlock(id)`, `bonus(effect)`,
+  signals `points_changed`, `skill_unlocked`, `skills_changed`. Skills are DATA: one `SkillDef`
+  (`Scripts/skill_def.gd`) `.tres` per skill in `Data/skills/`, loaded with
+  `ResourceLoader.list_directory` (works in exports). 3 branches (Wire, Suit, Life Support),
+  5 skills each, cost 1-2, each needs its `parent_id`. Effects: `wire_time` (START, and lifts
+  the cap too), `node_time`, `max_time`, `node_hold`, `cell_bonus`, `walk_speed` (+8% each),
+  `boots` (zaps per room absorbed), `o2`, `o2_per_cell`. Tree: Wire (LONGER WIRE I, NODE BOOST,
+  BIG SPOOL, SUPER CELLS, LONGER WIRE II), Suit (servos x3, RUBBER BOOTS, INSULATED SOLES),
+  Life Support (tanks, CELL CHARGER, CALM BREATHING = nodes hold 1 s longer).
+  Points: level.gd export `skill_points` (L1 2, L2 3, L3 3), given in `_finish_level()` only the
+  first time (`Game.has_finished()`), so replays can't farm them. New points (Nov 23 2026, Nilay:
+  "a noti when you get more skill points"): `hud.notify_skill_points()` = a popup "+n SKILL
+  POINTS: PRESS T TO UPGRADE" and an amber "!" dot on the SKILLS button that pings (a ring
+  grows out of it). The dot shows whenever you have points and a skill you can buy
+  (`_can_upgrade`), pings for 6 s at level start / 8 s when points arrive, and stops pinging
+  when the tree opens. The first time (and not after the last level) PIP says
+  `pip_skill_points` (level export, two lines). The tree opens at any time
+  (T, the SKILLS corner button, or the SKILL TREE buttons); it pauses the game and draws itself (`skill_tree.gd`,
+  layout computed from the parent links). Unlocks apply at once (level listens to
+  `skills_changed` -> `_apply_skills()`). Rules read skills through `_wire_time()`,
+  `_cell_bonus()`, `_shock()`, `Game.o2_bonus()`: never read `wire_time` / `cell_bonus`
+  directly in rules. **No puzzle may require a skill** (the solver uses none).
+  Saving: finishing a level and every unlock call `Game.save_game()`; the title screen shows
+  CONTINUE: LEVEL n + NEW GAME buttons when a save exists. Bots: `Game.new_game()` first.
   `RoguePip` is `@tool`: in the editor it previews the pylon, each socket (number + shutdown
   time) and the flight path, using `level.editor_core_spots()` (a quiet `_build_rooms(true)`).
 - **TestStart** (`Scripts/test_start.gd`, one per level scene, `active` off by default): drag it,
@@ -223,9 +514,15 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   rogue_pip.gd catch up. Only used when the level scene is run on its own from the editor
   (`OS.has_feature("editor")` and not `Game.playing_through`), so F5 and exports ignore it.
   Bots that load a level with `change_scene_to_file` count as "on its own": keep markers inactive.
+- **Dev menu** (`Scripts/dev_menu.gd`, added by Game._ready only when `OS.has_feature("editor")`,
+  so never in exports): ` or F1 anywhere lists every room of every level (level.gd
+  `dev_checkpoints()`, read from each scene without adding it to the tree). A pick sets
+  `Game.dev_room` and loads the level; `_apply_test_start()` then runs the same
+  `_start_in_room()` as TestStart, on the room's START (`_dev_spot()`). While open it freezes
+  the current scene (process_mode DISABLED, also the HUD's Always nodes) so keys don't leak.
 - **Tutorial**: `Scripts/tutorial.gd` on the `Tutorial` node runs its `TutorialStep` children
   (`Scripts/tutorial_step.gd`, Marker2D) in tree order. Each step has `text`, `advance_when`
-  (GRAB_WIRE, TOUCH_NODE, TOUCH_BEND, SOLVE_ROOM, ENTER_NEXT_ROOM, REACH_HERE, DRIFT) and its
+  (GRAB_WIRE, TOUCH_NODE, WRAP_POLE, SOLVE_ROOM, ENTER_NEXT_ROOM, REACH_HERE, DRIFT) and its
   position = where the arrow points. A step only shows once the player is in its room. Rewinds to
   the room's first step on restart. `Scripts/floor_guide.gd` = scrolling yellow floor chevrons
   (`hint_only` = hidden until H).
@@ -238,6 +535,10 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - **Space background** (`Scripts/starfield.gd`): parallax stars + `Assets/images/space/planet.png`
   and `nebula.png`, on a CanvasLayer at layer -10 (not darkened by the CanvasModulate).
 - `Scenes/title.tscn` + `Scripts/title.gd`: title, premise, controls, press E.
+- **Intro cutscene** (`Scenes/intro.tscn` + `Scripts/cutscene.gd`, a reusable slideshow):
+  START on a new game / NEW GAME -> `Game.go_to_intro()` -> 3 pictures (`Assets/images/cutscenes/`,
+  480x270, shown 1:1) -> Level 1. E / Space / Enter / click = next, Esc = skip all.
+  CONTINUE skips it. Slides, order, next level and music are exports on the Intro node.
 - **Player sprite**: animations live in SpriteFrames files, `Assets/images/astronaut/
   astronaut_frames.tres` (original art: idle, walk_down/left/right, carry, shock, burnt) and
   `astronaut_v2_frames.tres` (adds walk_up and idle_<dir>). `player.gd` picks the first animation
@@ -249,17 +550,38 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - `tile_map_data` is binary (uint16 format version, then 12 bytes per cell:
   int16 x, int16 y, uint16 source, uint16 atlas_x, uint16 atlas_y, uint16 alternative).
   Edit the map in the Godot editor, or sketch it as text and use `tools/map_to_scene.py`.
-- Coroutines (`await`) on the HUD can resume after the scene changed: check `is_inside_tree()`.
+- Coroutines (`await`) can resume after the scene changed (quit to title): SceneTree timers and
+  `process_frame` still fire, but the node is out of the tree, so `get_tree()` is null. After
+  every `await` in level.gd / hud.gd / rogue_pip.gd: `if not is_inside_tree(): return`.
+  rogue_pip.gd's `_wait()` / `_until_quiet()` return false then (`if not await _wait(0.6): return`).
+  (Nov 2026: quitting during PIP's malfunction crashed on `create_timer`; a bot that quits at
+  54 moments per level now runs clean.)
+- `Juice.hitstop` sets `Engine.time_scale` to 0: during it there are NO physics frames, and normal
+  timers and tweens wait. Bots that measure time by counting physics frames just pause; to watch
+  a hitstop, sample on `process_frame` with `Time.get_ticks_msec()`.
+- `get_meta(key, null)` counts as "no default" and errors when the key is missing: check
+  `has_meta()` first.
 - Running a test script with `--script` loads before autoloads are registered: don't use the
-  project's class names as types in such scripts (access them dynamically).
+  project's class names (Astronaut, SkillManager...) in such scripts at all, not even
+  `Astronaut.State.LOCKED` (use the number: FREE 0, WIRED 1, LOCKED 2, DRIFT 3).
+- **UI text** in the menus uses real Buttons and `KeyHint` (`Scripts/key_hint.gd`: drawn keycaps +
+  a label, sizes itself) instead of "[E] text" strings: console key reminders, pause controls,
+  title controls. Results use three stat tiles (Time / Cells / Retries).
 - Unused, safe to delete: `Scripts/hint_sign.gd`, `Scenes/hint_sign.tscn` (if present).
   `Scenes/main.tscn`, `Scripts/main.gd` and `electric_box.*` are the old prototype.
 
 ## Python tools
 `tools/` (ignored by Godot via `.gdignore`) has the level solver, map/lighting previews, the map
 writer and the art/sound generators. See `tools/README.md`. After editing a room, run
-`python tools/map_from_scene.py <scene> <out.txt>` then `python tools/solver2.py <out.txt>` to check
-it (routes, tightest segment, and whether every power cell can be charged in time).
+`python tools/solver2.py Levels/level_N.tscn`: it reads the map AND the level's Rules numbers
+and lists routes with their "lowest timer" (the least time left on the way; carried over from
+pad to pad) and whether every power cell can be charged in time. `--paths f.json --margin 3`
+exports routes a bot can replay in the game. On a Mac the command is `python3`. Rooms with
+movable crates take longer (Level 1: about 80 s); see "Movable crates".
+Known blind spots of the cell check (false "NOT collectible"): it ignores the +2 s a cell gives,
+it forgets pole wraps when it checks the way on from a cell (L1 cell (24,7) is fine in the game),
+and in core rooms it never checks cells on the last stretch before the loop closes (L3 (21,3)).
+Check such a cell with a bot in the game before moving it.
 
 ## AI-generated content (for TSA documentation)
 Made with Claude (Anthropic) in the Claude app and Claude Code: the level/tutorial/lighting/story/
@@ -282,5 +604,50 @@ and made the boss sound effects (`tools/sfx_pip.py`).
 boss = "Space staccato", ending = "Title theme no dramatic". Claude only wired them in
 (`Game.MUSIC` = per-track volume, `Game.load_music()`, `level.set_music_override()`). Record
 who made them for the copyright checklist.
+Nov 2026 (Claude, at the team's request): bends turned into poles (the wrap rule, the post art
+in puzzle_tile.gd), the new timer rules and all the balance numbers, the reworked Level 1 room 4
+and Level 2 room 5 (solver-checked, then replayed by a bot), the KeyHint keycaps and results tiles,
+and fixes for errors when quitting mid-level. Also the dev menu (jump to any room).
+The skill tree system (SkillManager, the skill files and their numbers, the skill tree screen,
+the save file and Continue) was written by Claude in Nov 2026 to replace the XP upgrades; the
+team chose the branches, the points per level and where it opens. Claude also made the menu
+buttons (art drawn in `tools/art_ui.py`, styled in the theme) and the SKILLS / MENU corner
+buttons, at the team's request.
+Nov 22 2026 (Claude): the support pillar art for the poles (`tools/art_pillar.py`, drawn pixel by
+pixel in Python, octagon design), the slideshow cutscene script and its per-picture sounds
+(`tools/sfx_intro.py`, synthesized), PIP's new Level 3 shutdown times, the fly-away ending, the
+dungeon systems (halls, fuses, fuse doors, main door, power links, clamp and sockets, ship map;
+art in `tools/art_dungeon.py`), Level 1's dungeon layout and its new wing puzzles (Cable Store,
+Coolant Pumps; solver-checked; Reactor Access is the team's old room 4, moved), and judge mode
+with PIP's autopilot. The three
+intro cutscene PICTURES were provided by the team (record who made them, and the tool if they
+were AI-generated, for the copyright checklist); Claude only cropped them to 16:9 and shrank them
+to 480x270 with Python.
+Nov 22 2026 (Claude, at the team's request): movable crates (push_crate.gd, the push / short out /
+reset rules, the solver's crate layouts and hall plans, the autopilot's pushes, the palette icon
+and push.wav), the reworked Level 1 hub and Cable Store and the Coolant Pumps crate (solver-checked,
+then walked by the autopilot in the real game), the editor's room labels and growing room lists,
+the dev menu, and the "clean sci-fi" UI restyle (ui_style.gd, theme, HUD, title, skill tree,
+map; canvas_items stretch for sharp text). The UI font is Godot's built-in Open Sans.
+Nov 22 2026 (Claude, at Nilay's request): the clamp / fuse rework of Level 1 (no fuse, the clamp in
+the reactor ring, the one-lamp door to the Service Duct, the lamp door and empty socket messages),
+the NODE REST switch in the dev menu, and the node hold fix (a node reached from below holds too).
+Nov 22 2026 (Claude, at Nilay's request): picked the pixel font Departure Mono and the DYSLEXIA
+FONT switch with OpenDyslexic (both fonts by other people, free under the SIL Open Font License:
+list them in the copyright checklist with their OFL.txt; Claude only wired them in and set the
+letter spacing).
+Nov 23 2026 (Claude, at Nilay's request): the skill point notification (popup, pinging dot on
+SKILLS, PIP's upgrade line, worded from Nilay's own) and PIP's autopilot timing the blinking
+grates. Also: the level scenes moved to `Levels/` and the game finds them by file name, so a
+new level needs no code change. And the game feel ("juice", `Scripts/juice.gd`): hitstop on the
+zap and on powering a room, a trauma camera shake, squash and stretch on the astronaut, popping
+pickups, pitch-varied sounds.
+Nov 24 2026 (Claude, at the team's request): the editor's live preview (painted tiles come alive
+in the editor) and the paintable test start tile with its palette icon (`tools/art_test_start.py`).
+Nov 25 2026 (Claude, at the team's request): spaced out Level 1's rooms (`tools/space_rooms.py`).
+Nov 24 2026: the team's new art (ground, front walls, objects, start / goal / extra time
+animations) is the TEAM's own (from their Drive; record who drew it); Claude only cut it into
+tiles, gave each tile its rule and wired it in. Claude drew the side, bottom and corner walls to
+match (`tools/art_wall_sides.py`, pixel by pixel in Python, in the team's colours).
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

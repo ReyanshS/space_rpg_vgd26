@@ -200,8 +200,8 @@ func _update_meter(delta: float) -> void:
 	if mood != Mood.ROGUE or _phase < 0:
 		_charge = 0.0
 		return
-	if _level.wire_room_index() != _spots[_phase][0]:
-		_charge = move_toward(_charge, 0.0, delta * 10.0)
+	if _level.wire_room_index() != _spots[_phase][0] or _level.autopilot_on:
+		_charge = move_toward(_charge, 0.0, delta * 10.0)   # (judge mode's autopilot: no cutting)
 		return
 	_charge += delta
 	var limit := _limit()
@@ -245,39 +245,50 @@ func _on_room_solved(index: int) -> void:
 
 
 ## Waits until PIP has finished talking (the player presses E through blocking lines).
-func _until_quiet() -> void:
+## Returns false if the level was closed meanwhile (see _wait).
+func _until_quiet() -> bool:
+	if not is_inside_tree():
+		return false
 	await get_tree().process_frame
-	while _level.hud.is_talking() and is_inside_tree():
+	while is_inside_tree() and _level.hud.is_talking():
 		await get_tree().process_frame
+	return is_inside_tree()
 
 
-func _wait(secs: float) -> void:
+## Waits `secs` seconds. Returns false if the level was closed meanwhile (you
+## quit to the title): then the caller must stop, because PIP isn't in the game
+## any more and get_tree() would be null. That's why every step below is written
+##   if not await _wait(0.6): return
+func _wait(secs: float) -> bool:
+	if not is_inside_tree():
+		return false
 	await get_tree().create_timer(secs).timeout
+	return is_inside_tree()
 
 
 ## The power surge hits him. The level waits (hold) until we let go, so the
 ## door to his core room only opens after he's turned.
 func _malfunction() -> void:
 	_level.hold()
-	await _wait(0.6)
+	if not await _wait(0.6): return
 	mood = Mood.AWAKE
 	_level.hud.say(surge_lines, "PIP", true)
-	await _until_quiet()
+	if not await _until_quiet(): return
 	# the glitch: flicker between his normal face and the red one
 	for i in 6:
 		mood = Mood.ROGUE if i % 2 == 0 else Mood.AWAKE
 		_play("glitch")
 		_level.hud.set_rogue(i % 2 == 0)
-		await _wait(0.12)
+		if not await _wait(0.12): return
 	mood = Mood.ROGUE
 	_level.hud.set_rogue(true)
 	_level.hud.flash(RED, 0.7)
 	_level.shake(0.7, 3.0)
 	_level.set_alert(true)          # red lights, flashing alarms, boss music
 	_phase = 0
-	await _wait(0.8)
+	if not await _wait(0.8): return
 	_level.hud.say(rogue_lines, GameHUD.ROGUE_SPEAKER, true)
-	await _until_quiet()
+	if not await _until_quiet(): return
 	_level.let_go()
 
 
@@ -290,7 +301,7 @@ func _caught() -> void:
 	_play("glitch")
 	_level.shake(0.4, 2.5)
 	_sparks(18)
-	await _wait(1.2)
+	if not await _wait(1.2): return
 	if _phase + 1 < _spots.size():
 		# not finished yet: he shakes it off and flies to his next socket
 		mood = Mood.ROGUE
@@ -298,6 +309,7 @@ func _caught() -> void:
 		_phase += 1
 		_level.let_go()             # the barrier sinks while he flies
 		await _fly_to(_dock(_phase))
+		if not is_inside_tree(): return
 		if line != "":
 			# the blue arrow points at him (just above his shutdown meter)
 			_level.hud.say(PackedStringArray([line]), GameHUD.ROGUE_SPEAKER, false, _dock(_phase) + Vector2(0, -40))
@@ -308,20 +320,21 @@ func _caught() -> void:
 	_light.energy = 0.0
 	_level.set_music_override("none")   # the music fades out while he's switched off
 	_level.set_alert(false)
-	await _wait(1.2)
+	if not await _wait(1.2): return
 	mood = Mood.BOOT
 	_play("boot")
 	_boot = 0.0
 	var tw := create_tween()
 	tw.tween_property(self, "_boot", 1.0, 1.4)
 	await tw.finished
+	if not is_inside_tree(): return
 	mood = Mood.AWAKE
 	_level.hud.set_rogue(false)
 	_level.set_music_override("ending")   # he's back: the ending theme, to the last results
 	_sparks(12)
-	await _wait(0.4)
+	if not await _wait(0.4): return
 	_level.hud.say(reboot_lines, "PIP", true)
-	await _until_quiet()
+	if not await _until_quiet(): return
 	_level.let_go()                 # now the lights-on cutscene can play
 
 

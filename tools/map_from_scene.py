@@ -1,16 +1,17 @@
 # map_from_scene.py - turns the map you PAINTED in Godot into a text grid.
 #
-# Reads the Layout TileMapLayer inside Scenes/level_1.tscn (its `tile_map_data`),
+# Reads the Layout TileMapLayer inside Levels/level_1.tscn (its `tile_map_data`),
 # looks up each tile's "kind" in layout_tileset.tres, and writes one character
 # per tile to tools/out/level1.txt. The solver and preview tools read that file.
 #
-#   # wall   . floor   S start   G goal   N node   B bend   X red (discharge)
+#   # wall   . floor   S start   G goal   N node   B pole   X red (discharge)
 #   x blinking grate   C crate   D door   P spawn   E exit
 #   * power cell   , hull (outside floor)   ~ open space   A airlock pad   = barrier
-#   @ core (Level 3: wrap the wire round it)   (space) = nothing
+#   @ core (Level 3: wrap the wire round it)   f fuse   F fuse door   M main door
+#   o clamp socket   k clamp   c movable crate (push it)   (space) = nothing
 #
 # Run from the project folder:   python tools/map_from_scene.py [scene.tscn] [out.txt]
-#   e.g. python tools/map_from_scene.py Scenes/level_2.tscn tools/out/level2.txt
+#   e.g. python tools/map_from_scene.py Levels/level_2.tscn tools/out/level2.txt
 # (tools/map_to_scene.py does the opposite: text grid -> scene.)
 #
 # tile_map_data format (Godot 4): 2 bytes = format version, then 12 bytes per
@@ -18,12 +19,30 @@
 # uint16 alternative tile.
 import os, re, struct, sys
 
-SCENE = sys.argv[1] if len(sys.argv) > 1 else 'Scenes/level_1.tscn'
+SCENE = sys.argv[1] if len(sys.argv) > 1 else 'Levels/level_1.tscn'
 TILESET = 'Assets/images/tiles/layout_tileset.tres'
 OUT = sys.argv[2] if len(sys.argv) > 2 else 'tools/out/level1.txt'
-SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'bend': 'B',
+SYMBOL = {'floor': '.', 'wall': '#', 'start': 'S', 'goal': 'G', 'node': 'N', 'pole': 'B',
           'discharge': 'X', 'blinker': 'x', 'crate': 'C', 'door': 'D', 'spawn': 'P', 'exit': 'E',
-          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@'}
+          'cell': '*', 'hull': ',', 'space': '~', 'airlock': 'A', 'barrier': '=', 'core': '@',
+          'fuse': 'f', 'fuse_door': 'F', 'main_door': 'M', 'socket': 'o', 'clamp': 'k', 'box': 'c',
+          'test_start': '.'}   # test start = floor for the solver (an editor note)
+
+def tileset_kinds(path):
+    """(source id, atlas x, atlas y) -> kind, from the tileset's Custom Data.
+    The tileset has several sources (the Layout palette is source 0, the team's
+    art sheets are 1 and up), each in its own [sub_resource] block."""
+    text = open(path, encoding='utf-8').read()
+    ids = {m.group(2): int(m.group(1)) for m in re.finditer(r'sources/(\d+) = SubResource\("([^"]+)"\)', text)}
+    out = {}
+    for block in re.split(r'\n(?=\[sub_resource )', text):
+        m = re.match(r'\[sub_resource type="TileSetAtlasSource" id="([^"]+)"\]', block)
+        if not m or m.group(1) not in ids:
+            continue
+        for k in re.finditer(r'(\d+):(\d+)/0/custom_data_0 = "(\w*)"', block):
+            out[(ids[m.group(1)], int(k.group(1)), int(k.group(2)))] = k.group(3)
+    return out
+
 
 scene = open(SCENE, encoding='utf-8').read()
 layout = scene[scene.index('[node name="Layout"'):]
@@ -37,15 +56,12 @@ if raw.startswith('"'):                      # newer Godot can store it as base6
 else:
     data = bytes(int(v) for v in raw.split(','))
 
-# atlas coords -> kind, from the tileset's Custom Data
-kinds = {}
-for k in re.finditer(r'(\d+):(\d+)/0/custom_data_0 = "(\w*)"', open(TILESET, encoding='utf-8').read()):
-    kinds[(int(k.group(1)), int(k.group(2)))] = k.group(3)
+kinds = tileset_kinds(TILESET)
 
 cells = {}
 for i in range(2, len(data) - 11, 12):
     x, y, src, ax, ay, alt = struct.unpack('<hhHHHH', data[i:i + 12])
-    cells[(x, y)] = SYMBOL.get(kinds.get((ax, ay), ''), '?')
+    cells[(x, y)] = SYMBOL.get(kinds.get((src, ax, ay), ''), '?')
 
 xs = [c[0] for c in cells]
 ys = [c[1] for c in cells]
