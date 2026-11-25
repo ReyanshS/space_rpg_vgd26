@@ -170,12 +170,6 @@ script = ExtResource("10_beat")
 lines = PackedStringArray("This is the generator room. It\'s three machines in one.", "Every time you power one, the cargo lifts drop and the room changes.", "So have a look around before you grab the next wire.")
 pause_game = true
 
-[node name="GeneratorB" type="Marker2D" parent="Story" unique_id=900240112]
-position = Vector2(1072, 1264)
-script = ExtResource("10_beat")
-lines = PackedStringArray("No straight line from here to that blue pad. Not with all that cargo.", "But the cargo lift dropped, so this side can reach the first machine now.")
-pause_game = true
-
 [node name="GeneratorC" type="Marker2D" parent="Story" unique_id=1076282822]
 position = Vector2(1136, 1520)
 script = ExtResource("10_beat")

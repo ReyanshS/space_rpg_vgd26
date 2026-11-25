@@ -185,7 +185,9 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   `show_camera` (`_glance_at`). Applied in `_solve()` after `_open_exit_doors` (`_apply_links`),
   and quietly by `_power_quietly`. Red floors switched off live in `_red_off`; use `_is_red(c)`.
 - **Clamp**: E next to a socket (no wire) drops / takes it (`_try_clamp`); in a socket it's added
-  to `_poles`, so the wrap rule is the pole rule. The solver tries every socket. Near a socket
+  to `_poles`, so the wrap rule is the pole rule. Standing on the socket works too (Nov 25 2026,
+  Nilay): `_spot_beside()` finds the nearest free safe spot next to it and `_step_to()` hops
+  him there before the clamp (solid) goes in. The solver tries every socket. Near a socket
   without the clamp: `popup_socket_empty` + PIP's `pip_socket_empty` once per level (Level 1
   sets it to "...There's one in the reactor ring.").
 - **Ship map** (M): `Scripts/ship_map.gd`, drawn from `level.map_info()`; only in levels with
@@ -204,6 +206,10 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   check `_crates` first). Onto a LIVE red tile = `_short_out()`: sparks, it sinks, the tile goes
   in `_grounded` (`_is_red()` says no: walkable, and the wire crosses it). Won't move = a shudder
   + tick, PIP says `pip_crate_stuck` once.
+- With team art a movable crate looks like the fixed ones, so `_point_out_crates()` (end of
+  `_enter_room`): the first time you enter an unpowered room, PIP's arrow points at each of its
+  movable crates, nearest first, max 4 lines (`pip_crate_spot`, then `pip_crate_spot_more`).
+  Not while the autopilot drives. (Nov 25 2026, Nilay: "I don't know stuff that can move".)
 - R (`_respawn`): `reset_crates(room)` puts the room's crates home (shorted tiles turn red
   again), unless the room has power. In a HALL with crates, R resets them and puts you back at
   the door you came in by (`_entered_at`, else `_dev_spot`), so the reactor ring can't trap you.
@@ -303,7 +309,8 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   (kind "goal"). Every team-art goal shows grey until its room is powered, then the animated
   blue goal (`_show_goal_art()`, called from `_build_visuals`, `_solve` and `_power_quietly`).
 - **Animated pads** (Nov 25 2026): `tools/use_team_pads.py` repaints START / GOAL / NODE pads
-  with the animated tiles (sources 5-7, same kinds, rules unchanged). Done for Level 1.
+  with the animated tiles (sources 5-7, same kinds, rules unchanged). Done for all 3 levels
+  (Levels 2 and 3 on Nov 25 2026, Nilay: "change all the old designs to the new ones").
 - **Old walls are gone** (Nov 24 2026, team: "delete all the old walls"): every wall in
   levels 1-3 is a team tile on the Layout, painted by `tools/retile_walls.py` (front panels
   where a wall is 3 tall above non-door floor, runs of 2+ columns: 6 = power strip, 4 = power,
@@ -333,7 +340,9 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 
 ## Judge mode and PIP's autopilot
 - Title, top left: JUDGE MODE toggle (`Game.judge_mode`, saved) + LEVEL n buttons. In a level,
-  R = `start_autopilot()` instead of restart; after 2 fails PIP says `pip_hint_judge`.
+  P (action `autopilot`, judge mode only) = `start_autopilot()`; R restarts as in normal mode
+  (Nov 25 2026, Nilay: a judge wants to retry a room themselves); after 2 fails PIP says
+  `pip_hint_judge` ("Press P").
 - `Scripts/autopilot.gd`: walks to the next room (`autopilot_target()`: current unsolved room,
   then the level's `walkthrough` export, then number order), fetches / places the clamp,
   collects fuses, steps on airlock pads, drifts across space (`walk_path()` has drift edges),
@@ -380,7 +389,9 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   goal: it's powered when the wire (START -> pads -> hands) winds a full turn round the core
   (`_winding()`: sum of `angle_to` of each straight piece, seen from the core; `_check_loop()` in
   `player_moved()`). The socket shows a yellow ring = how far round (`PuzzleTile.show_loop`), with a
-  tick at the START's direction: the loop closes when your hands cross that line.
+  tick at the START's direction: the loop closes when your hands cross that line. Then
+  `_plug_into_core()` flies the loose end from the hands into the socket (0.18 s, Nov 25 2026,
+  Nilay: the end used to hang in the air) and calls `_solve()`.
 - Story: Level 3's first room (CORE ACCESS) teaches the loop on a harmless "sync pylon". Powering
   it overloads PIP (`RoguePip.malfunction_room`): red alert (`set_alert`: `alert_light` tint,
   every emergency light flashes, boss music `music_core.ogg`), he talks as "P!P", and hides in the core
@@ -645,6 +656,10 @@ pickups, pitch-varied sounds.
 Nov 24 2026 (Claude, at the team's request): the editor's live preview (painted tiles come alive
 in the editor) and the paintable test start tile with its palette icon (`tools/art_test_start.py`).
 Nov 25 2026 (Claude, at the team's request): spaced out Level 1's rooms (`tools/space_rooms.py`).
+Nov 25 2026 (Claude, at Nilay's request): the clamp drops in while you stand on its socket, PIP
+points out movable crates, judge mode's P key for PIP (R restarts), the boss loop's wire end
+plugs into the core, and the team's animated pads in Levels 2 and 3. Also the draft demo video
+script (`docs/demo_video_script.md`).
 Nov 24 2026: the team's new art (ground, front walls, objects, start / goal / extra time
 animations) is the TEAM's own (from their Drive; record who drew it); Claude only cut it into
 tiles, gave each tile its rule and wired it in. Claude drew the side, bottom and corner walls to

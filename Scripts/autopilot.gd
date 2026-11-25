@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
-# autopilot.gd: judge mode's "PIP walks it for you". Press R in judge mode and
+# autopilot.gd: judge mode's "PIP walks it for you". Press P in judge mode and
 # PIP takes over the suit: he walks to the next unpowered room, sets the clamp
 # down if that room needs it, grabs the wire and walks the route, then gives
-# you control back. Press R again for the next room.
+# you control back. Press P again for the next room (R restarts, as always).
 #
 # Where the routes come from: tools/solver2.py works out the most forgiving
 # route of every room and writes it to Data/routes/level_N.json (feet positions

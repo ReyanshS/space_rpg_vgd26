@@ -351,7 +351,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## You walk into a fuse door without a fuse.
 @export var pip_fuse_locked := "That door needs a fuse. There'll be one lying around somewhere."
 ## Judge mode: offered after two fails in a room (instead of the hint line).
-@export var pip_hint_judge := "Stuck? Press R and I'll walk you through it."
+@export var pip_hint_judge := "Stuck? Press P and I'll walk you through it."
 ## Judge mode: when the autopilot takes over, and when it hands back.
 @export var pip_autopilot_start := "Hands off the controls. I've got this one."
 @export var pip_autopilot_done := "There. Your turn. R again if you want me to do the next one."
@@ -364,7 +364,11 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## The first time you walk into a lamp door that's still shut.
 @export var pip_lamps := "Each lamp on a red door is a room that has to get power first."
 ## The first time you push a movable crate.
-@export var pip_crate := "Those striped crates roll. Lean on one and it moves a tile."
+@export var pip_crate := "That's it. Keep leaning on a crate and it rolls one tile."
+## Walking into a room with crates that move: PIP's arrow points at each one.
+## The first line is for the first crate, the second for every other one.
+@export var pip_crate_spot := "See that crate? It's not bolted down. Walk into it to push it."
+@export var pip_crate_spot_more := "That one rolls too."
 ## The first time a crate shorts out a red tile.
 @export var pip_crate_ground := "It shorted the grate out. You and the wire can cross that tile now."
 ## The first time a crate won't move (something behind it).
@@ -520,6 +524,7 @@ var _lean_time := 0.0                # ...for how long...
 var _lean_frame := -10               # ...and the last physics frame you did
 var _lean_refused := false           # this lean already got its "won't move" shudder
 var _entered_at := {}                # Room -> where you last walked in (for R in a hall)
+var _crates_shown := {}              # Room -> true once PIP has pointed out its movable crates
 
 # --- judge mode: PIP walks the room for you (autopilot.gd)
 ## True while the autopilot has the controls: no timer, no zaps, keys ignored.
@@ -1119,13 +1124,54 @@ func _try_clamp() -> bool:
 	var best := Vector2i(-1, -1)
 	for s in _sockets:
 		var d := center_of(s).distance_to(player.position)
-		if d <= SOCKET_REACH and not Rect2(Vector2(s * TILE), Vector2(TILE, TILE)).grow(4).has_point(player.position):
-			if best.x < 0 or d < center_of(best).distance_to(player.position):
-				best = s
+		if d <= SOCKET_REACH and (best.x < 0 or d < center_of(best).distance_to(player.position)):
+			best = s
 	if best.x < 0:
 		return false
+	# Standing on the socket (even partly)? Once the clamp is in, it's solid, so
+	# he'd be stuck inside it. Step him off first, to the nearest free spot beside it.
+	var feet := Rect2(player.position - Astronaut.FEET_HALF, Astronaut.FEET_HALF * 2.0)
+	if feet.intersects(Rect2(Vector2(best * TILE), Vector2(TILE, TILE))):
+		var spot := _spot_beside(best)
+		if spot == player.position:
+			return false              # boxed in on every side: nowhere to step to
+		_step_to(spot)
 	_put_clamp(best)
 	return true
+
+
+## The nearest place next to socket s (not on it) where his feet fit and nothing
+## zaps him. Tries the edge of each side in line with where he stands, and the
+## middle of each side. Returns his own position if there's none.
+func _spot_beside(s: Vector2i) -> Vector2:
+	var tile := Rect2(Vector2(s * TILE), Vector2(TILE, TILE))
+	var half := Astronaut.FEET_HALF + Vector2.ONE      # one pixel clear of the socket
+	var pos := player.position
+	var tries: Array[Vector2] = []
+	for y in [pos.y, tile.get_center().y]:
+		tries.append(Vector2(tile.position.x - half.x, y))     # left side
+		tries.append(Vector2(tile.end.x + half.x, y))          # right side
+	for x in [pos.x, tile.get_center().x]:
+		tries.append(Vector2(x, tile.position.y - half.y))     # above
+		tries.append(Vector2(x, tile.end.y + half.y))          # below
+	var best := pos
+	var best_d := INF
+	for p in tries:
+		var d := p.distance_to(pos)
+		if d < best_d and not box_blocked(p, Astronaut.FEET_HALF) and _safe_to_stand(p):
+			best = p
+			best_d = d
+	return best
+
+
+## A quick little hop to `to` (he can't walk while it plays).
+func _step_to(to: Vector2) -> void:
+	player.lock()
+	var tw := create_tween()
+	tw.tween_property(player, "position", to, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func() -> void:
+		player.release()
+		player_moved())
 
 
 ## Takes the clamp out of its socket, into your hands.
@@ -1369,7 +1415,8 @@ func crate_at(c: Vector2i) -> bool:
 # ===================================================================== judge mode: the autopilot
 # autopilot.gd does the walking; these are the few things it asks the level.
 
-## R in judge mode: PIP takes over and does the next room.
+## P in judge mode: PIP takes over and does the next room. (R still restarts,
+## so a judge can try a room themselves after PIP has shown it.)
 func start_autopilot() -> void:
 	if _busy or _complete or autopilot_on:
 		return
@@ -2913,10 +2960,10 @@ func _physics_process(delta: float) -> void:
 		return
 	if _input_cooldown <= 0.0 and not autopilot_on:
 		if Input.is_action_just_pressed("restart"):
-			if Game.judge_mode:
-				start_autopilot()       # judge mode: R = PIP walks this room for you
-			else:
-				_fail("restart")
+			_fail("restart")
+			return
+		if Game.judge_mode and Input.is_action_just_pressed("autopilot"):
+			start_autopilot()           # judge mode: P = PIP walks this room for you
 			return
 		if Input.is_action_just_pressed("hint"):
 			_try_hint()
@@ -3118,8 +3165,30 @@ func _check_loop() -> void:
 	if t:
 		t.show_loop(true, (center_of(r.start) - center_of(r.core)).angle(), turn)
 	if absf(turn) >= TAU:
-		_wire.add_anchor(player.hand_position())    # the loop's last piece stays where it is
-		_solve(r)
+		_plug_into_core(r)
+
+
+## The loop is closed: the loose end leaves your hands and plugs into the core,
+## so the wire ends IN the machine instead of hanging in the air. Then the room
+## powers up as usual.
+func _plug_into_core(r: Room) -> void:
+	_busy = true                  # no more moves, fails or loop checks while it flies
+	player.lock(true)
+	var w := _wire
+	_wire = null                  # (else _process keeps pinning the end to his hands)
+	var hand := player.hand_position()
+	var socket := center_of(r.core)
+	w.add_anchor(hand)            # the loop's last bend stays where your hands were
+	w.set_live_end(hand)
+	var tw := create_tween()
+	tw.tween_method(w.set_live_end, hand, socket, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await tw.finished
+	if not is_inside_tree():
+		return
+	w.add_anchor(socket)
+	_play("clank")
+	_wire = w
+	_solve(r)
 
 
 func _hide_loop(r: Room) -> void:
@@ -3515,6 +3584,24 @@ func _enter_room(r: Room) -> void:
 	if new_area:
 		_announce_room()            # the next stage of the same area gets no popup
 	room_entered.emit(r.index)
+	_point_out_crates(r)
+
+
+## The first time you walk into a room, PIP points at every crate in it that
+## moves (they look just like the bolted-down ones, so you'd never guess).
+## Nearest first, one line each, and never while the autopilot is driving.
+func _point_out_crates(r: Room) -> void:
+	if _crates_shown.has(r) or r.solved or autopilot_on:
+		return
+	_crates_shown[r] = true
+	var here: Array[Vector2i] = []
+	for c in _crates:
+		if room_index_at(center_of(c)) == r.index:
+			here.append(c)
+	here.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return center_of(a).distance_to(player.position) < center_of(b).distance_to(player.position))
+	for i in mini(here.size(), 4):         # 4 lines at most, so PIP doesn't go on forever
+		_pip_say(pip_crate_spot if i == 0 else pip_crate_spot_more, center_of(here[i]))
 
 
 func _announce_room() -> void:
@@ -4072,7 +4159,7 @@ func _fail(kind: String) -> void:
 	if counts and r != null and not r.solved and r.fails >= 2 and not _hint_offered.has(r):
 		if Game.judge_mode:
 			_hint_offered[r] = true
-			_pip_say(pip_hint_judge)        # judge mode: R and PIP walks it
+			_pip_say(pip_hint_judge)        # judge mode: P and PIP walks it
 		elif _room_has_hint(r):
 			_hint_offered[r] = true
 			_pip_say(pip_hint)

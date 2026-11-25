@@ -831,7 +831,7 @@ func _update_keys() -> void:
 	elif _reel_prompt:
 		want = [["E", "reel back"]]
 	elif _judge:
-		want = [["R", "PIP does it"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
+		want = [["P", "PIP does it"], ["R", "restart"]]
 	elif _hint_on:
 		want = [["H", "hint"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
 	else:
