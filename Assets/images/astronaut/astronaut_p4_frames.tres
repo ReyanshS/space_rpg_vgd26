@@ -19,16 +19,6 @@ atlas = ExtResource("4_idle")
 region = Rect2(32, 0, 32, 48)
 margin = Rect2(0, 0, 0, 8)
 
-[sub_resource type="AtlasTexture" id="idle_0_2"]
-atlas = ExtResource("4_idle")
-region = Rect2(64, 0, 32, 48)
-margin = Rect2(0, 0, 0, 8)
-
-[sub_resource type="AtlasTexture" id="idle_0_3"]
-atlas = ExtResource("4_idle")
-region = Rect2(96, 0, 32, 48)
-margin = Rect2(0, 0, 0, 8)
-
 [sub_resource type="AtlasTexture" id="idle_0_4"]
 atlas = ExtResource("4_idle")
 region = Rect2(128, 0, 32, 48)
@@ -326,14 +316,6 @@ animations = [{
 {
 "duration": 1.0,
 "texture": SubResource("idle_0_1")
-},
-{
-"duration": 1.0,
-"texture": SubResource("idle_0_2")
-},
-{
-"duration": 1.0,
-"texture": SubResource("idle_0_3")
 },
 {
 "duration": 1.0,

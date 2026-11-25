@@ -558,7 +558,7 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   from the team's `astronautp4.png` (6 x 5 frames of 32 x 48: walk down, down-right, right,
   up-right, up; the left walks come from the mirrored `astronautp4_flipped.png`). Walking
   diagonally plays `walk_<up|down>_<side>`. The team's second sheet `astronautp4_idle.png`
-  (6 x 2 of 32 x 48) gives idle (row 0, 6 frames), shock (row 1, frames 0-3) and burnt (row 1,
+  (6 x 2 of 32 x 48) gives idle (row 0, frames 0, 1, 4, 5: Nilay cut the middle two), shock (row 1, frames 0-3) and burnt (row 1,
   frames 4-5, holds on 5). Only `carry` still comes from the old `astronaut.png` (36 px tall vs
   45: it looks smaller). Each new frame gets 8 px of AtlasTexture margin below so the feet line
   up with the old frames (sprite y stays -18).

@@ -11,7 +11,7 @@
 # whole sheet mirrored) for the left-facing walks.
 #
 # astronautp4_idle.png (the team's second sheet, 6 x 2 frames of 32 x 48):
-#   row 0 idle (6 frames, facing the camera)
+#   row 0 idle (6 frames, facing the camera; the game uses 0, 1, 4 and 5)
 #   row 1 shock (frames 0-3: sparks, skeleton, sparks, skeleton), burnt (frames 4-5)
 # Only "carry" (standing with the plug in his hands) still comes from the old
 # astronaut.png, because neither new sheet has it.
@@ -46,7 +46,7 @@ WALKS = {
 }
 # from the idle sheet: name -> ([(row, column)...], speed, loop)
 EXTRA = {
-    'idle': ([(0, c) for c in range(6)], 6.0, True),
+    'idle': ([(0, c) for c in (0, 1, 4, 5)], 6.0, True),   # frames 2 and 3 left out (Nilay)
     'shock': ([(1, c) for c in range(4)], 12.0, True),
     'burnt': ([(1, 4), (1, 5)], 6.0, False),       # chars, then stays on the darkest frame
 }
