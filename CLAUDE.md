@@ -163,7 +163,7 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   - hub reactor ring (crate puzzle) -> the CABLE CLAMP -> COOLANT PUMPS (needs it: `needs the
     clamp` in the solver).
   - CABLE STORE (open) -> its PowerLink `CableStoreDuct` lights the one lamp of the red lamp door
-    to the SERVICE DUCT -> REACTOR ACCESS (the team's old room 4).
+	to the SERVICE DUCT -> REACTOR ACCESS (the team's old room 4).
   Each wing's goal also has a PowerLink UNLOCK to the MAIN DOOR (3 lamps), which opens onto the
   Generator Room finale. Rooms: 13 (halls count), so room_titles / room_wire_time are 13 long.
 - Nov 22 2026 rework (Nilay: "the clamp and the fuse don't make sense, they're right next to each
