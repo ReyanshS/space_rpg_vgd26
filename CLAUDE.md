@@ -95,6 +95,14 @@ so the editor previews show Godot's font. Both fonts load at runtime (`UIStyle.p
 Sizes in game pixels (x3 on screen): `UIStyle.SMALL` 6, `BODY` 8 (theme default), `HEAD` 11,
 `TITLE` 18. PIP's console: `Game.console_font_size()` = 8 for both fonts (both are wider than
 Open Sans; at 8 every line fits two rows). StoryBeats' TOO LONG check measures both fonts.
+**Dyslexic sizes** (Nov 26 2026, Reyansh: "everything becomes bigger and stuff gets cut off"):
+OpenDyslexic is about 1.15x as wide and 1.5x as tall as Departure Mono at the same size, so with
+the switch on every size is scaled by `UIStyle.DYSLEXIC_SCALE` 0.8 (`UIStyle.size_scale`, set
+in `Game.apply_font`): `UIStyle.fs()` in all code-drawn text (`text()`, `text_width()`), the
+theme's default size (`Game.THEME_FONT_SIZE` 8), and every Label / Button font size override
+(`_rescale_fonts`; the original is kept in meta "base_font_size", so switching never drifts;
+`node_added` catches menus made later). The console keeps its own sizes (`console_font_size`).
+The pause and results panels grow from their centre (grow both ways), above the console.
 Tried and rejected: Pixelify Sans, Jersey 10, VT323 (uneven gaps or cramped at our small sizes).
 m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky because the old
 "viewport" stretch forced it to size 16.

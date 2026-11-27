@@ -41,6 +41,20 @@ const LED_OFF := Color(0.1, 0.14, 0.2)            # a meter segment that isn't l
 # --- font sizes (game pixels: 8 here is 24 pixels on screen)
 const SMALL := 6
 const BODY := 8
+
+## Every font size is multiplied by this (fs()). OpenDyslexic is much bigger
+## than Departure Mono at the same size (about 1.15x as wide and 1.5x as tall),
+## so with the DYSLEXIA FONT switch on, Game.apply_font sets it to
+## DYSLEXIC_SCALE and the text keeps fitting its boxes.
+const DYSLEXIC_SCALE := 0.8
+static var size_scale := 1.0
+
+
+## A font size, scaled for the font in use. Never below 6 (still readable).
+static func fs(size: int) -> int:
+	if is_equal_approx(size_scale, 1.0):
+		return size
+	return maxi(6, roundi(size * size_scale))
 const HEAD := 11
 const TITLE := 18
 
@@ -112,6 +126,7 @@ static func draw_box(ci: CanvasItem, r: Rect2, bg := GLASS, edge := EDGE, radius
 static func text(ci: CanvasItem, at: Vector2, s: String, col: Color, size := BODY,
 		align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
 	var f := font()
+	size = fs(size)
 	var x := at.x
 	if align != HORIZONTAL_ALIGNMENT_LEFT:
 		var w := f.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
@@ -120,7 +135,7 @@ static func text(ci: CanvasItem, at: Vector2, s: String, col: Color, size := BOD
 
 
 static func text_width(s: String, size := BODY) -> float:
-	return font().get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	return font().get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, fs(size)).x
 
 
 ## How wide a keycap for `key` is (KEY_H tall).

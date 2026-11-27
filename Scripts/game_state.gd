@@ -67,6 +67,8 @@ const SETTINGS_PATH := "user://settings.cfg"
 ## his lines still fits in the console's two rows (measured Nov 2026: one size
 ## bigger and OpenDyslexic pushes 34 lines onto a third row). If you change
 ## them, change story_beat.gd's TOO LONG check to match.
+## The theme's text size (Assets/ui/theme.tres default_font_size) before scaling.
+const THEME_FONT_SIZE := 8
 const CONSOLE_SIZE_PIXEL := 10
 const CONSOLE_SIZE_DYSLEXIC := 9
 const CONSOLE_SIZE_PLAIN := 9     # Godot's built-in font, if a font file is missing
@@ -127,6 +129,7 @@ func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) == OK:
 		dyslexic_font = cfg.get_value("settings", "dyslexic_font", false)
+	get_tree().node_added.connect(_on_node_added)   # (menus made later get the right text size too)
 	apply_font()
 	# Menu buttons react to the "ui_accept" action (Enter and Space). Add E to it
 	# too, so E presses the selected button, like it moves PIP's lines on.
@@ -150,7 +153,45 @@ func apply_font() -> void:
 	if theme:
 		theme.default_font = f
 	ThemeDB.fallback_font = f
+	# OpenDyslexic is bigger at the same size: shrink every font size to match
+	# (UIStyle.fs), so text still fits its buttons and panels
+	UIStyle.size_scale = UIStyle.DYSLEXIC_SCALE if f == UIStyle.dyslexic_font() else 1.0
+	if theme:
+		theme.default_font_size = UIStyle.fs(THEME_FONT_SIZE)
+	if is_inside_tree():
+		_rescale_fonts(get_tree().root)
 	font_changed.emit()
+
+
+## Every Label and Button with its own font size (set in a scene, or in code)
+## gets it scaled for the font in use. The size it was made with is kept in
+## its metadata ("base_font_size"), so switching back and forth never drifts.
+func _rescale_fonts(node: Node) -> void:
+	_rescale_one(node)
+	for child in node.get_children():
+		_rescale_fonts(child)
+
+
+func _rescale_one(node: Node) -> void:
+	if not is_instance_valid(node) or not node is Control:
+		return
+	var c := node as Control
+	c.queue_redraw()                # (things that draw their own text, like keycaps, redraw)
+	if not (node is Label or node is Button):
+		c.update_minimum_size()
+		return
+	if c.has_theme_font_size_override("font_size"):
+		if not c.has_meta("base_font_size"):
+			c.set_meta("base_font_size", c.get_theme_font_size("font_size"))
+		c.add_theme_font_size_override("font_size", UIStyle.fs(int(c.get_meta("base_font_size"))))
+	c.update_minimum_size()
+
+
+## A Label or Button that appears later (a new scene, a menu made in code)
+## gets the same treatment, once it has set its own sizes.
+func _on_node_added(node: Node) -> void:
+	if not is_equal_approx(UIStyle.size_scale, 1.0) and (node is Label or node is Button):
+		_rescale_one.call_deferred(node)
 
 
 ## The font in use: OpenDyslexic with the switch on, else Departure Mono (or

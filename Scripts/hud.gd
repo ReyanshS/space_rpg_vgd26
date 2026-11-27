@@ -166,6 +166,10 @@ func _ready() -> void:
 	# PIP's text size depends on the font (OpenDyslexic is wider, see Game.console_font_size)
 	_fit_console_font()
 	Game.font_changed.connect(_fit_console_font)
+	Game.font_changed.connect(func() -> void:     # code-drawn text changes size with the font
+		_update_corner()
+		_keys_shown = []
+		_update_keys())
 	timer_bar.visible = false
 	complete_panel.visible = false
 	toast.visible = false
