@@ -17,13 +17,11 @@ script = ExtResource("1_level")
 layout = NodePath("Layout")
 complete_message = "Engineering is back online."
 walkthrough = PackedInt32Array(1, 2, 3, 7, 5, 9, 10, 11, 12)
-wire_time = 4.5
+wire_time = 3.0
 node_time = 3.5
-max_wire_time = 6.0
 node_hold = 2.0
-room_wire_time = PackedFloat32Array(5.5, 0, 6, 0, 6, 0, 0, 0, 3.5, 3.2, 0, 5, 0, 0)
+room_wire_time = PackedFloat32Array()
 room_titles = PackedStringArray("ENGINEERING BAY", "STORAGE", "CONDUIT HALL", "REACTOR HALL", "COOLANT PUMPS", "SERVICE DUCT", "CABLE STORE", "MAIN BREAKER", "REACTOR ACCESS", "GENERATOR ROOM", "GENERATOR ROOM", "GENERATOR ROOM", "EXIT", "ROOM 14")
-pip_skill_points = PackedStringArray("Oh! Some power\'s restored, so you can upgrade your equipment now.", "Restore more power and you can upgrade more gear. Press T to look.")
 pip_socket_empty = "That socket takes a cable clamp. There's one in the reactor ring."
 ending_lines = PackedStringArray("Engines are warm. Hold on to something.", "Next stop, home.")
 
@@ -124,7 +122,7 @@ pause_game = true
 position = Vector2(304, 656)
 script = ExtResource("10_beat")
 trigger = 0
-lines = PackedStringArray("See that battery? It\'s a power cell, and it\'s still got juice in it.", "Grab it while you\'re holding the wire. It adds 2 seconds to your timer.", "Keep them and your suit gets extra air later. You\'ll want that.")
+lines = PackedStringArray("See that battery? It\'s a power cell, and it\'s still got juice in it.", "Grab it while you\'re holding the wire. It adds half a second to your timer.", "Keep them and your suit gets extra air later. You\'ll want that.")
 pause_game = true
 point_here = true
 

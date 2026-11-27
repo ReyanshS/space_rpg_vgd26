@@ -147,12 +147,12 @@ keys = PackedStringArray("H")
 text = "hint"
 text_color = Color(0.56, 0.66, 0.78, 1)
 
-[node name="Skills" type="Control" parent="UI/Controls/Row2"]
+[node name="Upgrade" type="Control" parent="UI/Controls/Row2"]
 layout_mode = 2
 mouse_filter = 2
 script = ExtResource("9_key")
-keys = PackedStringArray("T")
-text = "skills"
+keys = PackedStringArray("U")
+text = "upgrade"
 text_color = Color(0.56, 0.66, 0.78, 1)
 
 [node name="Menu" type="Control" parent="UI/Controls/Row2"]

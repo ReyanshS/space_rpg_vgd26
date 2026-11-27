@@ -77,7 +77,7 @@ Easiest way: `python tools/solver2.py Levels/level_1.tscn` reads the map AND the
 Solver output, e.g. `S(14,9) -> pole(19,9) -> N(19,4)@3.5s -> G(24,9)@7.0s   (lowest timer: 2.44 s)`
 means: from the START at tile (14, 9), walk so the wire wraps round the pole at (19, 9), touch the
 node at (19, 4) (3.5 s in), then the goal. The timer carries on from pad to pad (START time, each
-node adds Node Time, never above Max Wire Time); "lowest timer" is the least time you ever have
+node adds Node Time, never above the room's START time); "lowest timer" is the least time you ever have
 left on that route, so it's how tight the room is. Poles (`B`) are modelled exactly like the game
 (`rewrap()` = level.gd `_update_wraps()`). Drifting across open space is part of the walking
 between pads. `--paths out.json --margin 3` writes the most forgiving route of each room (feet

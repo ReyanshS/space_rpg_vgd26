@@ -7,7 +7,7 @@
 # START fades to black and plays the intro cutscene (Scenes/intro.tscn), which
 # then asks Game (the autoload) to load Level 1.
 # If there's a save file (you finished a level before), the first button says
-# CONTINUE instead and goes to the next level, with your skills. NEW GAME
+# CONTINUE instead and goes to the next level, with your batteries and upgrades. NEW GAME
 # appears next to it and starts over (it deletes the save).
 # Click a button, or pick one with the arrow keys and press E, Space or Enter.
 # Top left: DYSLEXIA FONT on/off (Game.set_dyslexic_font), and JUDGE MODE
@@ -28,7 +28,7 @@ var _grab: AudioStreamPlayer
 
 
 func _ready() -> void:
-	var saved := Game.load_game() and Game.has_save()   # results and skills come back
+	var saved := Game.load_game() and Game.has_save()   # results, batteries and upgrades come back
 	if saved:
 		play_button.text = "CONTINUE: LEVEL %d" % Game.continue_level()
 	else:

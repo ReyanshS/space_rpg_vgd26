@@ -1,7 +1,6 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://Scripts/hud.gd" id="1_hud"]
-[ext_resource type="PackedScene" path="res://Scenes/skill_tree.tscn" id="4_tree"]
 [ext_resource type="Script" path="res://Scripts/key_hint.gd" id="5_key"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_toast"]
@@ -324,7 +323,7 @@ horizontal_alignment = 1
 [node name="Points" type="Label" parent="Complete/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
-text = "+2 SKILL POINTS   [T] skill tree"
+text = "+2 BATTERIES TO SPEND"
 horizontal_alignment = 1
 
 [node name="Bonus" type="Label" parent="Complete/VBox"]
@@ -354,9 +353,9 @@ text = "NEXT LEVEL"
 layout_mode = 2
 text = "PLAY AGAIN"
 
-[node name="Skills" type="Button" parent="Complete/VBox/Buttons"]
+[node name="Upgrade" type="Button" parent="Complete/VBox/Buttons"]
 layout_mode = 2
-text = "SKILL TREE"
+text = "UPGRADE"
 
 [node name="Pause" type="PanelContainer" parent="."]
 visible = false
@@ -395,9 +394,9 @@ alignment = 1
 layout_mode = 2
 text = "RESUME"
 
-[node name="Skills" type="Button" parent="Pause/VBox/Buttons"]
+[node name="Upgrade" type="Button" parent="Pause/VBox/Buttons"]
 layout_mode = 2
-text = "SKILL TREE"
+text = "UPGRADE"
 
 [node name="Quit" type="Button" parent="Pause/VBox/Buttons"]
 layout_mode = 2
@@ -441,14 +440,14 @@ text = "show a hint"
 layout_mode = 2
 mouse_filter = 2
 script = ExtResource("5_key")
-keys = PackedStringArray("T")
-text = "skill tree, any time"
+keys = PackedStringArray("U")
+text = "upgrade the wire, any time"
 
 [node name="Suit" type="Label" parent="Pause/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.76, 0.3, 1)
 theme_override_font_sizes/font_size = 7
-text = "SKILLS 0/15"
+text = "WIRE UPGRADES 0/3"
 horizontal_alignment = 1
 autowrap_mode = 3
 
@@ -472,16 +471,14 @@ mouse_filter = 2
 theme_override_constants/separation = 4
 alignment = 2
 
-[node name="Skills" type="Button" parent="Corner"]
+[node name="Upgrade" type="Button" parent="Corner"]
 layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 7
-text = "SKILLS"
+text = "UPGRADE"
 
 [node name="Menu" type="Button" parent="Corner"]
 layout_mode = 2
 focus_mode = 0
 theme_override_font_sizes/font_size = 7
 text = "MENU"
-
-[node name="SkillTree" parent="." instance=ExtResource("4_tree")]

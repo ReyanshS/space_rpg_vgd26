@@ -40,8 +40,8 @@
 #   - You walk freely, but the wire is a tight straight line from the last pad
 #     you touched to your hands. It can't pass through walls, crates or red
 #     tiles. If a step would make it, you just can't take that step.
-#   - The START gives you wire_time seconds. The timer can never go above
-#     max_wire_time (not even with batteries).
+#   - The START gives you wire_time seconds, and that's also the most the
+#     timer can ever hold: nodes and batteries top it back up, never past it.
 #   - NODE: wraps the wire and adds node_time seconds. Standing on it holds the
 #     timer, but only for node_hold seconds: you can't rest there for ever.
 #   - NODE REST (a switch in the dev menu, off unless you turn it on): while the
@@ -119,17 +119,14 @@
 #   - R puts the crates of the room you're in back where they started, unless
 #     that room already has power (reset_crates). In a hall, R only does that.
 #
-# The RPG side (skill points and the skill tree; see skill_manager.gd)
-#   - Finishing a level for the first time gives `skill_points` (an export, so
-#     harder levels can give more). Replays give nothing (_finish_level).
-#     You're told: a popup, a pinging dot on the SKILLS button
-#     (hud.notify_skill_points), and the first time, PIP's pip_skill_points.
-#   - You spend them on the skill tree (T or the SKILLS button, at any time).
-#     Skills change the rules through _wire_time(), _cell_bonus(), _shock() and
-#     the player's speed_mult, and apply the moment you unlock them
-#     (_apply_skills listens to SkillManager.skills_changed).
-#   - No puzzle ever needs a skill: skills only make rules easier, and the
-#     solver checks every room with no skills at all.
+# The RPG side: batteries and the wire upgrade (game_state.gd, upgrade_panel.gd)
+#   - A battery you charge with the live wire adds cell_bonus seconds to the
+#     timer. Once its room has power it's yours: one battery to spend
+#     (Game.keep_battery; each battery pays out only once, so replays can't farm).
+#   - After every room you power, the WIRE UPGRADE panel comes up (hud
+#     offer_upgrade): spend batteries (3, then 5, then 7) for +1 s on the
+#     wire. U, the UPGRADE button or the pause menu open it any time.
+#   - The rules read the upgrade through _wire_time() and _max_time().
 # ---------------------------------------------------------------------------
 @tool
 class_name WireLevel
@@ -227,16 +224,14 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## Room Titles (1 = the first). Rooms with nothing to solve are skipped. Empty =
 ## every room with a START, in number order.
 @export var walkthrough: PackedInt32Array = []
-## Skill points for finishing this level the first time. Give harder levels more.
-@export var skill_points := 2
 
 @export_group("Rules")
-## Seconds you get from the START pad.
-@export var wire_time := 4.0
+## Seconds you get from the START pad. It's also the most the timer can ever
+## hold: nodes and batteries top it up to this, never past it. (The wire
+## upgrade adds to it.)
+@export var wire_time := 3.0
 ## Seconds a NODE adds to the timer.
 @export var node_time := 3.0
-## The timer never goes above this (START, nodes and batteries all stop here).
-@export var max_wire_time := 5.0
 ## Standing on a NODE holds the timer for this many seconds, then it runs again.
 @export var node_hold := 1.5
 ## Only with NODE REST switched on in the dev menu: how close (in pixels, a tile
@@ -248,7 +243,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## Check with:  python tools/solver2.py Levels/level_1.tscn
 @export var room_wire_time: PackedFloat32Array = []
 ## Seconds a power cell adds to the wire's timer when you grab it with the wire.
-@export var cell_bonus := 2.0
+@export var cell_bonus := 0.5
 
 @export_group("Lighting")
 ## How dark the ship is before a room gets power (1,1,1 = no darkness at all).
@@ -310,12 +305,8 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var pip_shared := "That node from the last machine is still live. Wrap this wire round it."
 ## After a fail, when there's no way back to the START without crossing red tiles or grates.
 @export var pip_stranded := "No safe way back from there. Press R and I'll bring you to the start."
-## The first time you earn skill points (the results screen of a level that has
-## a next one). One entry = one speech bubble.
-@export var pip_skill_points: PackedStringArray = [
-	"Oh! Some power's restored, so you can upgrade your equipment now.",
-	"Restore more power and you can upgrade more gear. Press T to look.",
-]
+## After the first room you power: what the upgrade panel is for.
+@export var pip_upgrade := "Every battery you keep is money. Spend them on a longer wire."
 
 # The short messages that pop up at the top of the screen.
 @export_group("Popup texts")
@@ -332,7 +323,6 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var popup_hint := "FOLLOW THE ARROWS"
 @export var popup_outer_door := "OUTER DOOR OPEN"
 @export var popup_stranded := "NO WAY BACK? PRESS R"
-@export var popup_boots := "YOUR BOOTS SAVED YOU"
 @export var popup_fuse := "GOT A FUSE"
 @export var popup_fuse_used := "FUSE FITTED. DOOR OPEN"
 @export var popup_fuse_locked := "LOCKED. IT NEEDS A FUSE"
@@ -489,9 +479,6 @@ var _last_safe := Vector2.INF             # the last spot you stood on safely (f
 var _stranded := false                    # after a fail: no safe path back to the START
 var _stranded_check := 0.0
 
-# --- RPG
-var _boots_used := {}                     # Room -> how many zaps your boots already shrugged off there
-
 # --- the core (Level 3)
 var _alert := false            # red alert: the ship's tinted red, the boss music plays
 var _holds := 0                # how many other nodes asked the level to wait (hold / let_go)
@@ -622,8 +609,9 @@ func _ready() -> void:
 	_setup_dungeon()
 	_visited[_current_room] = true
 	hud.set_judge(Game.judge_mode)
-	_apply_skills()                        # skills you unlocked earlier...
-	SkillManager.skills_changed.connect(_apply_skills)   # ...and ones you unlock mid level
+	hud.set_base_wire(wire_time)           # the upgrade panel shows what the wire becomes
+	_apply_upgrades()                        # upgrades you bought earlier...
+	Game.batteries_changed.connect(_apply_upgrades)   # ...and ones you buy mid level
 	_update_hint_label.call_deferred()     # after the floor guides know their rooms
 	_apply_test_start()
 	if camera:
@@ -3416,7 +3404,7 @@ func _check_cells() -> void:
 			continue
 		if wired and _room_of.get(c) == _wire_room:
 			# The battery's charge goes into the wire: more time, right now.
-			cell.collect("+%ds" % int(_cell_bonus()))
+			cell.collect("+%ss" % _secs_text(_cell_bonus()))
 			_time_left = minf(_time_left + _cell_bonus(), _max_time())
 			hud.pulse_timer()
 			_cells_pending.append(c)
@@ -3424,7 +3412,7 @@ func _check_cells() -> void:
 			_play("pickup", 1.0 + 0.07 * (_cells_pending.size() - 1))
 			hud.set_cells(_cells_banked + _cells_pending.size(), _cells.size(), true)
 			if Game.first_time("cell_charged"):
-				hud.show_toast(popup_cell_bonus.format({"bonus": int(_cell_bonus())}), 2.5)
+				hud.show_toast(popup_cell_bonus.format({"bonus": _secs_text(_cell_bonus())}), 2.5)
 			cell_collected.emit(_wire_room.index)
 		elif not wired and not _cell_tip_shown:
 			_cell_tip_shown = true
@@ -3739,6 +3727,10 @@ func _solve(r: Room) -> void:
 	r.solved = true
 	var kept := _cells_pending.size()
 	_cells_banked += kept                     # cells charged on this try are yours to keep
+	var paid := 0                             # ...and each one is a battery to spend
+	for c in _cells_pending:
+		if Game.keep_battery(level_number, c):
+			paid += 1
 	_cells_pending.clear()
 	_rooms_powered += 1
 	hud.set_timer(false, 0.0, 0.0)
@@ -3778,6 +3770,12 @@ func _solve(r: Room) -> void:
 	_open_exit_doors(r)
 	await _apply_links(r)           # power links: things change elsewhere (the camera glances over)
 	if not is_inside_tree(): return
+	# the end of every room: the wire upgrade (not while PIP's autopilot plays)
+	if not autopilot_on and Game.upgrade_cost() > 0:
+		if Game.first_time("upgrade"):
+			_pip_say(pip_upgrade)
+		await hud.offer_upgrade(paid, wire_time)
+		if not is_inside_tree(): return
 	if _rooms_powered >= _rooms_with_goal:
 		await _all_powered()        # the lights-on cutscene: wait here until it's over
 		if not is_inside_tree(): return
@@ -3785,67 +3783,54 @@ func _solve(r: Room) -> void:
 	_release_player()
 
 
-# ===================================================================== RPG: skills
-# Skills (SkillManager) change the rules a little, so every rule they touch
-# asks one of these small functions instead of reading wire_time or
-# cell_bonus directly.
+## 0.5 -> "0.5", 2.0 -> "2" (for "+0.5 SECONDS" popups).
+func _secs_text(secs: float) -> String:
+	return str(int(secs)) if is_equal_approx(secs, roundf(secs)) else "%.1f" % secs
+
+
+# ===================================================================== RPG: the wire upgrade
+# The upgrade (Game.wire_upgrades, bought with batteries) changes the wire timer,
+# so every rule it touches asks one of these small functions instead of reading
+# wire_time directly.
 
 ## Seconds on the wire timer from the START: this room's time (room_wire_time,
-## or else wire_time) + skills. Never above _max_time().
+## or else wire_time) + the upgrade.
 func _wire_time() -> float:
 	var t := wire_time
 	if _wire_room != null and _wire_room.index < room_wire_time.size() and room_wire_time[_wire_room.index] > 0.0:
 		t = room_wire_time[_wire_room.index]
-	return minf(t + SkillManager.bonus("wire_time"), _max_time())
+	return t + Game.wire_bonus()
 
 
-## Seconds a NODE adds: node_time + skills.
+## Seconds a NODE adds.
 func _node_time() -> float:
-	return node_time + SkillManager.bonus("node_time")
+	return node_time
 
 
-## The most the timer can ever hold: max_wire_time + skills. (LONGER WIRE
-## raises it too, so a longer START is never cut off by the cap.)
+## The most the timer can ever hold: the same as the START gives. A node or a
+## battery fills it back up to that, never past it.
 func _max_time() -> float:
-	return max_wire_time + SkillManager.bonus("max_time") + SkillManager.bonus("wire_time")
+	return _wire_time()
 
 
-## How long a NODE holds the clock while you stand on it: node_hold + skills.
+## How long a NODE holds the clock while you stand on it.
 func _node_hold() -> float:
-	return node_hold + SkillManager.bonus("node_hold")
+	return node_hold
 
 
-## Seconds a battery adds: cell_bonus + the SUPER CELLS skills.
+## Seconds a battery adds to the timer.
 func _cell_bonus() -> float:
-	return cell_bonus + SkillManager.bonus("cell_bonus")
+	return cell_bonus
 
 
-## You stepped on something live (a red tile or a lit grate). With the RUBBER
-## BOOTS skill the first zap in each room doesn't count (INSULATED SOLES: the
-## first two): a spark, and you hop back to the last spot you stood on safely.
-## You even keep the wire.
+## You stepped on something live (a red tile or a lit grate).
 func _shock() -> void:
-	var r := _current_room
-	var can_hop := player.state in [Astronaut.State.FREE, Astronaut.State.WIRED]
-	var saves := int(SkillManager.bonus("boots"))
-	if r != null and int(_boots_used.get(r, 0)) < saves and can_hop and _last_safe.is_finite():
-		_boots_used[r] = int(_boots_used.get(r, 0)) + 1
-		_sparks_at(player.position + Vector2(0, -4))     # sparks where the zap hit
-		player.position = _last_safe
-		_play("shock")
-		_shake_cam(0.2, 2.0)
-		Juice.hitstop(0.05)
-		player.flash()
-		hud.flash(Color(0.75, 0.95, 1.0), 0.3)
-		hud.show_toast(popup_boots, 2.0)
-		return
 	_fail("shock")
 
 
-## Skills that change something straight away (the others are read when needed).
-## Runs at the start, and every time SkillManager says something changed.
-func _apply_skills() -> void:
-	player.speed_mult = 1.0 + SkillManager.bonus("walk_speed")
+## The upgrade changed (or the level just started): an oxygen meter that's on
+## gets the right size. (The wire timer reads the upgrade when you grab it.)
+func _apply_upgrades() -> void:
 	if _o2_on:
 		_o2_max = o2_seconds + Game.o2_bonus()
 
@@ -4459,25 +4444,11 @@ func _finish_level() -> void:
 		stars += 1                                  # every power cell
 	if _retries <= retry_goal:
 		stars += 1                                  # few retries
-	# Skill points, but only the first time you finish this level (no farming
-	# them with "play again"). Ask BEFORE record_level, which marks it finished.
-	var points := 0 if Game.has_finished(level_number) else skill_points
-	SkillManager.add_points(points)
-	if points > 0:
-		_play("fanfare")
 	var stats := {"time": _play_time, "cells": _cells_banked, "cells_total": _cells.size(),
-		"retries": _retries, "retry_goal": retry_goal, "stars": stars, "hints": _hints_used,
-		"points": points}
+		"retries": _retries, "retry_goal": retry_goal, "stars": stars, "hints": _hints_used}
 	Game.record_level(level_number, stats)          # (this also saves the game)
 	hud.show_summary(level_number, complete_message, stats, Game.has_level(level_number + 1))
 	_play("complete")
-	# New skill points: a popup, the dot on SKILLS pings, and the first time,
-	# PIP explains them (not after the last level: there's nothing left to use them on)
-	if points > 0:
-		hud.notify_skill_points(points)
-		if Game.has_level(level_number + 1) and Game.first_time("skill_points"):
-			hud.say(PackedStringArray(Array(pip_skill_points).map(
-				func(l: String) -> String: return l.format(Game.story_values()))), "PIP")
 	level_completed.emit()
 
 

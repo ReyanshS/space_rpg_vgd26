@@ -11,12 +11,12 @@
 # Also: the wire timer (a small LED bar floating above the astronaut's head, so
 # you don't have to look away), the tutorial arrow, short "toast" messages at
 # the top (room names, "ZAP"...), the white flash / black fade, the results
-# screen with stars, the pause menu, the skill tree screen (skill_tree.gd), and
+# screen with stars, the pause menu, the wire upgrade panel (upgrade_panel.gd), and
 # the black film bar of the cutscenes.
 #
 # Buttons: the menus use real Buttons (their look comes from the project theme,
 # Assets/ui/theme.tres). Two of them sit in the top right corner the whole
-# time: SKILLS opens the skill tree and MENU pauses. T also opens the skill
+# time: UPGRADE opens the wire upgrade and MENU pauses. U also opens the
 # tree at any moment. You can click a button, or pick it with the arrow keys
 # and press E, Space or Enter.
 #
@@ -73,8 +73,7 @@ const LED_OFF := UIStyle.LED_OFF        # a segment of a meter that isn't lit
 @onready var pause_panel: Control = $Pause
 @onready var pause_level: Label = $Pause/VBox/Level
 @onready var bar_top: ColorRect = $BarTop
-@onready var skill_tree: SkillTreeScreen = $SkillTree
-@onready var corner_skills: Button = $Corner/Skills
+@onready var corner_upgrade: Button = $Corner/Upgrade
 @onready var corner_menu: Button = $Corner/Menu
 ## The E key that bobs just under PIP's little screen when you have to press E
 ## to go on (never on top of the text). It's its own node in hud.tscn: move it
@@ -135,13 +134,14 @@ var _line_rogue := false          # the line on screen is said by the malfunctio
 # results screen
 var _stars_earned := 0
 var _stars_shown := 0
-var _points_earned := 0             # skill points this level gave (0 on a replay)
 
-# the skill tree screen
-var _skill_badge: Control           # the notification dot on SKILLS (_draw_skill_badge)
+# the wire upgrade panel (upgrade_panel.gd, made in _ready)
+var upgrade_panel: UpgradePanel
+var _upgrade_badge: Control           # the dot on UPGRADE when you can afford one (_draw_upgrade_badge)
 var _badge_ping := 0.0              # seconds left of the dot's "look at me" ping
-var _tree_from_pause := false       # opened from the pause menu (go back to it on close)
-var _paused_before := false         # was the game paused before the tree opened?
+var _upgrade_from_pause := false       # opened from the pause menu (go back to it on close)
+var _paused_before := false         # was the game paused before the panel opened?
+var _base_wire := 3.0               # the level's wire_time (the upgrade panel shows what it becomes)
 
 var _keys_shown := []              # the key reminders on screen now (so we only rebuild them when they change)
 var _sfx := {}
@@ -167,13 +167,15 @@ func _ready() -> void:
 	fade_rect.color.a = 0.0
 	bar_top.visible = false
 	bar_top.position.y = -bar_top.size.y        # the film bar waits just above the screen
-	skill_tree.closed.connect(_on_skill_tree_closed)
+	upgrade_panel = UpgradePanel.new()
+	add_child(upgrade_panel)
+	upgrade_panel.closed.connect(_on_upgrade_closed)
 	ship_map = ShipMap.new()
 	add_child(ship_map)
 	ship_map.closed.connect(_on_map_closed)
 	# what each button does
 	$Pause/VBox/Buttons/Resume.pressed.connect(_set_paused.bind(false))
-	$Pause/VBox/Buttons/Skills.pressed.connect(open_skill_tree)
+	$Pause/VBox/Buttons/Upgrade.pressed.connect(open_upgrade)
 	$Pause/VBox/Buttons/Quit.pressed.connect(Game.go_to_title)
 	# the DYSLEXIA FONT switch (Game.set_dyslexic_font), at the bottom of the pause menu
 	var font_switch := Button.new()
@@ -186,19 +188,19 @@ func _ready() -> void:
 	$Pause/VBox.add_child(font_switch)
 	$Complete/VBox/Buttons/Next.pressed.connect(results_next.emit)
 	$Complete/VBox/Buttons/Again.pressed.connect(results_again.emit)
-	$Complete/VBox/Buttons/Skills.pressed.connect(open_skill_tree)
-	corner_skills.pressed.connect(open_skill_tree)
+	$Complete/VBox/Buttons/Upgrade.pressed.connect(open_upgrade)
+	corner_upgrade.pressed.connect(open_upgrade)
 	corner_menu.pressed.connect(func() -> void: _set_paused(not pause_panel.visible))
-	SkillManager.points_changed.connect(func(_p: int) -> void: _update_corner())
+	Game.batteries_changed.connect(_update_corner)
 	_update_corner()
-	# The notification dot on SKILLS: it shows while you have points AND a skill
-	# you could buy with them. It pings for a while when points arrive (and when
-	# a level starts), and stops pinging once you open the skill tree.
-	_skill_badge = Control.new()
-	_skill_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_skill_badge.size = Vector2(12, 12)
-	corner_skills.add_child(_skill_badge)
-	_skill_badge.draw.connect(_draw_skill_badge)
+	# The notification dot on UPGRADE: it shows while you have enough batteries
+	# for the next upgrade. It pings for a while (when a level starts), and stops
+	# pinging once you open the panel.
+	_upgrade_badge = Control.new()
+	_upgrade_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_upgrade_badge.size = Vector2(12, 12)
+	corner_upgrade.add_child(_upgrade_badge)
+	_upgrade_badge.draw.connect(_draw_upgrade_badge)
 	if _can_upgrade():
 		_badge_ping = 6.0
 	_show_idle()
@@ -216,10 +218,10 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_badge_ping = maxf(0.0, _badge_ping - delta)
-	_skill_badge.visible = _can_upgrade()
-	if _skill_badge.visible:
-		_skill_badge.position = Vector2(-6.0, -5.0)   # its top left corner (the right one is at the screen's edge)
-		_skill_badge.queue_redraw()
+	_upgrade_badge.visible = _can_upgrade()
+	if _upgrade_badge.visible:
+		_upgrade_badge.position = Vector2(-6.0, -5.0)   # its top left corner (the right one is at the screen's edge)
+		_upgrade_badge.queue_redraw()
 	_pulse = maxf(0.0, _pulse - delta * 2.5)
 	_power_flash = maxf(0.0, _power_flash - delta)
 	_cell_bump = maxf(0.0, _cell_bump - delta * 3.0)
@@ -237,8 +239,8 @@ func _process(delta: float) -> void:
 		next_key.queue_redraw()        # it bobs
 	# MENU only shows when pausing is allowed (not in cutscenes or on the results)
 	corner_menu.visible = allow_pause
-	# (not while the skill tree is open, or on the frame its Esc closed it)
-	var tree_busy := skill_tree.visible or skill_tree.closed_frame == Engine.get_process_frames()
+	# (not while the upgrade panel is open, or on the frame its Esc closed it)
+	var tree_busy := upgrade_panel.visible or upgrade_panel.closed_frame == Engine.get_process_frames()
 	var map_busy := ship_map.visible or ship_map.closed_frame == Engine.get_process_frames()
 	if Input.is_action_just_pressed("pause") and allow_pause and not tree_busy and not map_busy:
 		_set_paused(not get_tree().paused)
@@ -248,8 +250,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var key := (event as InputEventKey).physical_keycode
-	if key == KEY_T:
-		open_skill_tree()               # any time at all
+	if key == KEY_U:
+		open_upgrade()               # any time at all
 	elif key == KEY_M and _map_ok:
 		open_map()
 	elif key == KEY_Q and pause_panel.visible:
@@ -262,7 +264,7 @@ func _set_paused(on: bool) -> void:
 		pause_panel.modulate.a = 0.0
 		create_tween().tween_property(pause_panel, "modulate:a", 1.0, 0.15)
 		get_tree().paused = true
-		_update_pause_skills()
+		_update_pause_upgrade()
 		$Pause/VBox/Buttons/Resume.grab_focus()     # so the keys can pick a button straight away
 	else:
 		# Unpause at the end of this frame, not right now: if E pressed RESUME,
@@ -270,32 +272,44 @@ func _set_paused(on: bool) -> void:
 		get_tree().set_deferred("paused", false)
 
 
-## The line on the pause menu about your skills.
-func _update_pause_skills() -> void:
-	var pts := SkillManager.points
-	var text := "SKILLS %d/%d" % [SkillManager.unlocked_count(), SkillManager.all_skills().size()]
-	if pts > 0:
-		text += "   |   %d POINT%s TO SPEND" % [pts, "" if pts == 1 else "S"]
-	$Pause/VBox/Suit.text = text
+## The line on the pause menu about the wire upgrade and your batteries.
+func _update_pause_upgrade() -> void:
+	$Pause/VBox/Suit.text = "WIRE UPGRADES %d/%d   |   %d BATTER%s" % [Game.wire_upgrades,
+		Game.UPGRADE_COSTS.size(), Game.batteries, "Y" if Game.batteries == 1 else "IES"]
 
 
-# ------------------------------------------------------------------ skill tree
+# ------------------------------------------------------------------ the wire upgrade
 
-## Opens the skill tree screen and pauses the game until it closes. Works at
-## any moment, except while the screen is fading to the next scene.
-func open_skill_tree() -> void:
-	if skill_tree.visible or fade_rect.color.a > 0.5:
+## The level tells the HUD its wire_time, so the upgrade panel can show what
+## the timer is now and what it would be.
+func set_base_wire(secs: float) -> void:
+	_base_wire = secs
+
+
+## Opens the wire upgrade panel (upgrade_panel.gd) and pauses the game until
+## it closes. Works at any moment, except while the screen is fading out.
+func open_upgrade(gained := 0) -> void:
+	if upgrade_panel.visible or fade_rect.color.a > 0.5:
 		return
-	_tree_from_pause = pause_panel.visible
+	_upgrade_from_pause = pause_panel.visible
 	_paused_before = get_tree().paused
 	pause_panel.visible = false
 	get_tree().paused = true
 	_badge_ping = 0.0                   # you've seen it: the dot stops pinging
-	skill_tree.open()
+	upgrade_panel.open(_base_wire, gained)
 
 
-func is_skill_tree_open() -> bool:
-	return skill_tree.visible
+## The end of a room: the level waits here while the panel is open.
+## gained = batteries that room paid out.
+func offer_upgrade(gained: int, base_wire: float) -> void:
+	_base_wire = base_wire
+	open_upgrade(gained)
+	if upgrade_panel.visible:
+		await upgrade_panel.closed
+
+
+func is_upgrade_open() -> bool:
+	return upgrade_panel.visible
 
 
 # ------------------------------------------------------------------ ship map
@@ -309,7 +323,7 @@ func set_map_available(on: bool) -> void:
 
 ## Opens PIP's deck map (ship_map.gd) and pauses the game until it closes.
 func open_map() -> void:
-	if ship_map.visible or skill_tree.visible or pause_panel.visible or fade_rect.color.a > 0.5 or _cinematic:
+	if ship_map.visible or upgrade_panel.visible or pause_panel.visible or fade_rect.color.a > 0.5 or _cinematic:
 		return
 	var lv := get_tree().get_first_node_in_group("level")
 	if lv == null or not lv.has_method("map_info"):
@@ -338,49 +352,39 @@ func set_clamp(on: bool) -> void:
 	_clamp = on
 
 
-func _on_skill_tree_closed() -> void:
-	if _tree_from_pause:
+func _on_upgrade_closed() -> void:
+	if _upgrade_from_pause:
 		pause_panel.visible = true        # back to the pause menu, still paused
-		_update_pause_skills()
-		$Pause/VBox/Buttons/Skills.grab_focus()
+		_update_pause_upgrade()
+		$Pause/VBox/Buttons/Upgrade.grab_focus()
 	elif not _paused_before:
 		get_tree().set_deferred("paused", false)   # back to the game (see _set_paused)
 	_update_points_line()
 
 
-## The level calls this when you earn skill points (finishing a level): a popup,
-## and the dot on SKILLS pings again.
-func notify_skill_points(amount: int) -> void:
-	show_toast("+%d SKILL POINT%s: PRESS T TO UPGRADE" % [amount, "" if amount == 1 else "S"], 3.5)
-	_badge_ping = 8.0
-
-
-## You have points and at least one skill you could buy with them right now.
+## You have enough batteries for the next wire upgrade.
 func _can_upgrade() -> bool:
-	if SkillManager.points <= 0:
-		return false
-	return SkillManager.all_skills().any(func(s: SkillDef) -> bool: return SkillManager.can_unlock(s.id))
+	return Game.can_upgrade()
 
 
 ## The notification dot: an amber dot with a "!", and while it's pinging, a
 ## ring that grows out of it and fades, over and over (like a radar ping).
-func _draw_skill_badge() -> void:
+func _draw_upgrade_badge() -> void:
 	var c := Vector2(6, 6)
 	if _badge_ping > 0.0:
 		var k := fmod(_t * 1.4, 1.0)
-		_skill_badge.draw_arc(c, 5.0 + k * 7.0, 0.0, TAU, 24, Color(AMBER, 0.9 * (1.0 - k)), 1.0)
-	_skill_badge.draw_circle(c, 5.0, AMBER)
-	UIStyle.text(_skill_badge, c + Vector2(0, 2.5), "!", Color(0.05, 0.07, 0.1), 7, HORIZONTAL_ALIGNMENT_CENTER)
+		_upgrade_badge.draw_arc(c, 5.0 + k * 7.0, 0.0, TAU, 24, Color(AMBER, 0.9 * (1.0 - k)), 1.0)
+	_upgrade_badge.draw_circle(c, 5.0, AMBER)
+	UIStyle.text(_upgrade_badge, c + Vector2(0, 2.5), "!", Color(0.05, 0.07, 0.1), 7, HORIZONTAL_ALIGNMENT_CENTER)
 
 
-## The SKILLS button in the corner: amber, with a count, when you have points to spend.
+## The UPGRADE button in the corner: your batteries, and amber when you can buy.
 func _update_corner() -> void:
-	var pts := SkillManager.points
-	corner_skills.text = "SKILLS +%d" % pts if pts > 0 else "SKILLS"
-	if pts > 0:
-		corner_skills.add_theme_color_override("font_color", AMBER)
+	corner_upgrade.text = "UPGRADE  %d" % Game.batteries if Game.batteries > 0 else "UPGRADE"
+	if Game.can_upgrade():
+		corner_upgrade.add_theme_color_override("font_color", AMBER)
 	else:
-		corner_skills.remove_theme_color_override("font_color")
+		corner_upgrade.remove_theme_color_override("font_color")
 
 
 ## The pause menu shows which level you're on.
@@ -933,7 +937,6 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	var bonus := int(stats.get("cells", 0)) * int(Game.o2_per_cell())
 	$Complete/VBox/Bonus.visible = bonus > 0 and has_next     # no spacewalks after the last level
 	$Complete/VBox/Bonus.text = "Kept batteries: +%d s of oxygen" % bonus
-	_points_earned = int(stats.get("points", 0))
 	_update_points_line()
 	$Complete/VBox/StarHelp.text = "Stars for finishing, every cell, and %d retries or fewer" % stats.get("retry_goal", 0)
 	$Complete/VBox/Buttons/Next.text = "NEXT LEVEL" if has_next else "TITLE SCREEN"
@@ -949,7 +952,7 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 	await get_tree().create_timer(0.6).timeout
 	if not is_inside_tree():
 		return
-	if not skill_tree.visible:
+	if not upgrade_panel.visible:
 		$Complete/VBox/Buttons/Next.grab_focus()   # E / Space / Enter = next level
 	for i in _stars_earned:
 		_stars_shown += 1
@@ -960,16 +963,11 @@ func show_summary(number: int, message: String, stats: Dictionary, has_next: boo
 			return
 
 
-## The results line about skill points, e.g. "+2 SKILL POINTS".
+## The results line about batteries, e.g. "7 BATTERIES TO SPEND".
 func _update_points_line() -> void:
 	var label: Label = $Complete/VBox/Points
-	var pts := SkillManager.points
-	if _points_earned > 0:
-		label.text = "+%d SKILL POINT%s" % [_points_earned, "" if _points_earned == 1 else "S"]
-	elif pts > 0:
-		label.text = "%d skill point%s to spend" % [pts, "" if pts == 1 else "s"]
-	else:
-		label.text = ""
+	var b := Game.batteries
+	label.text = "%d BATTER%s TO SPEND" % [b, "Y" if b == 1 else "IES"] if b > 0 else ""
 	label.visible = label.text != ""
 
 

@@ -211,7 +211,7 @@ judge mode.
   an orange node tile onto the floor. The live preview makes it glow and animate straight away.
   Zoom out a little so the room labels (number, name, START time) show too.
 - **S17**: click the level's root node and scroll the Inspector to the Rules group
-  (`wire_time`, `node_time`, `max_wire_time`), so it's clear the numbers are settings, not code.
+  (`wire_time`, `node_time`), so it's clear the numbers are settings, not code.
 - **S18, `Scripts/level.gd`**: scroll to `func wire_reaches(pos: Vector2) -> bool:` (about line
   1737). Highlight the function while the narration says "checks every step".
 - **S19, `Scripts/player.gd`**: show `enum State { FREE, WIRED, LOCKED, DRIFT }` (line 26).

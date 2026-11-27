@@ -33,7 +33,7 @@ var _focus_before: Control     # the button that had focus before we opened
 
 
 func _ready() -> void:
-	layer = 120                     # above the HUD, the skill tree and the fades
+	layer = 120                     # above the HUD, the upgrade panel and the fades
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 

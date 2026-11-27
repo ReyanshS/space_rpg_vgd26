@@ -53,9 +53,13 @@ reboot him by looping the wire round his core three times; the team's idea, see 
 - Rating form: Creativity x2, Technical skill x2, Storyline/flow between levels x1, Overall appeal x2
   (game design 70); video, portfolio, directions/controls, storyboard, AI reflection (50).
 - 2026-27 theme: *"Create a deep space-themed RPG where the primary method of progression is
-  puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), a skill tree
-  (3 branches, points for finishing levels), collectibles (power cells: +5 s oxygen each on
-  spacewalks), results/stars per level, a save file with Continue. See "RPG" below.
+  puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), batteries as
+  money (power cells you keep) for the WIRE UPGRADE (3 steps), collectibles (power cells: +5 s
+  oxygen each on spacewalks), results/stars per level, a save file with Continue. See "RPG" below.
+- **Nov 26 2026 (Reyansh: "ignoring that the levels may be impossible")**: every level's
+  START is **3 s** (`wire_time` 3, `room_wire_time` empty), which is also the most the
+  timer holds (no `max_wire_time`), and a battery adds **0.5 s** (`cell_bonus`). The numbers below are the older balance; the solver now reports many rooms
+  as too tight. That's known and accepted for now: the wire upgrade is meant to make up for it.
 - **Balance (Nov 2026, "too easy")**: timer rules per level (Inspector, Rules group):
   L1 START 4.5 / node +3.5 / max 6 / hold 2 s, own START times 5.5, -, 6, 3.5, 3.2, -, 5;
   L2 3.5 / +3 / 5 / 1 s, room 3 = 4.2, room 5 = 5, `o2_seconds` 50; L3 3.5 / +2.5 / 5.2 / 1 s,
@@ -97,11 +101,13 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 
 ## Game rules (level.gd enforces them)
 - START pad: stand on it, press **E/Space** to grab the wire. The timer starts with `wire_time`
-  seconds (or that room's `room_wire_time`). Nothing ever pushes it above `max_wire_time`.
+  seconds (or that room's `room_wire_time`). That's also the most it can hold (Nov 26 2026,
+  Reyansh: "max time is capped at start time"): `_max_time()` = `_wire_time()`; there is no
+  `max_wire_time` any more.
 - Free movement while carrying. The wire is a taut straight line from the LAST pad touched to the
   player's hands; it can't pass through walls, crates, doors or live red tiles, so steps that would
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
-- NODE (orange): wraps the wire and ADDS `node_time` (no full refill), capped at `max_wire_time`.
+- NODE (orange): wraps the wire and ADDS `node_time`, capped at the START time.
   Standing on it holds the clock, but only for `node_hold` s. Touch radius 22 px. "Standing on
   it" uses the same test as touching (feet or `BODY_UP` higher), so a node reached from below
   holds too (before Nov 22 2026 it didn't).
@@ -136,7 +142,7 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   the stage resets but the player **stays where he fell** (`_stay_after_fail()` pushes him to the
   nearest safe tile if he's on red or over space; O2 refills). He walks back to the START himself.
   **R** = fade back to the START (only counts as a retry while carrying the wire).
-- POWER CELL (a full battery): touch it *while carrying the wire* and it adds `cell_bonus` (2 s)
+- POWER CELL (a full battery): touch it *while carrying the wire* and it adds `cell_bonus` (0.5 s)
   to the wire timer right away - a detour that can pay for itself. Kept when the stage is
   powered (star + suit oxygen later), back if you fail. PIP explains cells at Level 1's start (a
   StoryBeat with `point_here`); first use / keep / loss get one-time messages (`Game.first_time()`).
@@ -148,12 +154,13 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   `Game` (autoload, `game_state.gd`) stores results; cells from earlier levels = extra oxygen.
 - **H** shows the room's hint route (a FloorGuide with `hint_only`); PIP offers it after 2 fails.
   **Esc** pauses (the HUD runs with process mode Always), **Q** on the pause menu = title.
-- **Menus use real Buttons** (pause: RESUME / SKILL TREE / QUIT; results: NEXT LEVEL /
-  PLAY AGAIN / SKILL TREE; title: START or CONTINUE + NEW GAME; skill tree: UNLOCK / BACK).
+- **Menus use real Buttons** (pause: RESUME / UPGRADE / QUIT; results: NEXT LEVEL /
+  PLAY AGAIN / UPGRADE; title: START or CONTINUE + NEW GAME; upgrade panel: UPGRADE / CONTINUE).
   Their look is in the project theme (`Assets/ui/theme.tres`, textures `Assets/ui/button_*.png`
   drawn by `tools/art_ui.py`), so new Buttons match on their own. Keys: arrows move the focus,
   E / Space / Enter press it (Game._ready adds E to `ui_accept`). The top right corner always
-  has SKILLS (opens the tree, shows "+n" when you have points) and MENU (pause); they have
+  has UPGRADE (opens the wire upgrade, shows your batteries, amber + a "!" dot when you can
+  buy) and MENU (pause); they have
   `focus_mode` none so Space never presses them while you play. Unpausing is deferred to the
   end of the frame so the E that pressed RESUME doesn't also grab the wire.
 
@@ -464,15 +471,15 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   (`say(lines, speaker, blocking, point_at)`, typewriter; when quiet it shows the tutorial
   objective dimmed), ship power LEDs, cell counter, O2 bar (outside) or key reminders. The wire
   timer is a 5-LED bar floating above the astronaut's head. Also: tutorial/PIP arrows, toasts
-  (top), fades, results with stars + skill points, pause menu, the skill tree screen (an
-  instance of `Scenes/skill_tree.tscn`, `hud.open_skill_tree()`), cutscene film bar (top).
+  (top), fades, results with stars + batteries to spend, pause menu, the wire upgrade panel
+  (`Scripts/upgrade_panel.gd`, made in code, `hud.open_upgrade()`), cutscene film bar (top).
 - **UI look** ("clean sci-fi", Nov 22 2026; replaced the green terminal at the team's request:
   "polished, modern ish"): dark glass panels with rounded corners and a thin cyan edge
   (`StyleBoxFlat`), white text, amber for names / keys / things to buy, green = done, red =
   danger. Everything lives in `Scripts/ui_style.gd` (`UIStyle`: colours, font sizes, `box()`,
   `draw_box()`, `text()`, `draw_key()`, `draw_led()`) and the theme (`Assets/ui/theme.tres`:
-  Button, Panel, PanelContainer, Label, RichTextLabel). Code-drawn UI (console, timer, skill
-  tree, map, keycaps, dev menu) uses UIStyle, so a colour changed there changes everywhere.
+  Button, Panel, PanelContainer, Label, RichTextLabel). Code-drawn UI (console, timer, upgrade
+  panel, map, keycaps, dev menu) uses UIStyle, so a colour changed there changes everywhere.
   PIP's face stays a little green screen (his character). Toasts slide in, the pause menu fades
   in, results scale in. The old frame PNGs (`frame_*.png`, `button_*.png`) are no longer used.
 - **Story** (`Scripts/story.gd` on the `Story` node + `Scripts/story_beat.gd` Marker2D children):
@@ -491,31 +498,25 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 - **Stranded after a fail**: `_check_stranded()` runs a tile BFS from the player to the room's
   START avoiding red tiles and grates; no path = an [R] key floats over him, the console says
   "[R] back to start", PIP explains once. Cleared by R, by grabbing the wire, or when a path appears.
-- **RPG = skill tree** (replaced the old XP / LV / pick-an-upgrade system, Nov 2026).
-  Autoload **SkillManager** (`Scripts/skill_manager.gd`, registered BEFORE Game) holds `points`
-  and the unlocked skills; `has_skill(id)`, `can_unlock(id)`, `unlock(id)`, `bonus(effect)`,
-  signals `points_changed`, `skill_unlocked`, `skills_changed`. Skills are DATA: one `SkillDef`
-  (`Scripts/skill_def.gd`) `.tres` per skill in `Data/skills/`, loaded with
-  `ResourceLoader.list_directory` (works in exports). 3 branches (Wire, Suit, Life Support),
-  5 skills each, cost 1-2, each needs its `parent_id`. Effects: `wire_time` (START, and lifts
-  the cap too), `node_time`, `max_time`, `node_hold`, `cell_bonus`, `walk_speed` (+8% each),
-  `boots` (zaps per room absorbed), `o2`, `o2_per_cell`. Tree: Wire (LONGER WIRE I, NODE BOOST,
-  BIG SPOOL, SUPER CELLS, LONGER WIRE II), Suit (servos x3, RUBBER BOOTS, INSULATED SOLES),
-  Life Support (tanks, CELL CHARGER, CALM BREATHING = nodes hold 1 s longer).
-  Points: level.gd export `skill_points` (L1 2, L2 3, L3 3), given in `_finish_level()` only the
-  first time (`Game.has_finished()`), so replays can't farm them. New points (Nov 23 2026, Nilay:
-  "a noti when you get more skill points"): `hud.notify_skill_points()` = a popup "+n SKILL
-  POINTS: PRESS T TO UPGRADE" and an amber "!" dot on the SKILLS button that pings (a ring
-  grows out of it). The dot shows whenever you have points and a skill you can buy
-  (`_can_upgrade`), pings for 6 s at level start / 8 s when points arrive, and stops pinging
-  when the tree opens. The first time (and not after the last level) PIP says
-  `pip_skill_points` (level export, two lines). The tree opens at any time
-  (T, the SKILLS corner button, or the SKILL TREE buttons); it pauses the game and draws itself (`skill_tree.gd`,
-  layout computed from the parent links). Unlocks apply at once (level listens to
-  `skills_changed` -> `_apply_skills()`). Rules read skills through `_wire_time()`,
-  `_cell_bonus()`, `_shock()`, `Game.o2_bonus()`: never read `wire_time` / `cell_bonus`
-  directly in rules. **No puzzle may require a skill** (the solver uses none).
-  Saving: finishing a level and every unlock call `Game.save_game()`; the title screen shows
+- **RPG = batteries and the WIRE UPGRADE** (Nov 26 2026, Reyansh: "remove the tree and make it
+  a time on the wire upgrade button, batteries are the currency, 3, 5, 7"). Replaced the skill
+  tree (SkillManager, SkillDef, Data/skills, skill_tree.gd/.tscn are deleted).
+  All in **Game** (`game_state.gd`): `batteries` (to spend), `wire_upgrades` (0..3),
+  `UPGRADE_COSTS` [3, 5, 7], `UPGRADE_STEP` 1 s (was 0.5 until Reyansh asked for +1), `keep_battery(level, cell)` (called by
+  level.gd `_solve` for every cell kept in that room; each cell pays out ONCE ever, keys
+  "level:x,y" in `_paid_out`, so replays can't farm), `upgrade_cost()` (-1 = all bought),
+  `can_upgrade()`, `buy_upgrade()` (saves), `wire_bonus()`, signal `batteries_changed`.
+  Rules read it through `_wire_time()` (START + bonus, capped by `_max_time()`) and
+  `_max_time()` (= `_wire_time()`): each upgrade adds 1 s to what the START gives, which is
+  also the most the timer holds (3 -> 4 -> 5 -> 6 s). `_node_time`, `_node_hold`, `_cell_bonus` are now plain.
+  **The panel** (`upgrade_panel.gd`, class UpgradePanel, built in code with UIStyle): batteries
+  badge, "+n from that room", WIRE TIMER now > next, three lamps (costs under them), a hint,
+  UPGRADE (n) / CONTINUE buttons (focus on the useful one), U or Esc closes. It comes up after
+  EVERY room you power (`_solve` -> `await hud.offer_upgrade(paid, wire_time)`, after doors and
+  links, before the lights-on cutscene) unless all three are bought or PIP's autopilot is
+  playing; the first time PIP says `pip_upgrade`. Also U, the corner UPGRADE button, and the
+  UPGRADE buttons on the pause menu and the results screen. The panel pauses the game.
+  Saving: finishing a level and every upgrade call `Game.save_game()` (section [upgrades]); the title screen shows
   CONTINUE: LEVEL n + NEW GAME buttons when a save exists. Bots: `Game.new_game()` first.
   `RoguePip` is `@tool`: in the editor it previews the pylon, each socket (number + shutdown
   time) and the flight path, using `level.editor_core_spots()` (a quiet `_build_rooms(true)`).
@@ -581,7 +582,7 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 - `get_meta(key, null)` counts as "no default" and errors when the key is missing: check
   `has_meta()` first.
 - Running a test script with `--script` loads before autoloads are registered: don't use the
-  project's class names (Astronaut, SkillManager...) in such scripts at all, not even
+  project's class names (Astronaut, Game...) in such scripts at all, not even
   `Astronaut.State.LOCKED` (use the number: FREE 0, WIRED 1, LOCKED 2, DRIFT 3).
 - **UI text** in the menus uses real Buttons and `KeyHint` (`Scripts/key_hint.gd`: drawn keycaps +
   a label, sizes itself) instead of "[E] text" strings: console key reminders, pause controls,
@@ -673,5 +674,9 @@ Nov 24 2026: the team's new art (ground, front walls, objects, start / goal / ex
 animations) is the TEAM's own (from their Drive; record who drew it); Claude only cut it into
 tiles, gave each tile its rule and wired it in. Claude drew the side, bottom and corner walls to
 match (`tools/art_wall_sides.py`, pixel by pixel in Python, in the team's colours).
+Nov 26 2026 (Claude, at Reyansh's request): the skill tree replaced by batteries as money and the
+three step WIRE UPGRADE (game_state.gd, upgrade_panel.gd, the end of room prompt), 3 s START and
+0.5 s batteries in every level. The costs (3, 5, 7), the step (1 s) and the START time are the
+team's numbers.
 The tools in `tools/` were also written by Claude. Gameplay was playtested by automated scripts
 that drive the real game with simulated key presses.

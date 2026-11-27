@@ -1,6 +1,6 @@
 # solver2.py: checks that every room of a level can be solved, and how.
 # Simulates the real rules (free walking, taut wire that can't cross walls/crates/red,
-# the START gives TIME seconds, each node adds NODE_TIME up to MAX_TIME, the wire
+# the START gives TIME seconds, each node adds NODE_TIME but never past what the START gave, the wire
 # wraps round purple poles like a rope round a post, walking off a hull edge makes
 # you drift across open space) on a 4 px grid and lists every route that gets
 # there in time. "lowest timer" = the least time you ever have left on that route:
@@ -8,14 +8,15 @@
 # the live wire and still make it to the next pad in time?
 # Use it after changing a room to make sure there's no shortcut and no impossible segment.
 # The constants below must match player.gd (walk_speed, drift_speed)
-# and level.gd (wire_time, node_time, max_wire_time, pad radii, CELL_RADIUS).
+# and level.gd (wire_time, node_time, pad radii, CELL_RADIUS). The most the timer holds is
+# the room's START time (level.gd _max_time), so there's no separate max any more.
 #     python tools/solver2.py Levels/level_1.tscn        (easiest: reads the map AND
 #                                                         the level's Rules numbers)
 #     python tools/solver2.py tools/out/level1.txt --time 3.5 --node 2.5 --max 4.5
 #     (a text map from map_from_scene.py, with the numbers typed in; skills not counted)
 import math, heapq, sys
 TILE = 32; FEET = (6, 4); WALK = 100.0; DRIFT = 150.0
-TIME = 4.0; NODE_TIME = 3.0; MAX_TIME = 5.0      # level.gd defaults (--time / --node / --max)
+TIME = 3.0; NODE_TIME = 3.0                      # level.gd defaults (--time / --node)
 ROOM_TIME = {}                                   # stage number -> its own START time (room_wire_time)
 R = {'N': 22.0, 'G': 22.0}
 CELL_R = 14.0
@@ -264,7 +265,7 @@ def name(key, kind): return f'{kind}({key[0]},{key[1]})'
 def solve_room(M, pads, poles, cells, start_key, max_depth=12, core=None, start_time=None):
     """Every route from START to GOAL: (labels, lowest timer on the way, cells,
     total seconds). The timer carries on from pad to pad: START gives TIME,
-    each node adds NODE_TIME (never above MAX_TIME). With `core` (a pixel
+    each node adds NODE_TIME (never above what the START gave). With `core` (a pixel
     position) there's no goal: a route is finished as soon as the wire (pads,
     poles + his hands) winds a full turn round the core."""
     sols = []
@@ -319,9 +320,9 @@ def solve_room(M, pads, poles, cells, start_key, max_depth=12, core=None, start_
         if kind == 'G':
             sols.append((labels + lab, ms, got, el, trail)); return
         if kind == 'N':
-            rec(pc, p, min(tl + NODE_TIME, MAX_TIME), used | {key}, labels + lab, got, depth + 1, ms, wind, el, trail)
+            rec(pc, p, min(tl + NODE_TIME, t0), used | {key}, labels + lab, got, depth + 1, ms, wind, el, trail)
 
-    t0 = min(start_time or TIME, MAX_TIME)
+    t0 = start_time or TIME           # also the most the timer can hold in this room
     rec(pads[start_key][1], pads[start_key][1], t0, frozenset([start_key]), [name(start_key, 'S')], frozenset(), 0,
         t0, 0.0, 0.0, [])
     return sols
@@ -523,7 +524,7 @@ if __name__ == '__main__':
         i = args.index('--paths'); paths_out = args[i + 1]; del args[i:i + 2]
     paths = {}
     halls = []           # crate plans for halls (rooms with no START): what PIP's autopilot pushes
-    for flag, var in (('--time', 'TIME'), ('--node', 'NODE_TIME'), ('--max', 'MAX_TIME'), ('--margin', 'MARGIN'),
+    for flag, var in (('--time', 'TIME'), ('--node', 'NODE_TIME'), ('--margin', 'MARGIN'),
                       ('--crate-tries', 'MAX_TRIES')):
         if flag in args:
             i = args.index(flag); globals()[var] = type(globals()[var])(float(args[i + 1])); del args[i:i + 2]
@@ -539,7 +540,7 @@ if __name__ == '__main__':
         scene = open(sys.argv[1], encoding='utf-8').read()
         root = scene[scene.index('[node '):]
         root = root[:root.index('[node ', 1)] if '[node ' in root[1:] else root
-        for prop, var in (('wire_time', 'TIME'), ('node_time', 'NODE_TIME'), ('max_wire_time', 'MAX_TIME')):
+        for prop, var in (('wire_time', 'TIME'), ('node_time', 'NODE_TIME')):
             m = re.search(rf'^{prop} = ([\d.]+)', root, re.M)
             if m: globals()[var] = float(m.group(1))
         m = re.search(r'^room_wire_time = PackedFloat32Array\(([^)]*)\)', root, re.M)
@@ -549,7 +550,7 @@ if __name__ == '__main__':
         sys.argv[1] = txt
     g, floating = floating_cells(load(sys.argv[1]))
     poles = [center(c, r) for r, row in enumerate(g) for c, ch in enumerate(row) if ch == 'B']
-    print(f'Rules: START {TIME} s, node +{NODE_TIME} s, max {MAX_TIME} s' +
+    print(f'Rules: START {TIME} s (also the most the timer holds), node +{NODE_TIME} s' +
           (f', own START times {ROOM_TIME}' if ROOM_TIME else ''))
     rms = rooms(g)
     order, room_of, groups, area = walking_order(g, rms)
@@ -629,7 +630,7 @@ if __name__ == '__main__':
         if len(layouts) > 1:
             print(f'    crates: {len(layouts)} layouts you can push them into, checked the wire in {tried}')
         kind = f'CORE {cores[0]}: wrap the wire round it' if cores else 'goal'
-        print(f'Stage {k + 1} (start {st[0]}, {kind}, START {min(ROOM_TIME.get(k + 1, TIME), MAX_TIME)} s): {len(sols)} solutions')
+        print(f'Stage {k + 1} (start {st[0]}, {kind}, START {ROOM_TIME.get(k + 1, TIME)} s): {len(sols)} solutions')
         if sockets and not any(clamp_of[id(s)] is None for s in sols) and sols:
             print('    needs the clamp: no route without it')
         if sols and not any(not pushes_of[id(s)] for s in sols):

@@ -38,7 +38,7 @@ const FEET_HALF := Vector2(6, 4)
 @export var drift_speed := 150.0
 
 var level: WireLevel = null   # set by the level when the game starts
-## Walking speed is multiplied by this (the LEG SERVOS skills raise it).
+## Walking speed is multiplied by this (1 = normal; nothing changes it right now).
 var speed_mult := 1.0
 ## PIP's autopilot (judge mode, autopilot.gd) is walking for you: the keys are
 ## ignored and `auto_dir` is used instead, like a stick held in that direction.

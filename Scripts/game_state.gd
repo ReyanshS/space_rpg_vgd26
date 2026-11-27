@@ -9,10 +9,11 @@
 #
 # Any script can use it by its name, e.g.  Game.o2_bonus()  or  Game.go_to_level(2)
 #
-# The RPG side (skill points and the skill tree) lives in its own autoload,
-# SkillManager (skill_manager.gd). This script saves it, together with which
-# levels you've finished, to one save file (save_game / load_game), so the
-# title screen can offer "Continue".
+# The RPG side lives here too: BATTERIES are the money. Every power cell you
+# keep (it's yours once its room has power) is one battery to spend, and you
+# spend them on the WIRE UPGRADE: a bigger wire timer (upgrade_panel.gd).
+# All of it goes in one save file (save_game / load_game) with the levels
+# you've finished, so the title screen can offer "Continue".
 # ---------------------------------------------------------------------------
 extends Node
 
@@ -93,11 +94,30 @@ var node_rest := false
 # Tips PIP already gave (so he explains something only once, even across levels)
 var _tips_seen := {}
 
+# --- batteries and the wire upgrade
+## Batteries or the upgrade changed (the HUD's UPGRADE button listens).
+signal batteries_changed
+## What each wire upgrade costs, in batteries: the first, the second, the third.
+## Add a number to add a fourth upgrade.
+const UPGRADE_COSTS: Array[int] = [3, 5, 7]
+## Seconds each upgrade adds to the wire timer (to the most it holds, and to
+## what the START gives, so the bigger wire starts full).
+const UPGRADE_STEP := 1.0
+## Batteries you can spend.
+var batteries := 0
+## How many wire upgrades you've bought (0 to UPGRADE_COSTS.size()).
+var wire_upgrades := 0
+# Every battery that has already paid out, as "level:x,y". Each battery in the
+# game pays out once: replaying a level can't farm them.
+var _paid_out := {}
+
 
 ## Forget everything and delete the save (the title screen's "new game").
 func new_game() -> void:
 	results.clear()
-	SkillManager.reset()
+	batteries = 0
+	wire_upgrades = 0
+	_paid_out.clear()
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
 
@@ -108,8 +128,6 @@ func _ready() -> void:
 	if cfg.load(SETTINGS_PATH) == OK:
 		dyslexic_font = cfg.get_value("settings", "dyslexic_font", false)
 	apply_font()
-	# Buying a skill saves straight away, so quitting mid level doesn't lose it.
-	SkillManager.skill_unlocked.connect(func(_id: String) -> void: save_game())
 	# Menu buttons react to the "ui_accept" action (Enter and Space). Add E to it
 	# too, so E presses the selected button, like it moves PIP's lines on.
 	var e := InputEventKey.new()
@@ -189,14 +207,55 @@ func cells_collected() -> int:
 	return n
 
 
-## Seconds of oxygen each kept battery gives (CELL CHARGER skill adds to it).
+## Seconds of oxygen each kept battery gives.
 func o2_per_cell() -> float:
-	return O2_PER_CELL + SkillManager.bonus("o2_per_cell")
+	return O2_PER_CELL
 
 
-## Extra oxygen on spacewalks: from batteries you kept, and the Life Support skills.
+## Extra oxygen on spacewalks, from batteries you kept (spent or not).
 func o2_bonus() -> float:
-	return cells_collected() * o2_per_cell() + SkillManager.bonus("o2")
+	return cells_collected() * o2_per_cell()
+
+
+# ------------------------------------------------------------------ batteries and the upgrade
+
+## The level calls this when a battery is yours to keep (its room got power).
+## It pays out one battery to spend, unless that battery already paid out on
+## an earlier try. Returns true if it paid.
+func keep_battery(level: int, cell: Vector2i) -> bool:
+	var key := "%d:%d,%d" % [level, cell.x, cell.y]
+	if _paid_out.has(key):
+		return false
+	_paid_out[key] = true
+	batteries += 1
+	batteries_changed.emit()
+	return true
+
+
+## What the next upgrade costs, or -1 when you have them all.
+func upgrade_cost() -> int:
+	return UPGRADE_COSTS[wire_upgrades] if wire_upgrades < UPGRADE_COSTS.size() else -1
+
+
+func can_upgrade() -> bool:
+	var cost := upgrade_cost()
+	return cost > 0 and batteries >= cost
+
+
+## Buys the next upgrade. Returns false if you can't afford it (or have them all).
+func buy_upgrade() -> bool:
+	if not can_upgrade():
+		return false
+	batteries -= upgrade_cost()
+	wire_upgrades += 1
+	batteries_changed.emit()
+	save_game()                  # saved straight away, so quitting mid level doesn't lose it
+	return true
+
+
+## Extra seconds on the wire timer from the upgrades you bought.
+func wire_bonus() -> float:
+	return wire_upgrades * UPGRADE_STEP
 
 
 ## True the first time it's asked about `tip`, false every time after that.
@@ -287,9 +346,9 @@ func story_values() -> Dictionary:
 func save_game() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("progress", "results", results)
-	var skills := SkillManager.to_save()
-	cfg.set_value("skills", "points", skills["points"])
-	cfg.set_value("skills", "unlocked", skills["unlocked"])
+	cfg.set_value("upgrades", "batteries", batteries)
+	cfg.set_value("upgrades", "wire", wire_upgrades)
+	cfg.set_value("upgrades", "paid_out", _paid_out.keys())
 	cfg.set_value("settings", "judge_mode", judge_mode)
 	var err := cfg.save(SAVE_PATH)
 	if err != OK:
@@ -303,10 +362,12 @@ func load_game() -> bool:
 		return false
 	results = cfg.get_value("progress", "results", {})
 	judge_mode = cfg.get_value("settings", "judge_mode", false)
-	SkillManager.from_save({
-		"points": cfg.get_value("skills", "points", 0),
-		"unlocked": cfg.get_value("skills", "unlocked", []),
-	})
+	batteries = int(cfg.get_value("upgrades", "batteries", 0))
+	wire_upgrades = clampi(int(cfg.get_value("upgrades", "wire", 0)), 0, UPGRADE_COSTS.size())
+	_paid_out.clear()
+	for key in cfg.get_value("upgrades", "paid_out", []):
+		_paid_out[key] = true
+	batteries_changed.emit()
 	return true
 
 

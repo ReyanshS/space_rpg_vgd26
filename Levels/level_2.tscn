@@ -15,13 +15,11 @@
 script = ExtResource("1_level")
 layout = NodePath("Layout")
 level_number = 2
-skill_points = 3
 level_name = "MAIN DECK"
-wire_time = 3.5
+wire_time = 3.0
 node_time = 3.0
-max_wire_time = 5.0
 node_hold = 1.0
-room_wire_time = PackedFloat32Array(0, 0, 4.2, 0, 5)
+room_wire_time = PackedFloat32Array()
 o2_seconds = 50.0
 complete_message = "The main coupling is fixed. The ship's alive again."
 room_titles = PackedStringArray("THE BRIDGE", "AIRLOCK", "OUTER HULL", "SOLAR ARRAY", "MAIN COUPLING")

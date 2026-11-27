@@ -203,7 +203,7 @@ The same level node also has **Level** (name, results message), **Rules**,
 **Rules** is where the difficulty lives:
 - **Wire Time**: seconds from the START. **Room Wire Time**: one number per room (in
   walking order, like Room Names) to give a room its own START time; 0 = use Wire Time.
-- **Node Time**: seconds a node adds. **Max Wire Time**: the timer never goes above this.
+- **Node Time**: seconds a node adds. The timer never goes above the START time (Wire Time): a node or battery only tops it back up.
 - **Node Hold**: how long standing on a node holds the clock.
 - **Cell Bonus**: seconds a battery adds.
 After changing any of them (or the map), check every room still works:
@@ -242,22 +242,16 @@ its number, his shutdown time and a dotted flight path. On the **RoguePip** node
 - **Lines**: what he says when the surge hits, right after turning, when he escapes
   each socket, after the reboot, and when he cuts your wire.
 
-## 6b. The RPG side: skill points and the skill tree
+## 6b. The RPG side: batteries and the wire upgrade
 
-- **Points per level**: select the level's root node, Inspector > Level > **Skill Points**.
-  You only get them the first time you finish that level.
-- **Skills** are files in `Data/skills/` (one `.tres` each). Double-click one to edit it in
-  the Inspector:
-  - **Cost**: points to unlock it. **Amount**: how strong it is.
-  - **Parent Id**: the `id` of the skill you need first (empty = top of its branch).
-  - **Branch**: which column (Wire, Suit, Life Support).
-  - **Short Name**: the word under its box on the tree. **Description**: shown when selected.
-  - **Effect**: what it changes (`wire_time`, `cell_bonus`, `walk_speed`, `boots`, `o2`,
-    `o2_per_cell`). Skills with the same effect add up.
-- **New skill**: right-click a skill file > **Duplicate**, then give it a new **Id** and a
-  Parent Id. The tree places it by itself. A brand new kind of effect needs code
-  (search for `SkillManager.bonus`).
-- Never make a puzzle that NEEDS a skill: run the solver, which uses no skills.
+- Every **cell** tile you paint is a battery: worth 0.5 s on the wire when it's charged
+  (level node, Rules > **Cell Bonus**), and one battery to spend once its room has power.
+- The upgrade's numbers are in `Scripts/game_state.gd`: **UPGRADE_COSTS** (3, 5, 7: add a
+  number for a fourth upgrade) and **UPGRADE_STEP** (1 s each).
+- The START time is the level's **Wire Time** (Rules group, 3 s), or a room's own entry in
+  **Room Wire Time**. That's also the most the timer holds. Each upgrade adds 1 s to it.
+- The upgrade screen shows after every room you power. Its first PIP line is the level's
+  **Pip Upgrade** (Inspector, PIP's rule lines).
 - The save file is `user://save.cfg`. To start clean while testing, press **N** on the title
   screen (or delete it: Project > Open User Data Folder).
 

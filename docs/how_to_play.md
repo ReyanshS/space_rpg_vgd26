@@ -31,7 +31,7 @@ they leave behind. At the end of each level you get up to three stars.
 | Go back to the START pad | R |
 | Show a hint (harder puzzles) | H |
 | Pause menu (controls, quit) | Esc, or the **MENU** button (top right) |
-| Skill tree | T at any time, or the **SKILLS** button (top right) |
+| Wire upgrade | U at any time, or the **UPGRADE** button (top right) |
 | Menu buttons | click them, or pick one with the arrow keys and press E, Space or Enter |
 
 ## Rules
@@ -87,19 +87,19 @@ they leave behind. At the end of each level you get up to three stars.
   reboot him. While you hold the wire near him, the **red lights over his head** fill up. When
   they're full he cuts your wire, so plan the loop before you grab it.
 
-## The skill tree (the RPG part)
-- Finishing a level for the first time gives you **skill points**: 2 for Level 1, 3 for the
-  harder levels. Points you haven't spent show in the console as **SP**.
-- Spend them on the **skill tree**: press **T** or click **SKILLS** (top right) at any time,
-  or use the SKILL TREE button on the pause menu and the results screen. Arrows pick a skill,
-  **E** or the UNLOCK button unlocks it. With the mouse, click a skill, then UNLOCK.
-- Three branches: **Wire** (longer timer, stronger batteries), **Suit** (faster legs, boots
-  that shrug off zaps) and **Life Support** (more air on spacewalks).
-- A skill costs 1 or 2 points and needs the skill above it first. Grey = locked,
-  amber = you can buy it, green = yours. Skills work straight away and last all game.
-- Every puzzle can be solved with no skills at all. They just make it easier.
-- When you have points to spend, the **SKILLS** button (top right) gets an amber **!**.
-- The game saves when you finish a level or unlock a skill. The title screen then offers
+## Batteries and the wire upgrade (the RPG part)
+- The wire timer starts at **3 seconds**. Every battery you charge with the live wire adds
+  **0.5 s** to it straight away.
+- Once a room has power, the batteries you charged there are yours: **batteries are money**.
+- Spend them on the **wire upgrade**: each one makes the wire timer **1 s** bigger (it
+  starts with more, and holds more). The first costs **3** batteries, the second **5**, the
+  third **7**.
+- The upgrade screen comes up by itself after every room you power. You can also open it
+  with **U**, the **UPGRADE** button (top right), or the UPGRADE button on the pause menu and
+  the results screen. Arrows pick a button, **E** presses it.
+- When you can afford the next upgrade, the UPGRADE button turns amber with a **!**.
+- Each battery only pays once: playing a level again doesn't give you its batteries twice.
+- The game saves when you finish a level or buy an upgrade. The title screen then offers
   **Continue** or **New game** (which deletes the save).
 
 ## Easier to read

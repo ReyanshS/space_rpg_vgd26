@@ -5,7 +5,7 @@
 # white text, amber for things you can press or buy, green for done, red for
 # danger. The theme (Assets/ui/theme.tres) gives Buttons, Labels and panels
 # this look by itself; the screens that draw themselves in code (the console,
-# the skill tree, the map, keycaps...) use the colours and helpers below, so a
+# the upgrade panel, the map, keycaps...) use the colours and helpers below, so a
 # colour changed here changes everywhere.
 #
 # Sizes are in game pixels. The game is 480 x 270 game pixels, shown 3x as big
