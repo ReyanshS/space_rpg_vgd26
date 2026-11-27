@@ -27,7 +27,8 @@ they leave behind. At the end of each level you get up to three stars.
 | - | - |
 | Move | W A S D or the arrow keys |
 | Grab the wire / read the next line | E or Space |
-| Reel back to the last pad (while holding the wire) | E or Space |
+| Wrap the wire round a node you're standing on | E, Space, or a left click |
+| Reel back to the last pad (while holding the wire, not on a node) | E or Space |
 | Go back to the START pad | R |
 | Show a hint (harder puzzles) | H |
 | Pause menu (controls, quit) | Esc, or the **MENU** button (top right) |
@@ -35,12 +36,14 @@ they leave behind. At the end of each level you get up to three stars.
 | Menu buttons | click them, or pick one with the arrow keys and press E, Space or Enter |
 
 ## Rules
-- **Grab the wire** on the yellow START pad. The **timer** starts (4 to 6 seconds, depending on
-  the room). The LEDs over your head show how much is left.
+- **Grab the wire** on the yellow START pad. The **timer** starts (3 seconds, more with wire
+  upgrades). The lamps over your head show how much is left: one lamp per second.
 - The wire is pulled **tight in a straight line** from the last pad you touched to your hands.
   It can't pass through walls, crates or red tiles, so you can't walk where it would have to.
-- **Orange NODE**: the wire wraps around it and you get a few **extra seconds** (never more than
-  the timer can hold). Standing on it holds the clock, but only for a moment.
+- **Orange NODE**: stand on it and press **E** (or click) to **wrap the wire round it**. That
+  tops your timer back up (never past what the START gave) and holds the clock for a moment.
+  Until you press E the node does nothing, and your time keeps running. An E key bobs next to
+  a node you can wrap.
 - **PILLAR** (a steel support column with a purple ring): walk past it and the wire **wraps round
   it** like a rope round a post, so the wire can go round corners. Walk back and it comes off
   again. Pillars don't give you time.

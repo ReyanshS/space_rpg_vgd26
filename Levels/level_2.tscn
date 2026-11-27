@@ -90,7 +90,7 @@ pause_game = true
 position = Vector2(272, 192)
 script = ExtResource("10_beat")
 trigger = 9
-lines = PackedStringArray("Another battery. Half a second on the wire now, and one more to spend later.")
+lines = PackedStringArray("Another battery. Half a second on the wire, and one more to spend.")
 
 [node name="BridgeDone" type="Marker2D" parent="Story" unique_id=1711252232]
 position = Vector2(208, 192)
@@ -132,7 +132,7 @@ lines = PackedStringArray("Relay\'s online and your suit topped up its air. And 
 [node name="SolarIntro" type="Marker2D" parent="Story" unique_id=1869121701]
 position = Vector2(1232, 416)
 script = ExtResource("10_beat")
-lines = PackedStringArray("This is the solar array. The wire can\'t go through that floating junk.", "If it won\'t reach, hook it round a node first to get a better angle.")
+lines = PackedStringArray("This is the solar array. The wire can\'t go through that floating junk.", "If it won\'t reach, press E on a node first to get a better angle.")
 pause_game = true
 
 [node name="SolarDone" type="Marker2D" parent="Story" unique_id=60506198]

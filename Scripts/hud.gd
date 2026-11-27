@@ -102,6 +102,7 @@ var _marker_world := Vector2.ZERO   # where the arrow points, in level (world) p
 var _objective := ""                # the tutorial instruction, shown when PIP is quiet
 var _cinematic := false             # a cutscene is playing (film bar on)
 var _reel_prompt := false           # show the [E] "reel back" key above the astronaut
+var _node_prompt := Vector2.INF     # a node waiting for E: the key bobs over it (world position)
 var _restart_prompt := false        # show the [R] key: no safe way back to the START
 var _hint_on := false               # this room has an H hint
 var _t := 0.0
@@ -464,6 +465,10 @@ func _draw_marker() -> void:
 		_draw_arrow(_speech_point, Color(0.5, 0.9, 1.0), Color(0.0, 0.1, 0.18))
 	if _reel_prompt and not _cinematic:
 		_draw_key(_player_on_screen() + Vector2(16, -58 + roundf(sin(_t * 5.0))), "E")
+	if _node_prompt.is_finite() and not _cinematic:
+		# over the node you're standing on: press E to wrap the wire round it
+		var at: Vector2 = get_viewport().get_canvas_transform() * _node_prompt
+		_draw_key(at + Vector2(18, -26 + roundf(sin(_t * 6.0) * 1.5)), "E")
 	if _restart_prompt and not _cinematic:
 		_draw_key(_player_on_screen() + Vector2(0, -48 + roundf(sin(_t * 5.0))), "R")
 
@@ -512,6 +517,15 @@ func set_reel_prompt(on: bool) -> void:
 	if on == _reel_prompt:
 		return
 	_reel_prompt = on
+	_update_keys()
+
+
+## You're on a node with the wire: E (or a click) wraps the wire round it. An E
+## key bobs next to the node, and the console says so. INF = no node.
+func set_node_prompt(world: Vector2) -> void:
+	if world == _node_prompt:
+		return
+	_node_prompt = world
 	_update_keys()
 
 
@@ -886,6 +900,8 @@ func _update_keys() -> void:
 		want = [["E", "next"]]
 	elif _restart_prompt:
 		want = [["R", "back to start"]]
+	elif _node_prompt.is_finite():
+		want = [["E", "wrap node"]]
 	elif _reel_prompt:
 		want = [["E", "reel back"]]
 	elif _judge:
@@ -894,7 +910,7 @@ func _update_keys() -> void:
 		want = [["H", "hint"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
 	else:
 		want = [["R", "restart"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
-	keys_box.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key
+	keys_box.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key or _node_prompt.is_finite()
 	if want == _keys_shown:
 		return
 	_keys_shown = want
@@ -934,7 +950,7 @@ func _draw_status() -> void:
 		status_box.draw_rect(Rect2(k, Vector2(7, 11)), Color(0.02, 0.035, 0.13))
 		status_box.draw_rect(Rect2(k + Vector2(1, 2), Vector2(5, 8)), Color(0.75, 0.47, 1.0))
 		status_box.draw_rect(Rect2(k + Vector2(-1, 0), Vector2(9, 2)), Color(0.92, 0.85, 1.0))
-	if _o2_on and not _reel_prompt and not _restart_prompt and not _waiting_key:
+	if _o2_on and not _reel_prompt and not _restart_prompt and not _waiting_key and not _node_prompt.is_finite():
 		var col := UIStyle.CYAN
 		if _o2_frac < 0.3:
 			col = UIStyle.RED if int(_t * 6.0) % 2 == 0 else Color(1.0, 0.7, 0.6)

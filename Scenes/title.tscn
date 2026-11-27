@@ -122,7 +122,7 @@ layout_mode = 2
 mouse_filter = 2
 script = ExtResource("9_key")
 keys = PackedStringArray("E")
-text = "grab the wire"
+text = "grab the wire, wrap nodes"
 text_color = Color(0.56, 0.66, 0.78, 1)
 
 [node name="Back" type="Control" parent="UI/Controls/Row1"]

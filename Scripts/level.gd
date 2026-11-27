@@ -42,8 +42,9 @@
 #     tiles. If a step would make it, you just can't take that step.
 #   - The START gives you wire_time seconds, and that's also the most the
 #     timer can ever hold: nodes and batteries top it back up, never past it.
-#   - NODE: wraps the wire and adds node_time seconds. Standing on it holds the
-#     timer, but only for node_hold seconds: you can't rest there for ever.
+#   - NODE: stand on it and press E (or click) to wrap the wire round it: it
+#     adds node_time seconds and holds the timer, but only for node_hold
+#     seconds. Until you press, it does nothing (an E key bobs over it).
 #   - NODE REST (a switch in the dev menu, off unless you turn it on): while the
 #     wire is latched on a node (the node is the last pad it touched) and you stay
 #     within node_rest_radius of it, the timer waits as long as you like. Time to
@@ -301,11 +302,13 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## The first time a charged battery goes back because you failed.
 @export var pip_cell_lost := "That battery's back. You only keep them once you reach the blue pad."
 ## The first time the wire stops you walking.
-@export var pip_strain := "The wire can't go through that. Wrap it round a node for a new angle."
+@export var pip_strain := "The wire can't go through that. Press E on a node for a new angle."
 ## The first time you grab a wire that can use a node from an earlier stage (PIP points at it).
-@export var pip_shared := "That node from the last machine is still live. Wrap this wire round it."
+@export var pip_shared := "That node from the last machine is still live. Press E on it to wrap this wire."
 ## After a fail, when there's no way back to the START without crossing red tiles or grates.
 @export var pip_stranded := "No safe way back from there. Press R and I'll bring you to the start."
+## The first time you stand on a node with the wire: it needs E now.
+@export var pip_node_press := "On the node? Press E to wrap the wire round it."
 ## After the first room you power: what the upgrade panel is for.
 @export var pip_upgrade := "You've got enough batteries for a longer wire. Want it?"
 
@@ -512,6 +515,10 @@ var _lean_time := 0.0                # ...for how long...
 var _lean_frame := -10               # ...and the last physics frame you did
 var _lean_refused := false           # this lean already got its "won't move" shudder
 var _entered_at := {}                # Room -> where you last walked in (for R in a hall)
+
+# --- nodes wait for E (or a click) before the wire wraps round them
+var _node_ready := Vector2i(-1, -1)  # the node you're on that E would wrap, or (-1, -1)
+var _click_at := -1000              # when (msec) the left mouse button was last clicked
 var _crates_shown := {}              # Room -> true once PIP has pointed out its movable crates
 
 # --- judge mode: PIP walks the room for you (autopilot.gd)
@@ -2963,17 +2970,29 @@ func _physics_process(delta: float) -> void:
 	if _tick_o2(delta):
 		return
 	if _wire != null and player.is_wired():
-		# E while walking with the wire = reel back to the last pad it's wrapped round
+		# E (or a click) on a node = wrap the wire round it. E anywhere else
+		# while walking with the wire = reel back to the last pad it's wrapped round.
 		var walking := player.state == Astronaut.State.WIRED
-		if walking and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact") and not autopilot_on:
-			_reel_back()
+		if walking and _input_cooldown <= 0.0 and not autopilot_on:
+			var e := Input.is_action_just_pressed("interact")
+			# a click counts for a moment (the game may draw several frames per
+			# physics step, so "this frame only" could miss it)
+			var click := Time.get_ticks_msec() - _click_at < 150
+			if (e or click) and _node_ready.x >= 0:
+				_click_at = -1000
+				var n := _node_ready
+				_set_node_ready(Vector2i(-1, -1))
+				_touch_pad(n, "node")
+			elif e:
+				_reel_back()
 		# stood still a moment away from the last pad? remind them they can reel back
 		_still_time = _still_time + delta if walking and not player.is_moving() else 0.0
-		hud.set_reel_prompt(_still_time > 0.7 and player.position.distance_to(_last_anchor) > 24.0)
+		hud.set_reel_prompt(_still_time > 0.7 and player.position.distance_to(_last_anchor) > 24.0 and _node_ready.x < 0)
 		_tick_timer(delta)
 	else:
 		hud.set_timer(false, 0.0, 0.0)
 		hud.set_reel_prompt(false)
+		_set_node_ready(Vector2i(-1, -1))
 		if player.state == Astronaut.State.FREE and _input_cooldown <= 0.0 and Input.is_action_just_pressed("interact") \
 				and not autopilot_on:
 			_try_grab()
@@ -3108,7 +3127,9 @@ func player_moved() -> void:
 	# Did the wire sweep across a pole (wrap round it), or back again (unwrap)?
 	_update_wraps(_prev_feet, player.position)
 	_prev_feet = player.position
-	# Did we touch a pad we haven't used yet?
+	# Did we touch a pad we haven't used yet? A goal connects straight away; a
+	# node only gets ready: E (or a click) wraps the wire round it.
+	var ready := Vector2i(-1, -1)
 	for pad in _wire_pads:
 		if _anchor_cells.has(pad):
 			continue
@@ -3119,9 +3140,32 @@ func player_moved() -> void:
 			continue
 		if not _line_clear(_last_anchor, pc):
 			continue          # the wire can't reach that pad's centre
+		if kind == "node" and not autopilot_on:
+			ready = pad       # (PIP's autopilot can't press E: for him it wraps by itself)
+			continue
+		_set_node_ready(Vector2i(-1, -1))
 		_touch_pad(pad, kind)
 		return
+	_set_node_ready(ready)
 	_check_loop()
+
+
+## The node E would wrap right now (or none): the HUD bobs an E key over it.
+func _set_node_ready(c: Vector2i) -> void:
+	if c == _node_ready:
+		return
+	_node_ready = c
+	hud.set_node_prompt(center_of(c) if c.x >= 0 else Vector2.INF)
+	if c.x >= 0 and Game.first_time("node_press"):
+		_pip_say(pip_node_press)
+
+
+## A left click anywhere in the game (not on a button) counts like E for nodes.
+func _unhandled_input(event: InputEvent) -> void:
+	if Engine.is_editor_hint():
+		return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_click_at = Time.get_ticks_msec()
 
 
 # ===================================================================== the core: wrap the wire round it
@@ -4055,6 +4099,7 @@ func _fail(kind: String) -> void:
 	if _busy:
 		return
 	_busy = true
+	_set_node_ready(Vector2i(-1, -1))
 	_set_hum(false)
 	_set_paused_node(Vector2i(-1, -1))
 	if _reel_tween:

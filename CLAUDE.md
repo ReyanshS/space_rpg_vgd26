@@ -107,7 +107,16 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
 - Free movement while carrying. The wire is a taut straight line from the LAST pad touched to the
   player's hands; it can't pass through walls, crates, doors or live red tiles, so steps that would
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
-- NODE (orange): wraps the wire and ADDS `node_time`, capped at the START time.
+- NODE (orange): **press E (or left click) to wrap** (Nov 26 2026, Reyansh: "you have to click to
+  redirect"). Touching one with the wire only makes it READY (`_node_ready`, set in
+  `player_moved()`'s pad loop; `hud.set_node_prompt()` bobs an E key next to it and the console
+  says "E wrap node"; the first time PIP says `pip_node_press`). E or a click in that state =
+  `_touch_pad()`; E anywhere else = reel back. Clicks: `_unhandled_input` stamps
+  `_click_at` (msec); a click counts for 150 ms and is used up when it wraps (clicks on buttons
+  never get there). PIP's
+  autopilot wraps nodes by itself (it can't press E). Goals still connect on touch. The solver
+  is unchanged (a route touching a node = the player pressed E there).
+  Once wrapped it ADDS `node_time`, capped at the START time.
   Standing on it holds the clock, but only for `node_hold` s. Touch radius 22 px. "Standing on
   it" uses the same test as touching (feet or `BODY_UP` higher), so a node reached from below
   holds too (before Nov 22 2026 it didn't).
@@ -126,7 +135,7 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   hands must contain the pole, with real width). Gives no time. Anchors list = pads AND poles
   (`_anchor_cells` + `_anchor_signs`), so `_winding()` counts poles too. The solver uses the exact
   same rule (`rewrap()` / `swept_over()`); keep them identical.
-- REEL BACK: **E while walking with the wire** pulls you back along it (past each pole) to the last
+- REEL BACK: **E while walking with the wire** (and not on a ready node) pulls you back along it (past each pole) to the last
   pad it's wrapped round (`_reel_back()`), unwrapping the poles; onto a node = it holds again. Costs
   the flying time. After 0.7 s standing still away from that pad, an [E] key shows above you.
 - Pads/cells count as touched from the feet OR from BODY_UP (10 px) higher (`_touching()`),

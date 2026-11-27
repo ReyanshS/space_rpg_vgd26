@@ -67,7 +67,7 @@ advance_when = 0
 [node name="Step5Node" type="Marker2D" parent="Tutorial" unique_id=24002893]
 position = Vector2(112, 336)
 script = ExtResource("8_step")
-text = "Crates block the wire. Touch the orange node to wrap it round"
+text = "Crates block the wire. Stand on the orange node and press E to wrap it"
 advance_when = 1
 
 [node name="Step6Goal" type="Marker2D" parent="Tutorial" unique_id=874758325]
@@ -142,7 +142,7 @@ lines = PackedStringArray("Lights. I can see again. Well, my cameras can.")
 position = Vector2(176, 400)
 script = ExtResource("10_beat")
 trigger = 2
-lines = PackedStringArray("A node tops your timer back up, and holds it while you stand on it.")
+lines = PackedStringArray("Press E on a node to wrap the wire. It tops your timer up and holds it.")
 
 [node name="Room3Intro" type="Marker2D" parent="Story" unique_id=372436841]
 position = Vector2(688, 240)
@@ -171,7 +171,7 @@ pause_game = true
 [node name="GeneratorC" type="Marker2D" parent="Story" unique_id=1076282822]
 position = Vector2(1136, 1520)
 script = ExtResource("10_beat")
-lines = PackedStringArray("These grates blink on and off. Lit ones zap your boots. The wire\'s fine.", "The light moves like a wave. Walk in the dark gap right behind it.", "The node in the middle holds the clock for a bit. Wait there for the gap.")
+lines = PackedStringArray("These grates blink on and off. Lit ones zap your boots. The wire\'s fine.", "The light moves like a wave. Walk in the dark gap right behind it.", "Press E on the middle node. It holds the clock while you wait for the gap.")
 pause_game = true
 
 [node name="ShipLightsUp" type="Marker2D" parent="Story" unique_id=2024546782]
