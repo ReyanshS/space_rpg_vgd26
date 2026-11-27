@@ -250,7 +250,8 @@ its number, his shutdown time and a dotted flight path. On the **RoguePip** node
   number for a fourth upgrade) and **UPGRADE_STEP** (1 s each).
 - The START time is the level's **Wire Time** (Rules group, 3 s), or a room's own entry in
   **Room Wire Time**. That's also the most the timer holds. Each upgrade adds 1 s to it.
-- The upgrade screen shows after every room you power. Its first PIP line is the level's
+- The upgrade screen shows after a room you power, when the player can afford the next
+  upgrade. Its first PIP line is the level's
   **Pip Upgrade** (Inspector, PIP's rule lines).
 - The save file is `user://save.cfg`. To start clean while testing, press **N** on the title
   screen (or delete it: Project > Open User Data Folder).

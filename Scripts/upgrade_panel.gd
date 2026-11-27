@@ -7,8 +7,9 @@
 # you have, what the wire is now and what it would be, and three lamps for the
 # three upgrades.
 #
-# It comes up by itself after every room you power (level.gd _solve ->
-# hud.offer_upgrade), and any time from the UPGRADE button in the corner, the
+# It comes up by itself (with a chime) after a room you power, when you have
+# enough batteries for the next upgrade (level.gd _solve -> hud.offer_upgrade),
+# and any time from the UPGRADE button in the corner, the
 # pause menu, the results screen, or the U key. While it's open the game is
 # paused (the HUD does that).
 #
@@ -65,7 +66,7 @@ func _ready() -> void:
 	_done.text = "CONTINUE"
 	_done.pressed.connect(close)
 	row.add_child(_done)
-	for n in ["powerup", "warn"]:
+	for n in ["powerup", "warn", "star"]:
 		var p := AudioStreamPlayer.new()
 		var path := "res://Assets/audio/%s.wav" % n
 		if ResourceLoader.exists(path):
@@ -81,6 +82,7 @@ func open(base_time: float, gained := 0) -> void:
 	_gained = gained
 	_opened_frame = Engine.get_process_frames()
 	visible = true
+	_sfx["star"].play()               # the chime the results screen plays for each star
 	modulate.a = 0.0
 	create_tween().tween_property(self, "modulate:a", 1.0, 0.15)
 	_refresh()
@@ -150,7 +152,7 @@ func _draw_board() -> void:
 	var w := UIStyle.text_width(have, UIStyle.BODY) + 26.0
 	var badge := Rect2(mid - w * 0.5, panel.position.y + 30, w, 15)
 	UIStyle.draw_box(_board, badge, Color(UIStyle.AMBER, 0.14), Color(UIStyle.AMBER, 0.8), 7)
-	PowerCell.draw_battery(_board, badge.position + Vector2(5, 1.5), UIStyle.AMBER, Color(0.4, 0.25, 0.02))
+	PowerCell.draw_battery(_board, badge.position + Vector2(6, 0), UIStyle.AMBER, Color(0.4, 0.25, 0.02))
 	UIStyle.text(_board, Vector2(badge.position.x + 17, badge.position.y + 11), have, UIStyle.AMBER, UIStyle.BODY)
 	if _gained > 0:
 		UIStyle.text(_board, Vector2(mid, panel.position.y + 57), "+%d from that room" % _gained, UIStyle.GREEN,

@@ -86,8 +86,14 @@ var allow_pause := true
 ## ("is that OK right now?", and it isn't while he's carrying the wire).
 var can_block: Callable
 
+var _battery_chip: Control           # the battery counter, top right (_draw_battery_chip)
+var _shown_batteries := 0
+var _chip_bump := 0.0                # it hops when the count changes
 var _frac := 1.0
 var _secs := 0.0
+var _cap := 0.0                     # the most the wire timer holds (sets the bar's length)
+const TIMER_PX := 8.0               # game pixels of wire bar per second
+const TIMER_GAP := 1.5              # the gap between two of its lamps
 var _paused := false
 var _pulse := 0.0
 var _toast_token := 0
@@ -192,6 +198,13 @@ func _ready() -> void:
 	corner_upgrade.pressed.connect(open_upgrade)
 	corner_menu.pressed.connect(func() -> void: _set_paused(not pause_panel.visible))
 	Game.batteries_changed.connect(_update_corner)
+	# Your batteries, top right next to UPGRADE: an amber pill with the battery icon
+	_battery_chip = Control.new()
+	_battery_chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_battery_chip.draw.connect(_draw_battery_chip)
+	corner_upgrade.get_parent().add_child(_battery_chip)
+	corner_upgrade.get_parent().move_child(_battery_chip, 0)
+	_shown_batteries = Game.batteries
 	_update_corner()
 	# The notification dot on UPGRADE: it shows while you have enough batteries
 	# for the next upgrade. It pings for a while (when a level starts), and stops
@@ -223,6 +236,9 @@ func _process(delta: float) -> void:
 		_upgrade_badge.position = Vector2(-6.0, -5.0)   # its top left corner (the right one is at the screen's edge)
 		_upgrade_badge.queue_redraw()
 	_pulse = maxf(0.0, _pulse - delta * 2.5)
+	if _chip_bump > 0.0:
+		_chip_bump = maxf(0.0, _chip_bump - delta * 3.0)
+		_battery_chip.queue_redraw()
 	_power_flash = maxf(0.0, _power_flash - delta)
 	_cell_bump = maxf(0.0, _cell_bump - delta * 3.0)
 	marker.queue_redraw()          # the arrows bob, and the camera moves, so redraw every frame
@@ -380,11 +396,26 @@ func _draw_upgrade_badge() -> void:
 
 ## The UPGRADE button in the corner: your batteries, and amber when you can buy.
 func _update_corner() -> void:
-	corner_upgrade.text = "UPGRADE  %d" % Game.batteries if Game.batteries > 0 else "UPGRADE"
+	corner_upgrade.text = "UPGRADE"
+	if Game.batteries != _shown_batteries:
+		_shown_batteries = Game.batteries
+		_chip_bump = 1.0                # the count changed: the pill hops
+	_battery_chip.custom_minimum_size = Vector2(UIStyle.text_width(str(Game.batteries), UIStyle.SMALL + 1) + 26.0, 0.0)
+	_battery_chip.queue_redraw()
 	if Game.can_upgrade():
 		corner_upgrade.add_theme_color_override("font_color", AMBER)
 	else:
 		corner_upgrade.remove_theme_color_override("font_color")
+
+
+## The battery counter in the top right corner: how many batteries you have
+## to spend (Game.batteries), on an amber pill with the battery icon.
+func _draw_battery_chip() -> void:
+	var r := Rect2(Vector2(0, -roundf(_chip_bump * 2.0)), _battery_chip.size)
+	var edge := AMBER.lerp(Color.WHITE, _chip_bump)
+	UIStyle.draw_box(_battery_chip, r, Color(0.03, 0.055, 0.09, 0.9), Color(edge, 0.75), 7)
+	PowerCell.draw_battery(_battery_chip, r.position + Vector2(6, (r.size.y - 15.0) * 0.5), AMBER, Color(0.4, 0.25, 0.02))
+	UIStyle.text(_battery_chip, r.position + Vector2(18, r.size.y * 0.5 + 3.0), str(Game.batteries), edge, UIStyle.SMALL + 1)
 
 
 ## The pause menu shows which level you're on.
@@ -753,11 +784,27 @@ func show_toast(text: String, seconds := 2.0) -> void:
 
 # ------------------------------------------------------------------ the wire timer (above his head)
 
-func set_timer(on: bool, frac: float, secs: float, paused := false) -> void:
+## The wire timer over his head. cap = the most it can hold (the START time):
+## the bar gets one segment per second of it (see _draw_timer).
+func set_timer(on: bool, frac: float, secs: float, paused := false, cap := 3.0) -> void:
 	timer_bar.visible = on and not _cinematic
 	_frac = frac
 	_secs = secs
 	_paused = paused
+	if on and not is_equal_approx(cap, _cap):
+		_cap = cap
+		var n := _timer_segments()
+		timer_bar.size = Vector2(n * _timer_step() * TIMER_PX + (n - 1) * TIMER_GAP + 5.0, 10.0)
+
+
+## Seconds each segment of the wire bar stands for: 1, or 2 once the cap is
+## over 5 s (so a big wire doesn't turn into a row of tiny lamps).
+func _timer_step() -> float:
+	return 1.0 if _cap <= 5.5 else 2.0
+
+
+func _timer_segments() -> int:
+	return maxi(1, ceili(_cap / _timer_step() - 0.001))
 
 
 ## Flash the timer when a node or a power cell refills it.
@@ -777,7 +824,9 @@ func _bolt(ci: CanvasItem, b: Vector2, col: Color) -> void:
 		b + Vector2(2, 13), b + Vector2(8, 5), b + Vector2(5, 5), b + Vector2(7, 0)]), col)
 
 
-## Five LEDs (each one a fifth of the time) in a tiny dark case floating above the astronaut.
+## The wire bar: a tiny dark case floating above the astronaut with one lamp
+## per second the wire can hold (3 s = 3 lamps; over 5 s, one lamp per 2 s), so
+## a longer wire is a longer bar. The lamp you're using up drains smoothly.
 ## Amber, then orange, then blinking red when time is short; blue while paused.
 func _draw_timer() -> void:
 	var size := timer_bar.size
@@ -791,9 +840,14 @@ func _draw_timer() -> void:
 		col = Color(1.0, 0.55, 0.15)
 	if _pulse > 0.0:
 		col = col.lerp(Color.WHITE, _pulse)
-	var lit := ceili(_frac * 5.0 - 0.001)
-	for i in 5:
-		_led(timer_bar, Rect2(2.5 + i * 6.5, 2.5, 5.5, size.y - 5), i < lit, col)
+	var step := _timer_step()
+	for i in _timer_segments():
+		var seg := minf(step, _cap - i * step)       # (the last one is shorter if the cap isn't a whole number)
+		var r := Rect2(2.5 + i * (step * TIMER_PX + TIMER_GAP), 2.5, seg * TIMER_PX, size.y - 5)
+		var fill := clampf((_secs - i * step) / seg, 0.0, 1.0)
+		_led(timer_bar, r, false, col)
+		if fill > 0.0:
+			_led(timer_bar, Rect2(r.position, Vector2(maxf(1.0, r.size.x * fill), r.size.y)), true, col)
 
 
 # ------------------------------------------------------------------ console meters

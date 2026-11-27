@@ -94,10 +94,14 @@ they leave behind. At the end of each level you get up to three stars.
 - Spend them on the **wire upgrade**: each one makes the wire timer **1 s** bigger (it
   starts with more, and holds more). The first costs **3** batteries, the second **5**, the
   third **7**.
-- The upgrade screen comes up by itself after every room you power. You can also open it
+- The upgrade screen comes up by itself (with a chime) after you power a room, when you
+  have enough batteries for the next upgrade. You can also open it
   with **U**, the **UPGRADE** button (top right), or the UPGRADE button on the pause menu and
   the results screen. Arrows pick a button, **E** presses it.
-- When you can afford the next upgrade, the UPGRADE button turns amber with a **!**.
+- Your batteries are counted in the top right corner, next to the UPGRADE button. When you
+  can afford the next upgrade, the UPGRADE button turns amber with a **!**.
+- The **wire bar** over your head has one lamp per second the wire can hold: 3 lamps at the
+  start, 4 and then 5 after upgrades. With the last upgrade (6 s) each lamp is 2 seconds.
 - Each battery only pays once: playing a level again doesn't give you its batteries twice.
 - The game saves when you finish a level or buy an upgrade. The title screen then offers
   **Continue** or **New game** (which deletes the save).

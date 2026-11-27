@@ -511,10 +511,17 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   also the most the timer holds (3 -> 4 -> 5 -> 6 s). `_node_time`, `_node_hold`, `_cell_bonus` are now plain.
   **The panel** (`upgrade_panel.gd`, class UpgradePanel, built in code with UIStyle): batteries
   badge, "+n from that room", WIRE TIMER now > next, three lamps (costs under them), a hint,
-  UPGRADE (n) / CONTINUE buttons (focus on the useful one), U or Esc closes. It comes up after
-  EVERY room you power (`_solve` -> `await hud.offer_upgrade(paid, wire_time)`, after doors and
-  links, before the lights-on cutscene) unless all three are bought or PIP's autopilot is
-  playing; the first time PIP says `pip_upgrade`. Also U, the corner UPGRADE button, and the
+  UPGRADE (n) / CONTINUE buttons (focus on the useful one), U or Esc closes, plays `star.wav`
+  (the results star chime) when it opens. It comes up after a room you power ONLY when you can
+  buy the next upgrade (`Game.can_upgrade()`; `_solve` -> `await hud.offer_upgrade(paid,
+  wire_time)`, after doors and links, before the lights-on cutscene) and not while PIP's
+  autopilot plays; the first time PIP says `pip_upgrade`.
+  **Battery counter**: top right, left of UPGRADE (`hud._battery_chip`, `_draw_battery_chip`):
+  an amber pill with the battery icon and `Game.batteries`; it hops when the count changes.
+  **Wire bar** (over his head, `hud._draw_timer`): one lamp per second of the cap
+  (`set_timer(..., cap)`, cap = `_max_time()`): 3 / 4 / 5 lamps, and over 5 s one lamp per 2 s
+  (6 s = 3 long lamps). `TIMER_PX` 8 game pixels per second, so a longer wire is a longer bar;
+  the lamp in use drains smoothly. Also U, the corner UPGRADE button, and the
   UPGRADE buttons on the pause menu and the results screen. The panel pauses the game.
   Saving: finishing a level and every upgrade call `Game.save_game()` (section [upgrades]); the title screen shows
   CONTINUE: LEVEL n + NEW GAME buttons when a save exists. Bots: `Game.new_game()` first.

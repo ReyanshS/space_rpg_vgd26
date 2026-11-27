@@ -73,7 +73,7 @@ advance_when = 1
 [node name="Step6Goal" type="Marker2D" parent="Tutorial" unique_id=874758325]
 position = Vector2(240, 208)
 script = ExtResource("8_step")
-text = "The node gave you more time. Now get to the blue pad"
+text = "The node topped your timer up. Now get to the blue pad"
 advance_when = 3
 
 [node name="Step7Onward" type="Marker2D" parent="Tutorial" unique_id=1175761091]
@@ -122,7 +122,7 @@ pause_game = true
 position = Vector2(304, 656)
 script = ExtResource("10_beat")
 trigger = 0
-lines = PackedStringArray("See that battery? It\'s a power cell, and it\'s still got juice in it.", "Grab it while you\'re holding the wire. It adds half a second to your timer.", "Keep them and your suit gets extra air later. You\'ll want that.")
+lines = PackedStringArray("See that battery? It\'s a power cell, and it\'s still got juice in it.", "Grab it while you\'re holding the wire. It adds half a second to your timer.", "Keep them and they\'re yours to spend. Enough of them buys a longer wire.")
 pause_game = true
 point_here = true
 
@@ -142,7 +142,7 @@ lines = PackedStringArray("Lights. I can see again. Well, my cameras can.")
 position = Vector2(176, 400)
 script = ExtResource("10_beat")
 trigger = 2
-lines = PackedStringArray("A node adds time, and holds the clock while you stand on it.")
+lines = PackedStringArray("A node tops your timer back up, and holds it while you stand on it.")
 
 [node name="Room3Intro" type="Marker2D" parent="Story" unique_id=372436841]
 position = Vector2(688, 240)

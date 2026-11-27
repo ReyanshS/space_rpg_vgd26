@@ -123,9 +123,10 @@
 #   - A battery you charge with the live wire adds cell_bonus seconds to the
 #     timer. Once its room has power it's yours: one battery to spend
 #     (Game.keep_battery; each battery pays out only once, so replays can't farm).
-#   - After every room you power, the WIRE UPGRADE panel comes up (hud
-#     offer_upgrade): spend batteries (3, then 5, then 7) for +1 s on the
-#     wire. U, the UPGRADE button or the pause menu open it any time.
+#   - After a room you power, if you have enough batteries for the next
+#     upgrade, the WIRE UPGRADE panel comes up (hud offer_upgrade): spend them
+#     (3, then 5, then 7) for +1 s on the wire. U, the UPGRADE button or the
+#     pause menu open it any time.
 #   - The rules read the upgrade through _wire_time() and _max_time().
 # ---------------------------------------------------------------------------
 @tool
@@ -296,7 +297,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## You walked towards open space with no hull plate ahead to land on.
 @export var pip_no_landing := "Nothing to land on that way. Your boots only let go with a plate ahead."
 ## The first time you power a room with a battery charged.
-@export var pip_cell_kept := "That battery's yours now. Each one you keep adds {o2_per_cell} seconds of suit air."
+@export var pip_cell_kept := "That battery's yours now. Save them up and buy a longer wire."
 ## The first time a charged battery goes back because you failed.
 @export var pip_cell_lost := "That battery's back. You only keep them once you reach the blue pad."
 ## The first time the wire stops you walking.
@@ -306,7 +307,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## After a fail, when there's no way back to the START without crossing red tiles or grates.
 @export var pip_stranded := "No safe way back from there. Press R and I'll bring you to the start."
 ## After the first room you power: what the upgrade panel is for.
-@export var pip_upgrade := "Every battery you keep is money. Spend them on a longer wire."
+@export var pip_upgrade := "You've got enough batteries for a longer wire. Want it?"
 
 # The short messages that pop up at the top of the screen.
 @export_group("Popup texts")
@@ -344,7 +345,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var pip_hint_judge := "Stuck? Press P and I'll walk you through it."
 ## Judge mode: when the autopilot takes over, and when it hands back.
 @export var pip_autopilot_start := "Hands off the controls. I've got this one."
-@export var pip_autopilot_done := "There. Your turn. R again if you want me to do the next one."
+@export var pip_autopilot_done := "There. Your turn. P again if you want me to do the next one."
 ## You pick up the clamp.
 @export var pip_clamp := "A cable clamp. Press E by a purple socket to set it down."
 ## The first time you put the clamp in a socket.
@@ -3010,7 +3011,7 @@ func _tick_timer(delta: float) -> void:
 		_time_left -= delta
 	var frac := clampf(_time_left / _max_time(), 0.0, 1.0)
 	_wire.set_urgency(1.0 - frac)
-	hud.set_timer(true, frac, maxf(_time_left, 0.0), paused)
+	hud.set_timer(true, frac, maxf(_time_left, 0.0), paused, _max_time())
 	if _time_left < 1.5 and not paused:
 		_tick_accum += delta
 		if _tick_accum >= 0.25:
@@ -3770,8 +3771,9 @@ func _solve(r: Room) -> void:
 	_open_exit_doors(r)
 	await _apply_links(r)           # power links: things change elsewhere (the camera glances over)
 	if not is_inside_tree(): return
-	# the end of every room: the wire upgrade (not while PIP's autopilot plays)
-	if not autopilot_on and Game.upgrade_cost() > 0:
+	# the end of a room: the wire upgrade, if you can afford the next one
+	# (not while PIP's autopilot plays)
+	if not autopilot_on and Game.can_upgrade():
 		if Game.first_time("upgrade"):
 			_pip_say(pip_upgrade)
 		await hud.offer_upgrade(paid, wire_time)

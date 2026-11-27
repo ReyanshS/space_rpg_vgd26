@@ -90,7 +90,7 @@ pause_game = true
 position = Vector2(272, 192)
 script = ExtResource("10_beat")
 trigger = 9
-lines = PackedStringArray("Another battery. Plug it into the wire for a couple of extra seconds.")
+lines = PackedStringArray("Another battery. Half a second on the wire now, and one more to spend later.")
 
 [node name="BridgeDone" type="Marker2D" parent="Story" unique_id=1711252232]
 position = Vector2(208, 192)
