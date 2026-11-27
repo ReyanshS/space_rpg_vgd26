@@ -146,7 +146,8 @@ var _stars_shown := 0
 var upgrade_panel: UpgradePanel
 var _upgrade_badge: Control           # the dot on UPGRADE when you can afford one (_draw_upgrade_badge)
 var _badge_ping := 0.0              # seconds left of the dot's "look at me" ping
-var _upgrade_from_pause := false       # opened from the pause menu (go back to it on close)
+var _upgrade_from_pause := false    # opened from the pause menu (go back to it on close)
+var _upgrade_from_results := false  # opened from the results screen (show it again on close)
 var _paused_before := false         # was the game paused before the panel opened?
 var _base_wire := 3.0               # the level's wire_time (the upgrade panel shows what it becomes)
 
@@ -260,6 +261,12 @@ func _process(delta: float) -> void:
 		next_key.queue_redraw()        # it bobs
 	# MENU only shows when pausing is allowed (not in cutscenes or on the results)
 	corner_menu.visible = allow_pause
+	# While a menu is open (pause, upgrade, map, results) the corner buttons and
+	# the popup at the top step aside, so nothing overlaps the menu.
+	var menu_open := pause_panel.visible or upgrade_panel.visible or ship_map.visible or complete_panel.visible
+	corner_menu.get_parent().visible = not menu_open
+	if menu_open and toast.visible:
+		toast.visible = false
 	# (not while the upgrade panel is open, or on the frame its Esc closed it)
 	var tree_busy := upgrade_panel.visible or upgrade_panel.closed_frame == Engine.get_process_frames()
 	var map_busy := ship_map.visible or ship_map.closed_frame == Engine.get_process_frames()
@@ -313,8 +320,10 @@ func open_upgrade(gained := 0) -> void:
 	if upgrade_panel.visible or fade_rect.color.a > 0.5:
 		return
 	_upgrade_from_pause = pause_panel.visible
+	_upgrade_from_results = complete_panel.visible
 	_paused_before = get_tree().paused
 	pause_panel.visible = false
+	complete_panel.visible = false      # one menu at a time: it takes the results' place
 	get_tree().paused = true
 	_badge_ping = 0.0                   # you've seen it: the dot stops pinging
 	upgrade_panel.open(_base_wire, gained)
@@ -378,6 +387,11 @@ func _on_upgrade_closed() -> void:
 		pause_panel.visible = true        # back to the pause menu, still paused
 		_update_pause_upgrade()
 		$Pause/VBox/Buttons/Upgrade.grab_focus()
+	elif _upgrade_from_results:
+		complete_panel.visible = true     # back to the results screen
+		$Complete/VBox/Buttons/Upgrade.grab_focus()
+		if not _paused_before:
+			get_tree().set_deferred("paused", false)
 	elif not _paused_before:
 		get_tree().set_deferred("paused", false)   # back to the game (see _set_paused)
 	_update_points_line()

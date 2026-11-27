@@ -144,7 +144,7 @@ func _refresh() -> void:
 
 func _draw_board() -> void:
 	var panel := Rect2(110, 48, 260, 170)
-	UIStyle.draw_box(_board, panel, UIStyle.GLASS, UIStyle.EDGE, 6)
+	UIStyle.draw_box(_board, panel, Color(UIStyle.GLASS, 0.98), UIStyle.EDGE, 6)
 	var mid := panel.get_center().x
 	UIStyle.text(_board, Vector2(mid, panel.position.y + 22), "WIRE UPGRADE", UIStyle.TEXT, UIStyle.HEAD, HORIZONTAL_ALIGNMENT_CENTER)
 	# batteries you have, in an amber badge (and how many the last room gave you)

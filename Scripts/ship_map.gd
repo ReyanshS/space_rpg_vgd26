@@ -62,7 +62,7 @@ func _draw() -> void:
 	var screen := get_viewport_rect().size
 	draw_rect(Rect2(Vector2.ZERO, screen), Color(0, 0, 0, 0.55))
 	var panel := Rect2(12, 8, screen.x - 24, screen.y - 16)
-	UIStyle.draw_box(self, panel, Color(0.03, 0.055, 0.09, 0.96), UIStyle.EDGE, 6)
+	UIStyle.draw_box(self, panel, Color(0.03, 0.055, 0.09, 1.0), UIStyle.EDGE, 6)
 	UIStyle.text(self, panel.position + Vector2(10, 16), "DECK MAP", UIStyle.TEXT, UIStyle.HEAD)
 	UIStyle.text(self, Vector2(panel.end.x - 10, panel.position.y + 15), "M  close", UIStyle.DIM, UIStyle.SMALL + 1, HORIZONTAL_ALIGNMENT_RIGHT)
 	# fit the level into the screen: how many pixels per tile

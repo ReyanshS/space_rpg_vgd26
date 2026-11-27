@@ -103,6 +103,10 @@ theme's default size (`Game.THEME_FONT_SIZE` 8), and every Label / Button font s
 (`_rescale_fonts`; the original is kept in meta "base_font_size", so switching never drifts;
 `node_added` catches menus made later). The console keeps its own sizes (`console_font_size`).
 The pause and results panels grow from their centre (grow both ways), above the console.
+**One menu at a time** (Nov 26 2026, "the menus overlap"): while the pause menu, upgrade panel,
+map or results are open, the top right corner (battery counter, UPGRADE, MENU) and the popup
+hide (`hud._process`), and the upgrade panel takes the results panel's place like it does the
+pause menu's (`_upgrade_from_results`). Menu panels are nearly solid (0.98) so nothing ghosts through.
 Tried and rejected: Pixelify Sans, Jersey 10, VT323 (uneven gaps or cramped at our small sizes).
 m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky because the old
 "viewport" stretch forced it to size 16.
