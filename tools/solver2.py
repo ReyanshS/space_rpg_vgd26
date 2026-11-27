@@ -524,10 +524,12 @@ if __name__ == '__main__':
         i = args.index('--paths'); paths_out = args[i + 1]; del args[i:i + 2]
     paths = {}
     halls = []           # crate plans for halls (rooms with no START): what PIP's autopilot pushes
+    typed = set()          # numbers typed on the command line win over the scene's Rules
     for flag, var in (('--time', 'TIME'), ('--node', 'NODE_TIME'), ('--margin', 'MARGIN'),
                       ('--crate-tries', 'MAX_TRIES')):
         if flag in args:
             i = args.index(flag); globals()[var] = type(globals()[var])(float(args[i + 1])); del args[i:i + 2]
+            typed.add(var)
     sys.argv = [sys.argv[0]] + args
     if sys.argv[1].endswith('.tscn'):
         # a level scene: make the text map with map_from_scene.py, and read the
@@ -542,7 +544,7 @@ if __name__ == '__main__':
         root = root[:root.index('[node ', 1)] if '[node ' in root[1:] else root
         for prop, var in (('wire_time', 'TIME'), ('node_time', 'NODE_TIME')):
             m = re.search(rf'^{prop} = ([\d.]+)', root, re.M)
-            if m: globals()[var] = float(m.group(1))
+            if m and var not in typed: globals()[var] = float(m.group(1))
         m = re.search(r'^room_wire_time = PackedFloat32Array\(([^)]*)\)', root, re.M)
         if m and m.group(1).strip():
             for i, v in enumerate(m.group(1).split(',')):

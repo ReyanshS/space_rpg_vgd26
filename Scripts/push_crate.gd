@@ -31,8 +31,9 @@ var cell := Vector2i.ZERO
 var room = null
 ## Sunk into a red tile: now it's a flat plate in the floor.
 var grounded := false
-## A picture painted on the map for this crate (the team's crate tile). Empty =
-## draw the steel crate in code (draw_crate).
+## A picture painted on the map for this crate (the team's art). Not drawn: a
+## crate you can push always looks like the striped steel crate (draw_crate), so
+## players can tell it from the fixed wooden ones at a glance (Nov 26 2026).
 var art: Texture2D
 var _bump := 0.0               # a little squash when it gets pushed or is stuck
 
@@ -50,10 +51,6 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if grounded:
 		draw_plate(self, Vector2.ZERO)
-	elif art:
-		# the painted picture, squashed a little when it's pushed or stuck
-		var squash := roundf(_bump * 2.0)
-		draw_texture_rect(art, Rect2(-16, -16 + squash, 32, 32 - squash), false)
 	else:
 		var squash := roundf(_bump * 2.0)
 		draw_crate(self, Vector2(0, squash), squash)

@@ -55,6 +55,7 @@ var _drift_t := 0.0
 var _moving := false
 var _carrying := false
 var _anim_override := ""      # forces an animation ("shock", "burnt")
+var _push_t := 0.0            # > 0 = leaning on a movable crate: play "push_<dir>" (counts down)
 var _lamp: PointLight2D       # helmet lamp, only on in rooms with no power
 var _lamp_tween: Tween
 var _hand_light: PointLight2D # yellow glow from the live wire in his hands
@@ -81,6 +82,7 @@ func _ready() -> void:
 # last call (~0.016 s). Multiplying speeds by delta keeps movement the same
 # speed on fast and slow computers.
 func _physics_process(delta: float) -> void:
+	_push_t = maxf(0.0, _push_t - delta)
 	match state:
 		State.FREE, State.WIRED:
 			_walk(delta)
@@ -212,6 +214,8 @@ func _slide(mv: Vector2, may_nudge: bool) -> void:
 	# A movable crate in the way, and you're walking straight at it? Lean on it:
 	# the level rolls it a tile after a moment (level.gd lean_on_crate).
 	if may_nudge and level.lean_on_crate(target, dir):
+		_push_t = 0.25            # (it keeps going while he leans, and a moment after it rolls)
+		_face(dir)
 		return
 	# Only open space in the way (no wall, no crate)? Push off and drift across.
 	# (box_blocked's last argument = "does open space count as blocked?")
@@ -294,7 +298,8 @@ func _drift_step(delta: float) -> void:
 ## (Assets/images/astronaut/*_frames.tres). Different sprites have different
 ## animations: the original astronaut has "idle", "walk_down", "walk_left",
 ## "walk_right"; the v2 one also has "walk_up" and an idle for every direction;
-## the p4 one (the team's sheet) adds three-quarter diagonal walks ("walk_up_left"...).
+## the p4 one (the team's sheet) adds three-quarter diagonal walks ("walk_up_left"...)
+## and pushing ("push_down", "push_up", "push_left", "push_right": the team's push sheet).
 ## So for each situation we list what we'd like, best first, and play the first
 ## one this sprite actually has. Swap the sprite and this code still works.
 func _update_anim() -> void:
@@ -303,6 +308,9 @@ func _update_anim() -> void:
 	var anim: String
 	if _anim_override != "":
 		anim = _anim_override                                   # "shock" / "burnt"
+	elif _push_t > 0.0 and _moving:
+		# leaning on a movable crate (Assets/images/astronaut/astronaut_push.png)
+		anim = _first_existing(["push_" + dir, "walk_" + dir, "walk_" + side])
 	elif _moving:
 		# walking diagonally: a three-quarter view if the sprite has one
 		# ("walk_down_right"...), else the side view as before

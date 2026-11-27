@@ -56,6 +56,16 @@ reboot him by looping the wire round his core three times; the team's idea, see 
   puzzle-solving rather than combat."* RPG elements now in: story/dialogue (PIP), batteries as
   money (power cells you keep) for the WIRE UPGRADE (3 steps), collectibles (power cells: +5 s
   oxygen each on spacewalks), results/stars per level, a save file with Continue. See "RPG" below.
+- **Tutorial at 3 s** (Nov 26 2026, "relatively easy, not millisecond timings"): Level 1's
+  rooms 1-3 were moved round so the 3 s wire fits with time to spare (solver, lowest timer):
+  room 1 START (11,20) -> goal (6,20): 1.60 s; room 2 (Storage, + the tutorial crate): 1.41 s,
+  battery moved to (4,7); room 3 (Conduit Hall) START (17,9), pole (19,9), node (20,5), goal
+  (24,5), no second pole: 0.87 s, plus the battery at (20,6) right on the way (+0.5 s).
+  Tile edits that keep the team's art: `python tools/patch_tiles.py <scene> "move A B" ...`.
+  Later rooms (Coolant Pumps, Cable Store, Generator B) need wire upgrades at 3 s.
+  Autopilot routes are made with a long wire (he doesn't use the timer):
+  `python tools/solver2.py Levels/level_1.tscn --time 10 --paths Data/routes/level_1.json --margin 3`
+  (typed numbers now win over the scene's Rules).
 - **Nov 26 2026 (Reyansh: "ignoring that the levels may be impossible")**: every level's
   START is **3 s** (`wire_time` 3, `room_wire_time` empty), which is also the most the
   timer holds (no `max_wire_time`), and a battery adds **0.5 s** (`cell_bonus`). The numbers below are the older balance; the solver now reports many rooms
@@ -254,11 +264,25 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   wired). A route's "pushes" = [[x, y, dx, dy], ...].
 - Autopilot: resets the room's crates, does the route's pushes (`_push`: walk behind, lean),
   then the wire; hall plans run once, as soon as he can walk into that hall (`_do_hall_plans`).
+- The TUTORIAL teaches it (Nov 26 2026): Storage (room 2) has a striped crate at (5,12) on the
+  wire's line from the START to the node; tutorial step `Step4PushCrate` (advance PUSH_CRATE)
+  asks you to push it before grabbing the wire.
 - Level 1 uses: REACTOR HALL (the clamp in a 2 thick red ring, 2 crates: the one under the
   entrance pushed down twice is the way in), CABLE STORE (rebuilt bigger: a red strip across the
   room; short out the one tile (13,26) on the line START -> node; 2 crates, at least 3 pushes;
   lowest timer 1.52 s), COOLANT PUMPS (a crate on the clamp's line). Built by
   `tools/maps/build_level1_crates.py` (from the dungeon map), then the clamp / fuse rework above.
+
+- Nov 26 2026 (Reyansh): **only the special crates move.** The team's wooden crate art tile
+  (art source 4, atlas 4:7 in `layout_tileset.tres`) was kind "box", so crates painted with it
+  were pushable but looked fixed. It's kind "crate" now (fixed); pushable crates are painted
+  with the palette's crate tile (`c`, frame 23) and ALWAYS draw the striped steel look
+  (`PushCrate.art` is no longer drawn). Coolant Pumps relied on a wooden crate at (46,19) being
+  pushed: it's floor now (the room needs the clamp + one push of its striped crate again).
+- **Push animation**: `Assets/images/astronaut/astronaut_push.png` (the team's sheet, 6 x 4
+  frames of 32x48: rows down, right, left, up) = animations `push_down` / `push_right` /
+  `push_left` / `push_up` in `astronaut_p4_frames.tres`. player.gd plays them while
+  `_push_t` > 0 (set to 0.25 s every frame `lean_on_crate()` says he's leaning).
 
 ## Making levels in the editor (Nov 22 2026, team: "it should be very easy to create levels")
 - Painting is all it takes: each palette tile's `kind` gives it its art and its rules live.

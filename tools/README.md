@@ -33,6 +33,7 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | `art_barrier.py` | Draws the BARRIER tile (crate on a lift, hazard stripes) into `puzzle_tiles.png` frame 12 and its palette icon into `layout_tiles.png` frame 16 | `python tools/art_barrier.py` |
 | `art_ui.py` | Draws the OLD UI frames `Assets/ui/frame_screen.png` and `frame_plate.png` (no longer used: the UI is now drawn by `Scripts/ui_style.gd` and the theme) | `python tools/art_ui.py` |
 | `art_crate_icon.gd` | Draws the movable crate into the Layout palette (`layout_tiles.png` frame 23, kind "box") with the game's own crate drawing (push_crate.gd). A Godot script, not Python; needs a window | `godot --path . --script tools/art_crate_icon.gd` |
+| `patch_tiles.py` | Moves or changes a few tiles of a level's Layout without touching the rest (keeps the team's painted art): `move A B`, `set C kind`, `floor C` | `python tools/patch_tiles.py Levels/level_1.tscn "move 13,20 11,20"` |
 | `sfx_crate.py` | Makes `push.wav`, the movable crate rolling a tile. Plain Python (no numpy) | `python tools/sfx_crate.py` |
 | `maps/build_level1_crates.py` | How the movable crates went into Level 1 (hub reactor ring, the rebuilt Cable Store, the Coolant crate). Reference only | see the file |
 | `art_core.py` | Draws the CORE tile (Level 3's round socket) into `puzzle_tiles.png` frame 13 and its palette icon into `layout_tiles.png` frame 17 | `python tools/art_core.py` |
