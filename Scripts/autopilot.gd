@@ -89,6 +89,12 @@ func run() -> void:
 	if running:
 		return
 	running = true
+	# P pressed while PIP is talking and holding you still (a room's intro)? He
+	# can't walk you anywhere yet, so let him finish (E goes through the lines).
+	while level.hud.is_blocking():
+		await level.hud.dialogue_blocking
+		if not is_inside_tree():
+			return
 	level.autopilot_begin()
 	await _do_next_room()
 	if is_inside_tree():

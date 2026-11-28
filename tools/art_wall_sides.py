@@ -21,8 +21,9 @@
 # After those 47 come the pieces that sit next to a front panel (see FLOOR /
 # PANEL below): only the ones the levels use, so run this again after big map
 # changes, then tools/build_team_tiles.gd and tools/retile_walls.py.
-# The JSON lists each tile's open neighbours: "open" = floor, and "panel_top" /
-# "panel" = a front panel's top row / lower rows. tools/retile_walls.py reads
+# The JSON lists each tile's open neighbours: "open" = floor, "panel_top" /
+# "panel" = a front panel's top row / lower rows, "void" = empty map (the wall
+# fades out towards it). tools/retile_walls.py reads
 # it to pick the piece for every wall.
 # Run from the project folder:  python3 tools/art_wall_sides.py
 import json
@@ -50,6 +51,15 @@ CORNER_SIDES = {'NE': ('N', 'E'), 'SE': ('S', 'E'), 'SW': ('S', 'W'), 'NW': ('N'
 # panel's TOP row the rim lines up with the panel's own skirting line (wall.png:
 # rows 16 and 17 of each panel's first row; its face starts at PANEL_EDGE).
 FLOOR, PANEL_TOP, PANEL = 'floor', 'panel_top', 'panel'
+# Empty map (nothing painted: outside the level, or a hole in it). A wall next to
+# it fades softly into the background colour instead of stopping hard (Nov 2026,
+# team: "make it so it's not abrupt at all").
+VOID = 'void'
+BACKGROUND = (18, 18, 22, 255)     # project.godot default_clear_color
+# from the empty side inwards: distance in px -> colour, the dark wall top
+# fading out in bands (pixel art: steps, not a smooth blur)
+FADE = [BACKGROUND] * 3 + [(22, 22, 27, 255)] * 4 + [(28, 29, 33, 255)] * 4 + [(35, 36, 40, 255)] * 4 + \
+       [(42, 43, 47, 255)] * 4 + [(48, 50, 54, 255)] * 4
 PANEL_EDGE = 18
 
 
@@ -102,14 +112,15 @@ def tile(key):
     im = Image.new('RGBA', (T, T), TOP)
     px = im.load()
     rects = []                         # open neighbours, in this tile's pixels: (x0, y0, x1, y1)
+    voids = []                         # empty map round it, the same way
     for d, what in key:
         sx, sy = DIRS[d][0] * T - T, DIRS[d][1] * T - T
         top = sy + (PANEL_EDGE if what == PANEL_TOP else 0)
-        rects.append((sx, top, sx + T - 1, sy + T - 1))
+        (voids if what == VOID else rects).append((sx, top, sx + T - 1, sy + T - 1))
 
-    def dist(x, y):
+    def dist(x, y, boxes):
         best = 99
-        for (x0, y0, x1, y1) in rects:
+        for (x0, y0, x1, y1) in boxes:
             dx = max(x0 - x, x - x1, 0)
             dy = max(y0 - y, y - y1, 0)
             best = min(best, max(dx, dy))
@@ -117,9 +128,12 @@ def tile(key):
 
     for y in range(T):
         for x in range(T):
-            d = dist(x, y)                 # 1 = touching the floor
+            d = dist(x, y, rects)          # 1 = touching the floor
+            v = dist(x, y, voids)          # 1 = touching empty map
             if d - 1 < len(STEPS):
-                px[x, y] = STEPS[d - 1]
+                px[x, y] = STEPS[d - 1]    # the rim where the wall meets the floor wins
+            elif v - 1 < len(FADE):
+                px[x, y] = FADE[v - 1]
     return im
 
 
@@ -135,7 +149,7 @@ if __name__ == '__main__':
         sheet.paste(tile(p), (x * T, y * T))
         what = dict(p)
         entry = {'x': x, 'y': y, 'open': [d for d in DIRS if what.get(d) == FLOOR]}
-        for kind in (PANEL_TOP, PANEL):
+        for kind in (PANEL_TOP, PANEL, VOID):
             if kind in what.values():
                 entry[kind] = [d for d in DIRS if what.get(d) == kind]
         info.append(entry)

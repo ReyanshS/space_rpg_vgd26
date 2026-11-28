@@ -202,7 +202,7 @@ def retile(cells, kinds_of, keep_faces=True):
     from art_wall_sides import canonical, FLOOR
     for p in json.load(open('Assets/images/tiles/team/wall_sides.json')):
         what = {d: FLOOR for d in p['open']}
-        for kind in ('panel_top', 'panel'):
+        for kind in ('panel_top', 'panel', 'void'):
             what.update({d: kind for d in p.get(kind, [])})
         pieces[canonical(what)] = (p['x'], p['y'])
     changed = 0
@@ -246,7 +246,7 @@ def _wrap_panel_ends(cells, kind):
 def wall_keys(cells, kinds_of, keep_faces=True):
     """Every wall that isn't a front panel -> which of its neighbours are
     floor or front panel (a key from art_wall_sides.canonical)."""
-    from art_wall_sides import canonical, FLOOR, PANEL_TOP, PANEL
+    from art_wall_sides import canonical, FLOOR, PANEL_TOP, PANEL, VOID
     kind = {c: kinds_of.get(tuple(v[:3]), '?') for c, v in cells.items()}
     out = {}
     for c, v in cells.items():
@@ -258,6 +258,8 @@ def wall_keys(cells, kinds_of, keep_faces=True):
             nk = kind.get(n, '')
             if nk not in CLOSED:
                 what[d] = FLOOR
+            elif nk == '':
+                what[d] = VOID                 # empty map: the wall fades out towards it
             elif nk == 'wall' and cells[n][0] == SRC_FACE:
                 what[d] = PANEL_TOP if cells[n][2] % 3 == 0 else PANEL    # rows 0, 3, 6 = a panel's top row
             elif nk == 'wall' and cells[n][0] == SRC_CAP:

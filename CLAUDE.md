@@ -130,7 +130,10 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   player's hands; it can't pass through walls, crates, doors or live red tiles, so steps that would
   make it are refused (`wire_reaches()`). It CAN stretch across open space.
 - NODE (orange): **press E (or left click) to wrap** (Nov 26 2026, Reyansh: "you have to click to
-  redirect"). Touching one with the wire only makes it READY (`_node_ready`, set in
+  redirect").
+  **Wording** (Nov 27 2026, team): players CONNECT the wire to a node ("wrap" is only for poles,
+  where it's true); an unpowered goal is "the grey pad" (team-art goals show grey until
+  powered), a powered one "the lit pad". HUD key label "connect node". Touching one with the wire only makes it READY (`_node_ready`, set in
   `player_moved()`'s pad loop; `hud.set_node_prompt()` bobs an E key next to it and the console
   says "E wrap node"; the first time PIP says `pip_node_press`). E or a click in that state =
   `_touch_pad()`; E anywhere else = reel back. Clicks: `_unhandled_input` stamps
@@ -138,8 +141,13 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   never get there). PIP's
   autopilot wraps nodes by itself (it can't press E). Goals still connect on touch. The solver
   is unchanged (a route touching a node = the player pressed E there).
-  Once wrapped it ADDS `node_time`, capped at the START time.
-  Standing on it holds the clock, but only for `node_hold` s. Touch radius 22 px. "Standing on
+  **A node refills the timer** (Nov 26 2026, team: "as long as you're standing on the node the
+  timer doesn't go down and resets", tried out as a switch, then kept for good and the switch
+  removed): once wrapped, the timer is FULL (`_max_time()`), and while you stand on the node
+  the wire is wrapped round (`_paused_node`, `_timer_paused()`), `_tick_timer` keeps it full
+  with no time limit; step off and it counts down from full. Walking back onto it (the node
+  the wire is wrapped round last) or reeling back onto it fills it up again (`player_moved()`). So `node_time` and `node_hold` are gone (exports, scene values, solver flag
+  `--node`): the solver gives every node the full START time. Touch radius 22 px. "Standing on
   it" uses the same test as touching (feet or `BODY_UP` higher), so a node reached from below
   holds too (before Nov 22 2026 it didn't).
 - NODE REST (being tried out; dev menu switch `Game.node_rest`, off by default, not saved):
@@ -151,12 +159,27 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   feet, not for the wire. Looks: `Assets/images/tiles/pillar.png` (32x64, foot on the tile's
   centre) + `pillar_glow.png` (the ring, glow channel), drawn by `tools/art_pillar.py`;
   `PuzzleTile._make_pillar()` / `_update_pillar()` draw it over the wires, under the player, but
-  over him and see-through while he walks behind it. level.gd draws the same picture in the
+  over him and see-through while he walks behind it. The wire is DRAWN looped round the base
+  (Nov 26 2026, team: "make it look like the wire gets wrapped round the pole"): wire.gd
+  `add_anchor(p, wrap)` with `level._post_loop()` = Vector3(side, 11, 6) (pillar base, an
+  ellipse) or (side, 6.5, 3.5) (the clamp); `_display_points()` draws tangent lines and an arc;
+  which way round comes from the TURN DIRECTION (sign of the turn), arriving at
+  angle(a) + dir*acos(r/d) and leaving at angle(b) - dir*acos(r/d) (choosing "the outside of the
+  bend" picked the wrong side past half a turn); the front of each loop is drawn again over the
+  pillar (`_fronts`). Every post's base is also in `wire.posts` (set on grab): a straight stretch
+  that would cut through one is drawn bending round its edge (`_around_posts`), so the wire
+  never looks like it goes through a post before the rules wrap it at the centre. Rules and solver still use the centre corner. level.gd draws the same picture in the
   editor (`_draw_pillar_preview`). The column covers the tile above the pole. The wire wraps round its centre when it sweeps across it and unwraps when
   you sweep back (`_update_wraps()` / `_swept_over()`: the swung triangle anchor->old hands->new
   hands must contain the pole, with real width). Gives no time. Anchors list = pads AND poles
-  (`_anchor_cells` + `_anchor_signs`), so `_winding()` counts poles too. The solver uses the exact
-  same rule (`rewrap()` / `swept_over()`); keep them identical.
+  (`_anchor_cells` + `_anchor_signs` + `_anchor_turns`), so `_winding()` counts poles too.
+  Unwrapping (Nov 26 2026, team: "if you walk more than a circle it keeps wrapping, don't cut
+  off"): `_anchor_turns` = how far the wire has turned round each pole (radians, accumulated
+  every step); a pole only comes off when that drops back past 0 (and the straight wire is
+  clear). It used to come off half way round (the side test flips at 180 degrees too). Past a
+  full turn the wire coils (wire.gd draws spiral coils, `COIL_GAP`). The solver's `rewrap()`
+  adds `straight_on` (feet past the pole, dot > 0) instead of counting radians: the same answer
+  up to 270 degrees round a pole, and its results were identical on all 3 levels. Keep them in step.
 - REEL BACK: **E while walking with the wire** (and not on a ready node) pulls you back along it (past each pole) to the last
   pad it's wrapped round (`_reel_back()`), unwrapping the poles; onto a node = it holds again. Costs
   the flying time. After 0.7 s standing still away from that pad, an [E] key shows above you.
@@ -335,6 +358,66 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   team's band). `retile_walls.py` (`_wrap_panel_ends`) swaps a panel end to its cap when the
   tile beside it isn't wall / empty / space, and back when it is. Wall pieces next to a
   panel's top row start their rim at row 16 (`PANEL_EDGE` 18), lining up with the skirting.
+- **Level 1 is now only its first 3 rooms** (Nov 26 2026, team: "delete all the other rooms
+  except the first 3", and the exit too): Engineering Bay, Storage, Conduit Hall, by
+  `tools/keep_rooms.py` (keeps the rooms + a 4 tile wall frame, erases the rest of the map,
+  deletes the story beats / tutorial steps / hints / power links of deleted rooms; level-wide
+  beats stay; room lists and walkthrough trimmed). **There is no exit**: after the 3 rooms and
+  the lights-on cutscene the level can't be finished until the team adds one. The Conduit
+  Hall's old corridor towards the Reactor Hall is now a dead end (its door became wall). The
+  map now starts at tile (-3, -1): `map_from_scene.py` writes the text map from Godot (0, 0)
+  (blank padding) and, for maps left of / above it, an `.origin` file the solver adds back to
+  every exported route. The notes below about rooms 4-13 describe the old Level 1.
+- **Level 1's fourth room** (Nov 27 2026, the team's layout; Claude only updated what sits on
+  it, the map wasn't touched: same 966 tiles, identical rule map): rooms ENGINEERING BAY,
+  STORAGE, CONDUIT HALL (pole (20,9), node (20,4), pole (25,4), goal (25,7), door (24-26,10)
+  down), SWITCHGEAR ROOM (START (25,16), nodes (28,16) (22,19) (22,26) (29,25), 5 poles, the first
+  red floor and blinking grates, goal (25,29), door (24-26,32)), LIFT CORRIDOR (a hall, still
+  no exit tile: the level can't be finished until the team paints one). Room 1's goal is now
+  (4,20) and Storage's START (7,13); the tutorial arrows and guides follow them. PIP's beats
+  Room4Intro (red floor + grates), Room4Grates (REACH_HERE just before the grate column at
+  (26,25), where the hint route crosses), Room4Fail (the node refill tip), Room4Done.
+  **At 3 s, Conduit Hall and Switchgear have no fair route** (0.08 / 0.12 s lowest without
+  the margin); with the first wire upgrade (4 s; rooms 1 and 2 give 4 batteries, it costs 3)
+  they leave 0.96 / 0.61 s. Switchgear follows the team's own route (Nov 27 2026, drawn by the
+  team): START, round pole (22,16), node (22,19), node (28,16), down the right past the poles,
+  node (29,25), node (22,26), goal; `tools/route_choices.json` keeps it.
+  START and NODE pads are the animated tiles (sources 5 / 7); goals stay the grey block.
+  P during a blocking dialogue (a room's intro) used to start PIP while the astronaut was
+  still LOCKED, so every room got force-powered: `autopilot.run()` now waits for
+  `hud.is_blocking()` to end first.
+- **Hints, judge routes and "needs an upgrade" come from one solver run** (Nov 27 2026, team:
+  no Inspector toggle, work it out from the batteries available):
+  `python3 tools/solver2.py Levels/level_N.tscn --paths Data/routes/level_N.json --margin 3 --hints`.
+  For each stage it tries the START time, then one more wire upgrade at a time, as far as the
+  batteries of every EARLIER stage and earlier level pay for (`UPGRADE_COSTS` / `UPGRADE_STEP`
+  read from game_state.gd), and stops at the first time whose best route leaves at least
+  `MIN_SPARE` 0.25 s. The route gets `upgrades`, `time`, `batteries_before` in the JSON; the
+  autopilot walks it, `tools/write_hints.py` turns it into the room's H hint (updates the
+  Hints guide that starts on that START, else adds HintRoomN; rooms with a Tutorial guide get
+  none), and level.gd `_load_needs()` reads `upgrades` for PIP. `tools/route_choices.json`
+  ({"level_1": {"4": ["N(25,20)", ...]}}, nodes in the solver's printed coordinates) makes a
+  stage use the team's route; `--route 4=N(..),N(..)` for one run; `--no-upgrades` or a typed
+  `--time` = the old fixed time. Takes a few minutes on Level 1.
+- **PIP's upgrade tips** (level.gd "rooms that need a longer wire"): after 2 fails in a room
+  whose `upgrades` > `Game.wire_upgrades` (then every third fail), instead of the H offer:
+  can buy = `pip_needs_upgrade` + the corner UPGRADE button hops (`hud.flash_upgrade`);
+  can't = `pip_needs_batteries` ({need}) and, if a powered room still has batteries,
+  `pip_redo_room` ({room}, title capitalised) with PIP's arrow on its goal.
+- **Cut a room's power** (Nov 27 2026, team: "walk up to an active goal, hold interact to cut the
+  wire and retry", just that room): no wire, standing on a lit goal = `hud.set_cut_prompt`
+  (E key over the goal, a red ring fills; console "E hold to cut power"); hold E `CUT_HOLD`
+  0.9 s = `_cut_room()`: unsolved, fails reset, power LEDs, goal grey, conduit dark
+  (`Wire.set_unpowered`), the wire you laid there snaps and is deleted (`Room.cable`, set
+  in `_solve`; `_break_cable` = `Wire.snap()` then free), ceiling lights off (the emergency light pulses again by itself),
+  hull beacons removed, helmet lamp on, `popup_power_cut`. Doors, barriers and links stay
+  open. Kept batteries stay yours (each pays once); the missed ones are still there. PIP:
+  `pip_cut_hint` the first time you stand on a lit goal of a room with batteries left,
+  `pip_cut_done` after the first cut. Re-powering it runs `_solve` again (upgrade offer
+  included) but the lights-on cutscene only plays once (`_ship_powered`).
+- **Walls fade into empty map** (Nov 26 2026, team: the hard edge where wall met unpainted
+  map): neighbour type "void" (art_wall_sides `FADE`: the wall top steps down to the
+  background colour over ~24 px). retile_walls marks '' neighbours as void; space stays wall.
 - **More space for rooms 7, 8, 9** (Nov 25 2026, team: Cable Store, Main Breaker, Reactor
   Access "need much more space", walls modelled on theirs): `tools/move_rooms.py` moved the
   Generator Room area + exit 2 right / 3 down and Reactor Access 3 down, rigidly (the doors to
@@ -357,6 +440,13 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   = the yellow shape that doesn't reach the end columns). Kind wall, 6x3. `retile_walls.py`
   keeps it where painted (`PANELS`), wraps its ends like panel A's, and side walls line up
   with its skirting. It isn't picked automatically for new walls.
+- **Wooden crates are fixed** (team, Nov 26 2026: "only striped crates move"): objects.png (4, 7)
+  has kind "crate". `build_team_tiles.gd` says so too now (a rebuild on Nov 26 had quietly set it
+  back to "box", turning all 7 wooden crates in Storage into pushable carts: fixed the same day).
+  Rebuilding the tileset recreates sources 1-9 from that script: change kinds there, not only
+  in the TileSet editor, or the next rebuild undoes them.
+- **Tile index**: `docs/tile_index.html` (`tools/tile_index.py`), a picture of every Layout palette
+  tile (layout_tiles) with its kind, map letter and what it does (descriptions in `WHAT`).
 - **Grey goals** (Nov 25 2026): objects.png's grey block (1, 7) is the goal WITHOUT power
   (kind "goal"). Every team-art goal shows grey until its room is powered, then the animated
   blue goal (`_show_goal_art()`, called from `_build_visuals`, `_solve` and `_power_quietly`).
@@ -487,7 +577,10 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   `all_rooms_powered` (cutscene over).
 - `Scripts/player.gd` (`Astronaut`): state machine FREE / WIRED / LOCKED / DRIFT (no fling any more).
   Only movement + animation; asks the level for rules (`player_moved()`, `wire_reaches()`,
-  `drift_landing()`...).
+  `drift_landing()`...). Standing still he faces the way he last walked (`_show_idle()`, Nov 26
+  2026): an "idle_<dir>" animation if the sprite has one, else the team's "idle" (drawn facing
+  down-right; mirrored for down-left), else that direction's walk held on `STAND_FRAME` 1 (feet
+  together). A stop within 0.12 s of a diagonal walk keeps the diagonal (`_since_diag`).
 - `Scripts/game_state.gd` (autoload **Game**): level order (`LEVELS`, found at start by
   `_find_levels()`: every `Levels/level_<n>.tscn`, in number order, numbers 1, 2, 3 with no gap;
   `ResourceLoader.list_directory` so it works in the web build too. A new level = save the next
@@ -553,7 +646,7 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   `can_upgrade()`, `buy_upgrade()` (saves), `wire_bonus()`, signal `batteries_changed`.
   Rules read it through `_wire_time()` (START + bonus, capped by `_max_time()`) and
   `_max_time()` (= `_wire_time()`): each upgrade adds 1 s to what the START gives, which is
-  also the most the timer holds (3 -> 4 -> 5 -> 6 s). `_node_time`, `_node_hold`, `_cell_bonus` are now plain.
+  also the most the timer holds (3 -> 4 -> 5 -> 6 s). `_cell_bonus` is now plain.
   **The panel** (`upgrade_panel.gd`, class UpgradePanel, built in code with UIStyle): batteries
   badge, "+n from that room", WIRE TIMER now > next, three lamps (costs under them), a hint,
   UPGRADE (n) / CONTINUE buttons (focus on the useful one), U or Esc closes, plays `star.wav`
@@ -717,6 +810,9 @@ pickups, pitch-varied sounds.
 Nov 24 2026 (Claude, at the team's request): the editor's live preview (painted tiles come alive
 in the editor) and the paintable test start tile with its palette icon (`tools/art_test_start.py`).
 Nov 25 2026 (Claude, at the team's request): spaced out Level 1's rooms (`tools/space_rooms.py`).
+Nov 26 2026 (Claude, at the team's request): idle facing the last walking direction, the wire
+drawn looped round poles (and coiling when you walk round one again and again, with the new
+unwrap rule), walls fading into empty map, and Level 1 cut down to its first 3 rooms.
 Nov 25 2026 (Claude, at Nilay's request): the clamp drops in while you stand on its socket, PIP
 points out movable crates, judge mode's P key for PIP (R restarts), the boss loop's wire end
 plugs into the core, and the team's animated pads in Levels 2 and 3. Also the draft demo video
@@ -726,6 +822,14 @@ Nov 24 2026: the team's new art (ground, front walls, objects, start / goal / ex
 animations) is the TEAM's own (from their Drive; record who drew it); Claude only cut it into
 tiles, gave each tile its rule and wired it in. Claude drew the side, bottom and corner walls to
 match (`tools/art_wall_sides.py`, pixel by pixel in Python, in the team's colours).
+Nov 27 2026 (Claude, at the team's request): the solver's per-room wire upgrade search, the
+route choice file and the hint writer (`tools/write_hints.py`), PIP's upgrade tips, and the
+hold-E cut on a lit goal (the cut idea and the Switchgear route are the team's).
+Nov 27 2026 (Claude, at the team's request): for the team's new Level 1 layout (the layout
+itself is the team's), the room names, PIP's lines for the Switchgear Room, the tutorial arrow
+fixes, the H hint routes and the judge mode routes (from the solver), and the animated pads.
+Nov 26 2026 (Claude, at the team's request): nodes refill the timer and keep it full while you
+stand on them (the team's idea; Claude wrote the rule and updated the solver).
 Nov 26 2026 (Claude, at Reyansh's request): the skill tree replaced by batteries as money and the
 three step WIRE UPGRADE (game_state.gd, upgrade_panel.gd, the end of room prompt), 3 s START and
 0.5 s batteries in every level. The costs (3, 5, 7), the step (1 s) and the START time are the

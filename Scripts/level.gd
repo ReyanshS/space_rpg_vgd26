@@ -42,9 +42,10 @@
 #     tiles. If a step would make it, you just can't take that step.
 #   - The START gives you wire_time seconds, and that's also the most the
 #     timer can ever hold: nodes and batteries top it back up, never past it.
-#   - NODE: stand on it and press E (or click) to wrap the wire round it: it
-#     adds node_time seconds and holds the timer, but only for node_hold
-#     seconds. Until you press, it does nothing (an E key bobs over it).
+#   - NODE: stand on it and press E (or click) to wrap the wire round it: the
+#     timer fills up and stays full for as long as you stand there. Step off
+#     and it counts down from full. Until you press, it does nothing (an E key
+#     bobs over it).
 #   - NODE REST (a switch in the dev menu, off unless you turn it on): while the
 #     wire is latched on a node (the node is the last pad it touched) and you stay
 #     within node_rest_radius of it, the timer waits as long as you like. Time to
@@ -164,6 +165,7 @@ const DIRS4: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1),
 const START_RADIUS := 20.0
 const NODE_RADIUS := 22.0
 const GOAL_RADIUS := 22.0
+const CUT_HOLD := 0.9          # seconds to hold E on a lit goal to cut its power
 const BODY_UP := 10.0
 const CELL_RADIUS := 14.0
 const AIRLOCK_RADIUS := 12.0
@@ -232,10 +234,6 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## hold: nodes and batteries top it up to this, never past it. (The wire
 ## upgrade adds to it.)
 @export var wire_time := 3.0
-## Seconds a NODE adds to the timer.
-@export var node_time := 3.0
-## Standing on a NODE holds the timer for this many seconds, then it runs again.
-@export var node_hold := 1.5
 ## Only with NODE REST switched on in the dev menu: how close (in pixels, a tile
 ## is 32) you must stay to the node the wire is latched on for the timer to wait.
 @export var node_rest_radius := 48.0
@@ -300,17 +298,30 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 ## The first time you power a room with a battery charged.
 @export var pip_cell_kept := "That battery's yours now. Save them up and buy a longer wire."
 ## The first time a charged battery goes back because you failed.
-@export var pip_cell_lost := "That battery's back. You only keep them once you reach the blue pad."
+@export var pip_cell_lost := "That battery's back. You only keep them once the room has power."
 ## The first time the wire stops you walking.
 @export var pip_strain := "The wire can't go through that. Press E on a node for a new angle."
 ## The first time you grab a wire that can use a node from an earlier stage (PIP points at it).
-@export var pip_shared := "That node from the last machine is still live. Press E on it to wrap this wire."
+@export var pip_shared := "That node from the last machine is still live. Press E to connect this wire."
 ## After a fail, when there's no way back to the START without crossing red tiles or grates.
 @export var pip_stranded := "No safe way back from there. Press R and I'll bring you to the start."
 ## The first time you stand on a node with the wire: it needs E now.
-@export var pip_node_press := "On the node? Press E to wrap the wire round it."
+@export var pip_node_press := "On the node? Press E to connect the wire to it."
 ## After the first room you power: what the upgrade panel is for.
 @export var pip_upgrade := "You've got enough batteries for a longer wire. Want it?"
+## After two fails in a room that needs a longer wire than yours, when you can
+## buy it. (Which rooms need one: the solver works it out from the batteries you
+## could have by then, see "upgrades" in Data/routes/level_N.json.)
+@export var pip_needs_upgrade := "Your wire's too short for this room. Press U and buy a longer one."
+## The same, when you can't buy it yet. {need} = batteries you're short.
+@export var pip_needs_batteries := "Your wire's too short for this room. You need {need} more batteries."
+## ...and a room you already powered still has batteries in it (PIP points at its
+## lit pad, the goal). {room} = that room's name.
+@export var pip_redo_room := "{room} still has some. Hold E on its lit pad to redo it."
+## The first time you stand on the lit pad (a powered goal) of a room you left batteries in.
+@export var pip_cut_hint := "Missed a battery? Hold E here to cut the power and redo the room."
+## The first time you cut a room's power.
+@export var pip_cut_done := "Power's off. Grab the wire again and get the batteries you missed."
 
 # The short messages that pop up at the top of the screen.
 @export_group("Popup texts")
@@ -337,6 +348,7 @@ const SOUNDS := ["grab", "hum", "node", "bend", "shock", "snap", "powerup", "doo
 @export var popup_socket_empty := "THIS SOCKET TAKES THE CABLE CLAMP"
 @export var popup_crate_grounded := "SHORTED OUT. SAFE TO CROSS"
 @export var popup_crates_reset := "CRATES PUT BACK"
+@export var popup_power_cut := "POWER CUT"
 
 # What PIP says about the dungeon parts (each one only once).
 @export_group("PIP's dungeon lines")
@@ -390,6 +402,7 @@ class Room:
 	var solved := false
 	var is_exit := false
 	var conduit: Wire = null            # the floor cable from goal to door
+	var cable: Wire = null              # the wire you carried in, left lying powered from START to goal
 	var outside := false                # has hull / open space: a spacewalk area
 	var airlock := Vector2i(-1, -1)     # the airlock pad, if this room is an airlock
 	var cycled := false                 # this airlock has been used
@@ -441,11 +454,15 @@ var _wire: Wire = null
 var _wire_room: Room
 var _anchor_cells: Array[Vector2i] = []   # pads and poles the wire is wrapped around, in order
 var _anchor_signs: Array[float] = []      # for each anchor: which way the wire turns round it (poles only, else 0)
+## For each anchor: how far the wire has turned round it so far, in radians, with
+## the sign of the way it turns (poles only, else 0). Walk round a pole and it
+## keeps growing: past TAU (a full turn) the wire is coiled round the pole. It
+## only comes off when you walk back and this drops past 0 (see _update_wraps).
+var _anchor_turns: Array[float] = []
 var _last_anchor := Vector2.ZERO          # pixel position the tight wire starts from
 var _prev_feet := Vector2.ZERO            # where you stood last time player_moved() ran (for wrapping)
 var _poles: Array[Vector2i] = []          # every pole tile in the level
-var _paused_node := Vector2i(-1, -1)      # node you're standing on (timer held)
-var _node_hold_left := 0.0                # how much longer that node holds the timer
+var _paused_node := Vector2i(-1, -1)      # node you're standing on (timer full)
 var _time_left := 0.0
 var _tick_accum := 0.0
 var _strain_cd := 0.0
@@ -460,6 +477,10 @@ var _retries := 0
 var _hints_used := 0
 var _hints_shown := {}                    # Room -> true
 var _hint_offered := {}                   # Room -> true
+var _needs_upgrades := {}                 # START tile -> wire upgrades that room needs (the solver's routes file)
+var _upgrade_tipped := {}                 # Room -> the fail count when PIP last said "buy an upgrade"
+var _cut_at: Room = null                  # the powered room whose blue pad you're standing on
+var _cut_hold := 0.0                      # how long you've held E there
 var _rooms_powered := 0
 var _rooms_with_goal := 0
 
@@ -615,6 +636,7 @@ func _ready() -> void:
 	hud.set_cells(0, _cells.size())
 	hud.set_power(0, _rooms_with_goal)
 	_setup_dungeon()
+	_load_needs()
 	_visited[_current_room] = true
 	hud.set_judge(Game.judge_mode)
 	hud.set_base_wire(wire_time)           # the upgrade panel shows what the wire becomes
@@ -1550,12 +1572,16 @@ func autopilot_sync_wraps(pads: int, want: Array) -> void:
 	while _anchor_cells.size() > first + keep:     # off: the ones the route doesn't have
 		_anchor_cells.pop_back()
 		_anchor_signs.pop_back()
+		_anchor_turns.pop_back()
 		_wire.remove_last_anchor()
 	for k in range(keep, want.size()):             # on: the ones it does
 		var c := Vector2i(int(want[k][0]), int(want[k][1]))
+		var sd := float(want[k][2])
+		var turn := _turn_at(center_of(_anchor_cells[-1]), center_of(c), player.position, sd)
 		_anchor_cells.append(c)
-		_anchor_signs.append(float(want[k][2]))
-		_wire.add_anchor(center_of(c))
+		_anchor_signs.append(sd)
+		_anchor_turns.append(turn)
+		_wire.add_anchor(center_of(c), _post_loop(c, sd, turn))
 		_tile_hit(c)
 		_play("bend")
 		pad_touched.emit("pole", _wire_room.index)
@@ -2186,7 +2212,7 @@ func _wall_piece(c: Vector2i) -> Vector2i:
 		# wall_sides.json (written with the picture) lists each piece's floor sides
 		var list = JSON.parse_string(FileAccess.get_file_as_string("res://Assets/images/tiles/team/wall_sides.json"))
 		for p in list:
-			if p.has("panel_top") or p.has("panel"):
+			if p.has("panel_top") or p.has("panel") or p.has("void"):
 				continue                      # pieces next to a front panel: only painted by tools/retile_walls.py
 			var bits := 0
 			for d in p["open"]:
@@ -2988,6 +3014,7 @@ func _physics_process(delta: float) -> void:
 		# stood still a moment away from the last pad? remind them they can reel back
 		_still_time = _still_time + delta if walking and not player.is_moving() else 0.0
 		hud.set_reel_prompt(_still_time > 0.7 and player.position.distance_to(_last_anchor) > 24.0 and _node_ready.x < 0)
+		_set_cut_at(null)
 		_tick_timer(delta)
 	else:
 		hud.set_timer(false, 0.0, 0.0)
@@ -2998,6 +3025,7 @@ func _physics_process(delta: float) -> void:
 			_try_grab()
 			if _wire == null:
 				_try_clamp()                # not on a START: maybe next to a clamp socket
+		_tick_cut(delta)
 		# stranded? keep checking: if you find a safe way back, the [R] goes away
 		if _stranded:
 			_stranded_check -= delta
@@ -3007,8 +3035,10 @@ func _physics_process(delta: float) -> void:
 	_update_prompts()
 
 
+## True while you stand on the node your wire is wrapped round: the timer is
+## full and doesn't go down (it starts counting again when you step off).
 func _timer_paused() -> bool:
-	return _paused_node.x >= 0 and _node_hold_left > 0.0
+	return _paused_node.x >= 0
 
 
 ## NODE REST (the dev menu switch, Game.node_rest): the wire is latched on a
@@ -3025,7 +3055,7 @@ func _tick_timer(delta: float) -> void:
 	# PIP's autopilot never runs out of time, and neither does a node rest
 	var paused := _timer_paused() or autopilot_on or _node_rest()
 	if _timer_paused():
-		_node_hold_left -= delta        # a node only holds the timer for so long
+		_time_left = _max_time()        # on the node: full, and it stays full
 	elif not paused:
 		_time_left -= delta
 	var frac := clampf(_time_left / _max_time(), 0.0, 1.0)
@@ -3124,6 +3154,12 @@ func player_moved() -> void:
 	# coming at a node from below would step you off it the moment you touch it.
 	if _paused_node.x >= 0 and not _touching(center_of(_paused_node), NODE_RADIUS + 4.0):
 		_set_paused_node(Vector2i(-1, -1))
+	# Walked back onto the node the wire is wrapped round (the last thing it
+	# touched)? Then the timer fills up and stays full again, like the first time.
+	if _paused_node.x < 0 and not _anchor_cells.is_empty():
+		var last: Vector2i = _anchor_cells[-1]
+		if kind_at(last) == "node" and _touching(center_of(last), NODE_RADIUS):
+			_set_paused_node(last)
 	# Did the wire sweep across a pole (wrap round it), or back again (unwrap)?
 	_update_wraps(_prev_feet, player.position)
 	_prev_feet = player.position
@@ -3327,21 +3363,54 @@ func _touching_at(feet: Vector2, pc: Vector2, radius: float) -> bool:
 #           are on. When that side flips, the wire has straightened out again.
 
 ## Called from player_moved() while you carry the wire.
+## How the wire is drawn round a post it wraps round (wire.gd draws a loop round
+## its base): Vector3(side it turns, half width, half depth) of the base, in px.
+## The rule is still the corner at the centre; this is only the picture.
+func _post_loop(c: Vector2i, side: float, turn: float) -> Vector4:
+	if c == _clamp_at:
+		return Vector4(side, 6.5, 3.5, turn)       # the clamp: a slim post (pickup.gd _draw_clamp_post)
+	return Vector4(side, 11.0, 6.0, turn)          # a pillar: its base is 22 px wide (pillar.png)
+
+
+## How far the wire turns at a post at `p`: coming from `q`, going on to `to`
+## (radians). `side` says which way it should turn: a wire that only just grazes
+## the post (turning a hair the other way) still counts as a tiny turn that way.
+func _turn_at(q: Vector2, p: Vector2, to: Vector2, side: float) -> float:
+	var t := (p - q).angle_to(to - p)
+	if side != 0.0 and t * side <= 0.0:
+		t = side * 0.001
+	return t
+
+
 func _update_wraps(from: Vector2, to: Vector2) -> void:
 	if from.is_equal_approx(to) or autopilot_wraps:
 		return
-	# unwrap first (maybe several poles in a row came free). _poles also has
+	# the wire from the last pole to your feet turns with you: add how far it
+	# turned this step. Walk round and round the pole and it keeps growing.
+	if _anchor_cells.size() >= 2 and _poles.has(_anchor_cells[-1]):
+		var lp := center_of(_anchor_cells[-1])
+		if from.distance_to(lp) > 0.5 and to.distance_to(lp) > 0.5:
+			_anchor_turns[-1] += (from - lp).angle_to(to - lp)
+			_wire.set_turn(_anchor_cells.size() - 1, _anchor_turns[-1])     # coils round the base
+	# unwrap first (maybe several poles in a row came free): a pole comes off when
+	# you've walked back far enough that the wire's turn round it drops past 0,
+	# and nothing's in the way of the straight wire. Only then, not when you're
+	# just half way round (Nov 2026: it used to come off there). _poles also has
 	# the clamp while it stands in a socket, so it comes off the same way.
 	while _anchor_cells.size() >= 2 and _poles.has(_anchor_cells[-1]):
 		var p := center_of(_anchor_cells[-1])
 		var q := center_of(_anchor_cells[-2])
-		var side := signf((p - q).cross(to - p))
-		if side == 0.0 or side == _anchor_signs[-1] or not _line_clear(q, to):
+		if _anchor_turns[-1] * _anchor_signs[-1] > 0.0 or not _line_clear(q, to):
 			break
 		_anchor_cells.pop_back()
 		_anchor_signs.pop_back()
+		_anchor_turns.pop_back()
 		_last_anchor = q
 		_wire.remove_last_anchor()
+		# the pole before it (if any) now leads straight to your feet again
+		if _anchor_cells.size() >= 2 and _poles.has(_anchor_cells[-1]):
+			_anchor_turns[-1] += (p - q).angle_to(to - q)
+			_wire.set_turn(_anchor_cells.size() - 1, _anchor_turns[-1])
 	# then wrap: the pole the sweep reaches first (smallest angle from the old wire)
 	var a := _last_anchor
 	var best := Vector2i(-1, -1)
@@ -3359,10 +3428,17 @@ func _update_wraps(from: Vector2, to: Vector2) -> void:
 	if best.x < 0:
 		return
 	var pc := center_of(best)
+	var sd := signf((from - a).cross(to - a))      # which way the wire was swinging
+	# the pole before (if any) now leads to this new pole, not to your feet
+	if _anchor_cells.size() >= 2 and _poles.has(_anchor_cells[-1]):
+		_anchor_turns[-1] += (to - a).angle_to(pc - a)
+		_wire.set_turn(_anchor_cells.size() - 1, _anchor_turns[-1])
+	var turn := _turn_at(a, pc, to, sd)
 	_anchor_cells.append(best)
-	_anchor_signs.append(signf((from - a).cross(to - a)))   # which way the wire was swinging
+	_anchor_signs.append(sd)
+	_anchor_turns.append(turn)
 	_last_anchor = pc
-	_wire.add_anchor(pc)
+	_wire.add_anchor(pc, _post_loop(best, sd, turn))
 	_tile_hit(best)
 	_play("bend")
 	pad_touched.emit("pole", _wire_room.index)     # the tutorial listens for this
@@ -3426,14 +3502,14 @@ func _reel_back() -> void:
 	while _anchor_cells.size() > i + 1:
 		_anchor_cells.pop_back()
 		_anchor_signs.pop_back()
+		_anchor_turns.pop_back()
 		_wire.remove_last_anchor()
 	_last_anchor = target
 	_prev_feet = player.position
 	player.grab_wire()                                # walking with the wire again
 	var c: Vector2i = _anchor_cells[-1]
 	if kind_at(c) == "node":
-		_set_paused_node(c)                           # back on a node: it holds the timer again
-		_node_hold_left = _node_hold()
+		_set_paused_node(c)                           # back on a node: the timer fills up again
 	_play("clank")
 	player.squash(Vector2(1.2, 0.82), 0.18)          # a bump as the wire stops pulling
 
@@ -3469,15 +3545,15 @@ func _touch_pad(c: Vector2i, kind: String) -> void:
 	var came_from := _last_anchor
 	_anchor_cells.append(c)
 	_anchor_signs.append(0.0)
+	_anchor_turns.append(0.0)
 	_last_anchor = pc        # the tight wire now starts from this pad
 	_wire.add_anchor(pc)
 	_tile_hit(c)
 	pad_touched.emit(kind, _wire_room.index)     # the tutorial listens for this
 	match kind:
 		"node":
-			_time_left = minf(_time_left + _node_time(), _max_time())
+			_time_left = _max_time()          # full, and it stays full while you stand here (_tick_timer)
 			_set_paused_node(c)
-			_node_hold_left = _node_hold()    # it holds the timer for a moment
 			_play("node")
 			player.squash(Vector2(0.9, 1.12), 0.15)
 			hud.pulse_timer()
@@ -3682,12 +3758,20 @@ func _try_grab() -> void:
 	_wire_pads = _stage_pads(r)
 	_anchor_cells = [r.start]
 	_anchor_signs = [0.0]
+	_anchor_turns = [0.0]
 	_last_anchor = sc
 	_prev_feet = player.position
 	_set_paused_node(Vector2i(-1, -1))
 	_wire = Wire.new(Wire.Style.CABLE)
 	_wire_root.add_child(_wire)
 	_wire.begin(sc)
+	# every post (poles, and the clamp in its socket): the wire bends round their
+	# bases instead of being drawn through them (wire.gd _around_posts)
+	var bases: Array[Vector4] = []
+	for pole in _poles:
+		var size := _post_loop(pole, 0.0, 0.0)
+		bases.append(Vector4(center_of(pole).x, center_of(pole).y, size.y, size.z))
+	_wire.posts = bases
 	_wire.set_live_end(player.hand_position())
 	player.grab_wire()
 	_time_left = _wire_time()     # the timer starts right away on the START pad
@@ -3786,6 +3870,7 @@ func _solve(r: Room) -> void:
 	var w := _wire
 	_wire = null
 	w.finish()
+	r.cable = w                     # it stays on the floor, powered (a cut snaps it: _cut_room)
 	await w.power_flow(0.8)
 	if not is_inside_tree(): return
 	_hide_loop(r)
@@ -3822,7 +3907,7 @@ func _solve(r: Room) -> void:
 			_pip_say(pip_upgrade)
 		await hud.offer_upgrade(paid, wire_time)
 		if not is_inside_tree(): return
-	if _rooms_powered >= _rooms_with_goal:
+	if _rooms_powered >= _rooms_with_goal and not _ship_powered:   # (once: not again after a cut)
 		await _all_powered()        # the lights-on cutscene: wait here until it's over
 		if not is_inside_tree(): return
 	_busy = false
@@ -3848,20 +3933,10 @@ func _wire_time() -> float:
 	return t + Game.wire_bonus()
 
 
-## Seconds a NODE adds.
-func _node_time() -> float:
-	return node_time
-
-
 ## The most the timer can ever hold: the same as the START gives. A node or a
 ## battery fills it back up to that, never past it.
 func _max_time() -> float:
 	return _wire_time()
-
-
-## How long a NODE holds the clock while you stand on it.
-func _node_hold() -> float:
-	return node_hold
 
 
 ## Seconds a battery adds to the timer.
@@ -4187,14 +4262,171 @@ func _fail(kind: String) -> void:
 	# The first time a charged cell drains, PIP explains why.
 	if lost_cells and Game.first_time("cell_lost"):
 		_pip_say(pip_cell_lost)
+	# Failed twice here, and the solver says this room needs a longer wire than
+	# yours? A hint won't help with that: PIP says so (again every third fail).
+	if counts and r != null and not r.solved and r.fails >= 2 and Game.wire_upgrades < _room_needs(r) \
+			and r.fails - int(_upgrade_tipped.get(r, -99)) >= 3:
+		_upgrade_tipped[r] = r.fails
+		_upgrade_tip()
 	# Failed twice here? PIP offers a hint (once per room).
-	if counts and r != null and not r.solved and r.fails >= 2 and not _hint_offered.has(r):
+	elif counts and r != null and not r.solved and r.fails >= 2 and not _hint_offered.has(r):
 		if Game.judge_mode:
 			_hint_offered[r] = true
 			_pip_say(pip_hint_judge)        # judge mode: P and PIP walks it
 		elif _room_has_hint(r):
 			_hint_offered[r] = true
 			_pip_say(pip_hint)
+
+
+# ===================================================================== rooms that need a longer wire
+
+## Which rooms need wire upgrades. tools/solver2.py works it out: it tries each
+## room with the START time, then with one more upgrade at a time (as far as the
+## batteries you could have collected before that room pay for), and writes the
+## answer next to the routes PIP's autopilot walks. So nobody has to tick a box:
+## make the hints with the solver and PIP knows.
+func _load_needs() -> void:
+	var path := "res://Data/routes/level_%d.json" % level_number
+	if not FileAccess.file_exists(path):
+		return
+	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(data) != TYPE_DICTIONARY:
+		return
+	for k in data:
+		var route = data[k]
+		if typeof(route) == TYPE_DICTIONARY and route.has("start") and int(route.get("upgrades", 0)) > 0:
+			_needs_upgrades[Vector2i(int(route["start"][0]), int(route["start"][1]))] = int(route["upgrades"])
+
+
+## How many wire upgrades room r needs (0 = the START time is enough).
+func _room_needs(r: Room) -> int:
+	return int(_needs_upgrades.get(r.start, 0))
+
+
+## PIP: "your wire's too short". Buy it now, or else go and get batteries: if a
+## room you powered still has some, he points at its blue pad (hold E there).
+func _upgrade_tip() -> void:
+	if Game.can_upgrade():
+		_pip_say(pip_needs_upgrade)
+		hud.flash_upgrade()
+		return
+	_pip_say(pip_needs_batteries.format({"need": Game.upgrade_cost() - Game.batteries}))
+	var redo := _room_with_batteries_left()
+	if redo != null:
+		_pip_say(pip_redo_room.format({"room": _room_name(redo)}), center_of(redo.goal))
+
+
+## Uncollected batteries in room r.
+func _batteries_left(r: Room) -> int:
+	var n := 0
+	for c in _cells:
+		if _room_of.get(c) == r and not _cells[c].collected:
+			n += 1
+	return n
+
+
+## The nearest room you've powered that still has batteries in it (or null).
+func _room_with_batteries_left() -> Room:
+	var best: Room = null
+	for r in _rooms:
+		if r.solved and r.goal.x >= 0 and _batteries_left(r) > 0:
+			if best == null or player.position.distance_to(center_of(r.goal)) < player.position.distance_to(center_of(best.goal)):
+				best = r
+	return best
+
+
+## "ENGINEERING BAY" -> "Engineering Bay" (PIP doesn't shout).
+func _room_name(r: Room) -> String:
+	var title := room_titles[r.index] if r.index < room_titles.size() else "Room %d" % (r.index + 1)
+	return title.capitalize()
+
+
+# ===================================================================== cutting a room's power
+# Stand on the lit blue pad of a room you've powered and hold E: the power's cut
+# and you can do the room again, for the batteries you missed. Just that room:
+# its doors stay open and every other room keeps its power. Batteries you already
+# kept stay yours (each one pays out once), the ones you missed are still there.
+
+## Called every frame while you're not carrying the wire.
+func _tick_cut(delta: float) -> void:
+	var r: Room = null
+	if not (_busy or _dialogue_lock or autopilot_on or _complete or _cutscene) \
+			and player.state == Astronaut.State.FREE:
+		for o in _rooms:
+			if o.solved and o.goal.x >= 0 and o.start.x >= 0 and _touching(center_of(o.goal), GOAL_RADIUS):
+				r = o
+				break
+	_set_cut_at(r)
+	if r == null:
+		return
+	if Input.is_action_pressed("interact") and _input_cooldown <= 0.0:
+		_cut_hold += delta
+	else:
+		_cut_hold = 0.0
+	hud.set_cut_prompt(center_of(r.goal), _cut_hold / CUT_HOLD)
+	if _cut_hold >= CUT_HOLD:
+		_cut_room(r)
+
+
+## Which lit goal you're standing on (null = none): the HUD shows the hold prompt.
+func _set_cut_at(r: Room) -> void:
+	if r == _cut_at:
+		return
+	_cut_at = r
+	_cut_hold = 0.0
+	hud.set_cut_prompt(center_of(r.goal) if r != null else Vector2.INF, 0.0)
+	if r != null and _batteries_left(r) > 0 and Game.first_time("cut_hint"):
+		_pip_say(pip_cut_hint)
+
+
+## Room r loses its power: lights out, the goal goes grey, the floor cable dark.
+func _cut_room(r: Room) -> void:
+	_set_cut_at(null)
+	r.solved = false
+	r.full_power = false
+	r.fails = 0
+	_hint_offered.erase(r)
+	_upgrade_tipped.erase(r)
+	_rooms_powered -= 1
+	hud.set_power(_rooms_powered, _rooms_with_goal)
+	for c in [r.goal, r.start]:
+		var t: PuzzleTile = _tiles.get(c)
+		if t:
+			t.set_powered(false)
+	_show_goal_art(r.goal, false)
+	if r.conduit:
+		r.conduit.set_unpowered()
+	if r.cable != null and is_instance_valid(r.cable):
+		_break_cable(r.cable)       # the wire you laid here snaps and is gone
+		r.cable = null
+	for l in _room_lights.get(r, []):
+		var tw := create_tween()
+		tw.tween_property(l, "energy", 0.0, 0.25)
+		tw.tween_callback(func() -> void: l.visible = false)
+	# (the red emergency light pulses again by itself: _process does it for unpowered rooms)
+	for i in range(_beacons.size() - 1, -1, -1):
+		if _beacons[i][3] == r:
+			_beacons[i][0].queue_free()
+			_beacons[i][1].queue_free()
+			_beacons.remove_at(i)
+	player.set_lamp(true)
+	_play("snap")
+	_sparks_at(center_of(r.goal))
+	_shake_cam(0.25, 2.0)
+	player.squash(Vector2(1.15, 0.85), 0.2)
+	hud.show_toast(popup_power_cut)
+	_input_cooldown = 0.4           # the E you're still holding doesn't do anything else
+	_update_hint_label()
+	if Game.first_time("cut_done"):
+		_pip_say(pip_cut_done)
+
+
+## A cut: the wire lying in the room flashes red, throws sparks and goes, the
+## same snap as when the timer burns a wire out in your hands.
+func _break_cable(w: Wire) -> void:
+	await w.snap()
+	if is_instance_valid(w):
+		w.queue_free()
 
 
 ## Cells charged on a failed try come back, uncharged.

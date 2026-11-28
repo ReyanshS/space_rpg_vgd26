@@ -424,7 +424,7 @@ layout_mode = 2
 mouse_filter = 2
 script = ExtResource("5_key")
 keys = PackedStringArray("E")
-text = "grab the wire, wrap a node, reel back"
+text = "grab the wire, connect a node, reel back"
 
 [node name="Back" type="Control" parent="Pause/VBox/Controls"]
 layout_mode = 2

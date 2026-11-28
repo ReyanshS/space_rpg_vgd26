@@ -19,8 +19,6 @@ level_number = 3
 level_name = "THE CORE"
 complete_message = "PIP's back in control. Next stop: home."
 wire_time = 3.0
-node_time = 2.5
-node_hold = 1.0
 room_wire_time = PackedFloat32Array()
 room_titles = PackedStringArray("CORE ACCESS", "PIP\'S CORE", "PIP\'S CORE", "PIP\'S CORE")
 
@@ -125,7 +123,7 @@ lines = PackedStringArray("the grates flash on and off in a wave. cross while th
 position = Vector2(1088, 576)
 script = ExtResource("10_beat")
 trigger = 5
-lines = PackedStringArray("press E on a node and wait there for the dark. it holds the clock a moment.")
+lines = PackedStringArray("press E on a node and wait there for the dark. the timer stays full.")
 
 [node name="ShipLightsUp" type="Marker2D" parent="Story" unique_id=1258589253]
 position = Vector2(1120, 576)

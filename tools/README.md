@@ -8,9 +8,11 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 
 | Tool | What it's for | Command |
 | - | - | - |
-| `map_from_scene.py` | Reads the map you painted in a level scene and writes it as a text grid | `python tools/map_from_scene.py Levels/level_2.tscn tools/out/level2.txt` (no arguments = Level 1) |
+| `map_from_scene.py` | Reads the map you painted in a level scene and writes it as a text grid (a character's column / row = its Godot tile; a map painted left of / above tile (0, 0) also gets an `.origin` file, which the solver uses) | `python tools/map_from_scene.py Levels/level_2.tscn tools/out/level2.txt` (no arguments = Level 1) |
 | `map_to_scene.py` | The opposite: puts a text grid onto a scene's Layout layer (close the scene in Godot first) | `python tools/map_to_scene.py tools/maps/level2.txt Levels/level_2.tscn` |
-| `solver2.py` | Lists every route that solves each room in time, its lowest timer, and whether each power cell can be charged — use after editing a room or its Rules numbers | `python tools/solver2.py tools/out/level1.txt` |
+| `solver2.py` | Lists every route that solves each room in time, its lowest timer, and whether each power cell can be charged — use after editing a room or its Rules numbers. Tries one more wire upgrade at a time when a room needs it (as far as earlier batteries pay); `--paths ... --hints` also writes the judge routes and each room's H hint | `python tools/solver2.py tools/out/level1.txt` |
+| `write_hints.py` | Turns a routes file into the level's H hints (FloorGuides under Hints); the solver's `--hints` runs it | `python3 tools/write_hints.py Levels/level_1.tscn Data/routes/level_1.json` |
+| `route_choices.json` | The team's chosen route for a stage (its nodes in order); the solver uses it for that stage's hint and judge route | `{"level_1": {"4": ["N(25,20)", ...]}}` |
 | `render.py` | One image of the whole level with the real tiles | `python tools/render.py tools/out/level1.txt tools/out/map_preview.png` |
 | `light_preview.py` | Mock-up of the dark-ship lighting, to try numbers before changing `level.gd` | `python tools/light_preview.py` |
 | `sfx.py` | Generates every sound effect in `Assets/audio` from sine waves + noise (overwrites them!). The music is the team's own `music_*.ogg`, not made here | `python tools/sfx.py` |
@@ -26,6 +28,8 @@ Results go to `tools/out/` (git ignores it — you can always regenerate).
 | `art_wall_caps.py` | Draws the ends of the team's front panels with the top skirting wrapped round the corner (`Assets/images/tiles/team/wall_caps.png`, source 8); `retile_walls.py` uses them where a panel ends next to floor | `python tools/art_wall_caps.py` |
 | `art_wall_strip.py` | The team's power strip panel with the lightning bolt taken out, the strip's gap kept (`Assets/images/tiles/team/wall_strip.png`, source 9) | `python tools/art_wall_strip.py` |
 | `use_team_pads.py` | Repaints a level's START, GOAL and NODE pads with the team's animated tiles (same rules) | `python tools/use_team_pads.py Levels/level_1.tscn` |
+| `tile_index.py` | Builds `docs/tile_index.html`: a picture index of the Layout palette (layout_tiles) with each tile's kind, map letter and what it does. Re-run after the palette changes | `python tools/tile_index.py` |
+| `keep_rooms.py` | Deletes every room of a level except the ones you name (by a floor tile in each), keeps a 4 tile wall frame round them, deletes their story beats / tutorial steps / hints / links, trims the room lists. Close Godot first, then regenerate routes | `python tools/keep_rooms.py Levels/level_1.tscn 11,20 7,14 17,9` |
 | `move_rooms.py` | Moves whole rooms (a multistage area moves with all its stages) to give them more space; doors to rooms that stay come along and the hall on the other side grows (`--grow`); markers move with their tiles; walls repainted. Close Godot first | `python tools/move_rooms.py Levels/level_1.tscn --move 20,35:2,3 --grow 24,30` |
 | `retile_walls.py` | Repaints every wall of a level as team tiles: front panels where a wall is 3 tall above floor (stretched to fit, caps on both ends), the matching wall piece everywhere else. Close Godot first. `--preview out.png` draws the whole map, `--dry` writes nothing, `--all` repaints hand-painted front panels too | `python tools/retile_walls.py Levels/level_1.tscn` |
 | `build_team_tiles.gd` | Adds the team's art sheets in `Assets/images/tiles/team/` to the Layout tileset as sources 1-7, with a kind on every tile and the three animated tiles. A Godot script; safe to run again | `godot --headless --path . --script tools/build_team_tiles.gd` |
@@ -78,7 +82,7 @@ Easiest way: `python tools/solver2.py Levels/level_1.tscn` reads the map AND the
 Solver output, e.g. `S(14,9) -> pole(19,9) -> N(19,4)@3.5s -> G(24,9)@7.0s   (lowest timer: 2.44 s)`
 means: from the START at tile (14, 9), walk so the wire wraps round the pole at (19, 9), touch the
 node at (19, 4) (3.5 s in), then the goal. The timer carries on from pad to pad (START time, each
-node adds Node Time, never above the room's START time); "lowest timer" is the least time you ever have
+node fills it back up to the room's START time); "lowest timer" is the least time you ever have
 left on that route, so it's how tight the room is. Poles (`B`) are modelled exactly like the game
 (`rewrap()` = level.gd `_update_wraps()`). Drifting across open space is part of the walking
 between pads. `--paths out.json --margin 3` writes the most forgiving route of each room (feet

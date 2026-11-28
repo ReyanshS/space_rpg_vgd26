@@ -103,6 +103,8 @@ var _objective := ""                # the tutorial instruction, shown when PIP i
 var _cinematic := false             # a cutscene is playing (film bar on)
 var _reel_prompt := false           # show the [E] "reel back" key above the astronaut
 var _node_prompt := Vector2.INF     # a node waiting for E: the key bobs over it (world position)
+var _cut_prompt := Vector2.INF      # a lit goal you can cut by holding E (world position)
+var _cut_progress := 0.0            # 0..1 while E is held there
 var _restart_prompt := false        # show the [R] key: no safe way back to the START
 var _hint_on := false               # this room has an H hint
 var _t := 0.0
@@ -489,6 +491,13 @@ func _draw_marker() -> void:
 		_draw_key(at + Vector2(18, -26 + roundf(sin(_t * 6.0) * 1.5)), "E")
 	if _restart_prompt and not _cinematic:
 		_draw_key(_player_on_screen() + Vector2(0, -48 + roundf(sin(_t * 5.0))), "R")
+	if _cut_prompt.is_finite() and not _cinematic:
+		# over a lit goal: hold E to cut its power. A red ring fills while you hold.
+		var at: Vector2 = get_viewport().get_canvas_transform() * _cut_prompt + Vector2(0, -28)
+		marker.draw_arc(at, 10.0, 0.0, TAU, 32, Color(UIStyle.RED, 0.3), 2.0)
+		if _cut_progress > 0.0:
+			marker.draw_arc(at, 10.0, -PI / 2.0, -PI / 2.0 + TAU * _cut_progress, 32, UIStyle.RED, 2.0)
+		_draw_key(at, "E")
 
 
 func _draw_arrow(world: Vector2, col: Color, dark: Color) -> void:
@@ -545,6 +554,24 @@ func set_node_prompt(world: Vector2) -> void:
 		return
 	_node_prompt = world
 	_update_keys()
+
+
+## Standing on a lit goal: hold E to cut its power (and redo that room). The E
+## key sits over the goal with a ring that fills as you hold. INF = none.
+func set_cut_prompt(world: Vector2, progress: float) -> void:
+	_cut_progress = clampf(progress, 0.0, 1.0)
+	if world == _cut_prompt:
+		return
+	_cut_prompt = world
+	_update_keys()
+
+
+## PIP says the wire needs an upgrade: the corner UPGRADE button hops.
+func flash_upgrade() -> void:
+	corner_upgrade.pivot_offset = corner_upgrade.size * 0.5     # grow from its middle
+	var tw := create_tween()
+	tw.tween_property(corner_upgrade, "scale", Vector2(1.25, 1.25), 0.08)
+	tw.tween_property(corner_upgrade, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK)
 
 
 ## Stranded after a fail (no safe way back to the START): an [R] key floats
@@ -919,7 +946,9 @@ func _update_keys() -> void:
 	elif _restart_prompt:
 		want = [["R", "back to start"]]
 	elif _node_prompt.is_finite():
-		want = [["E", "wrap node"]]
+		want = [["E", "connect node"]]
+	elif _cut_prompt.is_finite():
+		want = [["E", "hold to cut power"]]
 	elif _reel_prompt:
 		want = [["E", "reel back"]]
 	elif _judge:
@@ -928,7 +957,8 @@ func _update_keys() -> void:
 		want = [["H", "hint"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
 	else:
 		want = [["R", "restart"], ["M", "map"] if _map_ok else ["Esc", "menu"]]
-	keys_box.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key or _node_prompt.is_finite()
+	keys_box.visible = not _o2_on or _reel_prompt or _restart_prompt or _waiting_key or _node_prompt.is_finite() \
+			or _cut_prompt.is_finite()
 	if want == _keys_shown:
 		return
 	_keys_shown = want

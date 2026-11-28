@@ -63,13 +63,21 @@ for i in range(2, len(data) - 11, 12):
     x, y, src, ax, ay, alt = struct.unpack('<hhHHHH', data[i:i + 12])
     cells[(x, y)] = SYMBOL.get(kinds.get((src, ax, ay), ''), '?')
 
+# The text map starts at Godot tile (0, 0) (blank space before the map if it
+# starts further in), so a character's column and row are its tile coordinates.
+# Only a map painted left of / above (0, 0) can't do that: then the text starts
+# at ORIGIN, written next to the map (OUT + '.origin'), and the solver adds it
+# back to every route it exports.
+ox, oy = min(0, min(c[0] for c in cells)), min(0, min(c[1] for c in cells))
 xs = [c[0] for c in cells]
 ys = [c[1] for c in cells]
 rows = []
-for y in range(min(ys), max(ys) + 1):
-    rows.append(''.join(cells.get((x, y), ' ') for x in range(min(xs), max(xs) + 1)).rstrip())
+for y in range(oy, max(ys) + 1):
+    rows.append(''.join(cells.get((x, y), ' ') for x in range(ox, max(xs) + 1)).rstrip())
 
-os.makedirs(os.path.dirname(OUT), exist_ok=True)
+os.makedirs(os.path.dirname(OUT) or '.', exist_ok=True)
 open(OUT, 'w').write('\n'.join(rows))
+if OUT != '/dev/stdout':
+    open(OUT + '.origin', 'w').write(f'{ox} {oy}')
 print('\n'.join(rows))
-print(f'\n{len(cells)} tiles -> {OUT}  (top-left tile is ({min(xs)}, {min(ys)}) in Godot)')
+print(f'\n{len(cells)} tiles -> {OUT}  (top-left character is tile ({ox}, {oy}) in Godot)')

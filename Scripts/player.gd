@@ -48,6 +48,13 @@ var auto_dir := Vector2.ZERO
 var state: State = State.FREE
 var facing := Vector2i(0, 1)  # which way he looks: (0,1) = down, towards the camera
 var _last_x := 1              # last left/right he faced (for sprites with no "walk_up")
+var _diag := Vector2i(1, 1)   # the last diagonal he walked in...
+var _since_diag := 9.0        # ...and how long ago (s): letting go of two keys rarely
+                              # happens in the same frame, so a stop just after a
+                              # diagonal walk keeps the diagonal (see _idle_facing)
+## The frame of a walk animation where his feet are together: held still, it's
+## him standing (for sprites with no idle per direction, like the team's p4 one).
+const STAND_FRAME := 1
 
 var _drift_dir := Vector2.ZERO
 var _drift_target := Vector2.ZERO
@@ -83,6 +90,7 @@ func _ready() -> void:
 # speed on fast and slow computers.
 func _physics_process(delta: float) -> void:
 	_push_t = maxf(0.0, _push_t - delta)
+	_since_diag += delta
 	match state:
 		State.FREE, State.WIRED:
 			_walk(delta)
@@ -246,6 +254,9 @@ func _face(v: Vector2) -> void:
 		facing = f
 	if f.x != 0:
 		_last_x = f.x
+	if f.x != 0 and f.y != 0:
+		_diag = f
+		_since_diag = 0.0
 
 
 ## Picks which animation set to use: "down", "up", "right" or "left".
@@ -318,12 +329,12 @@ func _update_anim() -> void:
 		if facing.x != 0 and facing.y != 0:
 			diag = "walk_%s_%s" % ["down" if facing.y > 0 else "up", side]
 		anim = _first_existing([diag, "walk_" + dir, "walk_" + side])  # no walk_up? walk sideways
-	elif _carrying and dir == "down":
+	elif _carrying and _idle_facing() == Vector2i(0, 1) and not sprite.sprite_frames.has_animation("idle_down"):
 		anim = "carry"                                          # facing the camera, plug in hands
-	elif _carrying:
-		anim = _first_existing(["idle_" + dir, "carry"])
 	else:
-		anim = _first_existing(["idle_" + dir, "idle"])
+		_show_idle()                                            # standing still: face the way he went
+		return
+	sprite.flip_h = false
 	sprite.speed_scale = 1.0
 	# floating in zero-G: tilt gently from side to side
 	sprite.rotation = sin(_drift_t * 5.0) * 0.14 if state == State.DRIFT else 0.0
@@ -332,6 +343,54 @@ func _update_anim() -> void:
 	sprite.position.y = _sprite_y * sprite.scale.y
 	if sprite.animation != anim or not sprite.is_playing():
 		sprite.play(anim)
+
+
+## Which way he faces standing still: the way he last walked (a diagonal if he
+## was walking diagonally a moment ago, see _since_diag).
+func _idle_facing() -> Vector2i:
+	return _diag if _since_diag < 0.12 else facing
+
+
+## Standing still, facing the way he last walked. Best first:
+##   1. an idle made for that direction ("idle_left", "idle_down_right"...), if the sprite has one;
+##   2. down-right: the team's breathing "idle" (it's drawn three-quarter, facing down-right),
+##      and down-left: the same, mirrored;
+##   3. otherwise: the walk for that direction, held on the frame where his feet are together.
+func _show_idle() -> void:
+	var f := _idle_facing()
+	var key := ("down" if f.y > 0 else ("up" if f.y < 0 else ""))
+	var side := ("right" if f.x > 0 else ("left" if f.x < 0 else ""))
+	key = key + ("_" if key != "" and side != "" else "") + side      # "down_left", "up", "right"...
+	if key == "":
+		key = "down"
+	sprite.speed_scale = 1.0
+	# floating in zero-G: tilt gently from side to side (as in _update_anim)
+	sprite.rotation = sin(_drift_t * 5.0) * 0.14 if state == State.DRIFT else 0.0
+	sprite.position.y = _sprite_y * sprite.scale.y
+	var named := "idle_" + key
+	if sprite.sprite_frames.has_animation(named):
+		_play_held(named, -1, false)
+	elif key == "down_right" and sprite.sprite_frames.has_animation("idle"):
+		_play_held("idle", -1, false)
+	elif key == "down_left" and sprite.sprite_frames.has_animation("idle"):
+		_play_held("idle", -1, true)                          # the same idle, mirrored
+	else:
+		var walk := _first_existing(["walk_" + key, "walk_" + _dir_name(), "idle"])
+		_play_held(walk, STAND_FRAME if walk.begins_with("walk_") else -1, false)
+
+
+## Plays `anim` (frame -1), or holds it still on one frame.
+func _play_held(anim: String, frame: int, flip: bool) -> void:
+	sprite.flip_h = flip
+	if frame < 0:
+		if sprite.animation != anim or not sprite.is_playing():
+			sprite.play(anim)
+		return
+	frame = mini(frame, sprite.sprite_frames.get_frame_count(anim) - 1)
+	if sprite.animation != anim or sprite.frame != frame or sprite.is_playing():
+		sprite.animation = anim
+		sprite.set_frame_and_progress(frame, 0.0)
+		sprite.pause()
 
 
 ## The first animation in `names` that the sprite has (or the last one if none do).

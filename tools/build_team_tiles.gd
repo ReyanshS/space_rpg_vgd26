@@ -6,7 +6,8 @@
 # entry in the list on the left). Every tile gets a "kind", and the kind is what
 # gives it its rules (see level.gd): "wall" is solid, "floor" you walk on,
 # "start" / "goal" / "node" are the puzzle pads, "crate" is fixed cargo (solid
-# for you and the wire), "box" is a crate you can push.
+# for you and the wire), "box" is a crate you can push (only the palette's
+# striped crate is one: the team's wooden crates are all fixed).
 #
 # The three animation strips become ONE animated tile each: paint one square and
 # the whole animation plays there (Godot's tile animation: the frames sit side
@@ -41,7 +42,7 @@ const OBJECTS := {
 	Vector2i(1, 7): "goal",    # grey block: a goal without power (level.gd shows every goal like this until it's powered)
 	Vector2i(2, 7): "goal",    # blue goal block
 	Vector2i(3, 7): "start",   # yellow start block
-	Vector2i(4, 7): "box",     # small crate: you can push it
+	Vector2i(4, 7): "crate",   # the wooden crate: fixed cargo (only the striped crate moves, team, Nov 26 2026)
 	Vector2i(5, 6): "crate", Vector2i(6, 6): "crate",   # the big 2 x 2 crate: fixed cargo,
 	Vector2i(5, 7): "crate", Vector2i(6, 7): "crate",   # paint all four quarters
 }

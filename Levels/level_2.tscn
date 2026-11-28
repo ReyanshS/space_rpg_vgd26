@@ -17,8 +17,6 @@ layout = NodePath("Layout")
 level_number = 2
 level_name = "MAIN DECK"
 wire_time = 3.0
-node_time = 3.0
-node_hold = 1.0
 room_wire_time = PackedFloat32Array()
 o2_seconds = 50.0
 complete_message = "The main coupling is fixed. The ship's alive again."
@@ -53,7 +51,7 @@ advance_when = 6
 [node name="Step4Relay" type="Marker2D" parent="Tutorial" unique_id=258538740]
 position = Vector2(1040, 400)
 script = ExtResource("8_step")
-text = "Drift down to the blue relay and plug the wire in"
+text = "Drift down to the grey relay and plug the wire in"
 advance_when = 3
 
 [node name="Step5Onward" type="Marker2D" parent="Tutorial" unique_id=1359210264]

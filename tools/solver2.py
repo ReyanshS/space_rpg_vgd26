@@ -1,6 +1,6 @@
 # solver2.py: checks that every room of a level can be solved, and how.
 # Simulates the real rules (free walking, taut wire that can't cross walls/crates/red,
-# the START gives TIME seconds, each node adds NODE_TIME but never past what the START gave, the wire
+# the START gives TIME seconds, each node fills the timer back up to that, the wire
 # wraps round purple poles like a rope round a post, walking off a hull edge makes
 # you drift across open space) on a 4 px grid and lists every route that gets
 # there in time. "lowest timer" = the least time you ever have left on that route:
@@ -8,15 +8,20 @@
 # the live wire and still make it to the next pad in time?
 # Use it after changing a room to make sure there's no shortcut and no impossible segment.
 # The constants below must match player.gd (walk_speed, drift_speed)
-# and level.gd (wire_time, node_time, pad radii, CELL_RADIUS). The most the timer holds is
+# and level.gd (wire_time, pad radii, CELL_RADIUS). The most the timer holds is
 # the room's START time (level.gd _max_time), so there's no separate max any more.
 #     python tools/solver2.py Levels/level_1.tscn        (easiest: reads the map AND
 #                                                         the level's Rules numbers)
-#     python tools/solver2.py tools/out/level1.txt --time 3.5 --node 2.5 --max 4.5
+#     python tools/solver2.py tools/out/level1.txt --time 3.5
+#     python tools/solver2.py Levels/level_1.tscn --paths Data/routes/level_1.json --margin 3 --hints
+#     (the routes PIP's autopilot walks, AND each room's H hint, from the same routes;
+#      each stage gets the wire upgrades it needs, see UPGRADE_COSTS below)
 #     (a text map from map_from_scene.py, with the numbers typed in; skills not counted)
 import math, heapq, sys
 TILE = 32; FEET = (6, 4); WALK = 100.0; DRIFT = 150.0
-TIME = 3.0; NODE_TIME = 3.0                      # level.gd defaults (--time / --node)
+TIME = 3.0                                       # level.gd's default wire_time (--time)
+# A node fills the timer up and keeps it full while you stand on it (level.gd
+# _tick_timer), so leaving a node you always have the full START time.
 ROOM_TIME = {}                                   # stage number -> its own START time (room_wire_time)
 R = {'N': 22.0, 'G': 22.0}
 CELL_R = 14.0
@@ -24,6 +29,24 @@ BODY_UP = 10.0          # pads count from the feet AND from 10 px higher (level.
 
 
 MARGIN = 0.0   # --margin m: touch pads m px deeper than needed (routes a bot can follow safely)
+
+# The wire upgrade (game_state.gd: UPGRADE_COSTS, UPGRADE_STEP; read from there
+# when the solver starts, so they stay in step). Each stage is tried with the
+# START time first, then with one more upgrade at a time, but only as far as the
+# batteries you could have picked up BEFORE that stage pay for (every battery of
+# the earlier stages and earlier levels). The first time that leaves a fair
+# route (most forgiving lowest timer of at least MIN_SPARE) is the stage's time:
+# its "upgrades" go in the routes file, and the game's PIP reads them (level.gd
+# _needs_upgrades). --no-upgrades, or typing --time, turns this off.
+UPGRADE_COSTS = [3, 5, 7]
+UPGRADE_STEP = 1.0
+AUTO_UPGRADES = True
+MIN_SPARE = 0.25        # seconds: a route that leaves less than this is too tight for a person
+# A route the team picked for a stage (the hint and PIP's autopilot follow it):
+# stage number -> the nodes it wraps, in order, as the solver prints them. Kept in
+# tools/route_choices.json ({"level_1": {"4": ["N(25,20)", ...]}}) so it survives
+# the next run; --route 4=N(25,20),N(31,17) sets one just for this run.
+ROUTE_CHOICE = {}
 
 
 def near(x, y, pc, r):
@@ -124,6 +147,9 @@ def angle_between(u, v):
     return abs(math.atan2(cross(u, v), u[0] * v[0] + u[1] * v[1]))
 
 
+def dot(a, b): return a[0] * b[0] + a[1] * b[1]
+
+
 def rewrap(M, poles, base, wraps, frm, to):
     """The same as level.gd _update_wraps: the wire runs base -> wraps... -> feet.
     Moving from `frm` to `to` may unwrap the last poles, then wrap a new one.
@@ -134,7 +160,13 @@ def rewrap(M, poles, base, wraps, frm, to):
         p, sd = wraps[-1]
         q = wraps[-2][0] if len(wraps) > 1 else base
         side = sign(cross(sub(p, q), sub(to, p)))
-        if side == 0 or side == sd or not M.los(q, to): break
+        # comes off only when the wire swings back past straight: the side flips AND
+        # the feet are on past the pole (not doubling back half way round it, where
+        # the side flips too). level.gd counts the turn in radians instead
+        # (_anchor_turns, so it can coil); for anything up to three quarters of a
+        # turn round a pole (all a route ever needs), the two give the same answer.
+        straight_on = dot(sub(p, q), sub(to, p)) > 0
+        if side == 0 or side == sd or not straight_on or not M.los(q, to): break
         wraps.pop()
     a = wraps[-1][0] if wraps else base
     best = None; best_ang = 1e9
@@ -265,7 +297,7 @@ def name(key, kind): return f'{kind}({key[0]},{key[1]})'
 def solve_room(M, pads, poles, cells, start_key, max_depth=12, core=None, start_time=None):
     """Every route from START to GOAL: (labels, lowest timer on the way, cells,
     total seconds). The timer carries on from pad to pad: START gives TIME,
-    each node adds NODE_TIME (never above what the START gave). With `core` (a pixel
+    each node fills it back up to that. With `core` (a pixel
     position) there's no goal: a route is finished as soon as the wire (pads,
     poles + his hands) winds a full turn round the core."""
     sols = []
@@ -320,7 +352,7 @@ def solve_room(M, pads, poles, cells, start_key, max_depth=12, core=None, start_
         if kind == 'G':
             sols.append((labels + lab, ms, got, el, trail)); return
         if kind == 'N':
-            rec(pc, p, min(tl + NODE_TIME, t0), used | {key}, labels + lab, got, depth + 1, ms, wind, el, trail)
+            rec(pc, p, t0, used | {key}, labels + lab, got, depth + 1, ms, wind, el, trail)
 
     t0 = start_time or TIME           # also the most the timer can hold in this room
     rec(pads[start_key][1], pads[start_key][1], t0, frozenset([start_key]), [name(start_key, 'S')], frozenset(), 0,
@@ -525,26 +557,64 @@ if __name__ == '__main__':
     paths = {}
     halls = []           # crate plans for halls (rooms with no START): what PIP's autopilot pushes
     typed = set()          # numbers typed on the command line win over the scene's Rules
-    for flag, var in (('--time', 'TIME'), ('--node', 'NODE_TIME'), ('--margin', 'MARGIN'),
+    for flag, var in (('--time', 'TIME'), ('--margin', 'MARGIN'),
                       ('--crate-tries', 'MAX_TRIES')):
         if flag in args:
             i = args.index(flag); globals()[var] = type(globals()[var])(float(args[i + 1])); del args[i:i + 2]
             typed.add(var)
+    if 'TIME' in typed or '--no-upgrades' in args:
+        AUTO_UPGRADES = False          # a typed --time means: just this time, no upgrades
+    if '--no-upgrades' in args: args.remove('--no-upgrades')
+    write_hints_too = '--hints' in args      # also turn the routes into the level's H hints
+    if write_hints_too: args.remove('--hints')
+    scene_path = args[0]
+    typed_routes = {}
+    while '--route' in args:           # --route 4=N(25,20),N(31,17)
+        i = args.index('--route'); st_, pads_ = args[i + 1].split('='); del args[i:i + 2]
+        typed_routes[int(st_)] = [p.strip() for p in pads_.split(',') if p.strip()]
+    BATTERIES_BEFORE = 0               # batteries of earlier levels (added below for a scene)
     sys.argv = [sys.argv[0]] + args
+    import re, os
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:                               # the upgrade costs, straight from the game
+        gs = open(os.path.join(here, '..', 'Scripts', 'game_state.gd'), encoding='utf-8').read()
+        m = re.search(r'UPGRADE_COSTS[^=]*= \[([\d, ]+)\]', gs)
+        if m: UPGRADE_COSTS = [int(v) for v in m.group(1).split(',')]
+        m = re.search(r'UPGRADE_STEP := ([\d.]+)', gs)
+        if m: UPGRADE_STEP = float(m.group(1))
+    except OSError:
+        pass
+    if sys.argv[1].endswith('.tscn'):
+        lm = re.search(r'level_(\d+)\.tscn$', sys.argv[1])
+        if lm:
+            n = int(lm.group(1))
+            import json as _json
+            cf = os.path.join(here, 'route_choices.json')
+            if os.path.exists(cf):
+                for st_, v in _json.load(open(cf)).get(f'level_{n}', {}).items():
+                    ROUTE_CHOICE[int(st_)] = v
+            # every battery in the levels before this one could be in your pocket
+            import subprocess as _sp
+            for j in range(1, n):
+                other = os.path.join(os.path.dirname(sys.argv[1]), f'level_{j}.tscn')
+                if os.path.exists(other):
+                    tmp = os.path.join(here, 'out', f'_count_level_{j}.txt')
+                    _sp.run([sys.executable, os.path.join(here, 'map_from_scene.py'), other, tmp],
+                            check=True, stdout=_sp.DEVNULL)
+                    BATTERIES_BEFORE += open(tmp).read().count('*')
+    ROUTE_CHOICE.update(typed_routes)
     if sys.argv[1].endswith('.tscn'):
         # a level scene: make the text map with map_from_scene.py, and read the
         # level's Rules numbers (anything not set in the scene keeps level.gd's default)
-        import re, subprocess, os
-        here = os.path.dirname(os.path.abspath(__file__))
+        import subprocess
         txt = os.path.join(here, 'out', os.path.basename(sys.argv[1]).replace('.tscn', '.txt'))
         subprocess.run([sys.executable, os.path.join(here, 'map_from_scene.py'), sys.argv[1], txt],
                        check=True, stdout=subprocess.DEVNULL)
         scene = open(sys.argv[1], encoding='utf-8').read()
         root = scene[scene.index('[node '):]
         root = root[:root.index('[node ', 1)] if '[node ' in root[1:] else root
-        for prop, var in (('wire_time', 'TIME'), ('node_time', 'NODE_TIME')):
-            m = re.search(rf'^{prop} = ([\d.]+)', root, re.M)
-            if m and var not in typed: globals()[var] = float(m.group(1))
+        m = re.search(r'^wire_time = ([\d.]+)', root, re.M)
+        if m and 'TIME' not in typed: TIME = float(m.group(1))
         m = re.search(r'^room_wire_time = PackedFloat32Array\(([^)]*)\)', root, re.M)
         if m and m.group(1).strip():
             for i, v in enumerate(m.group(1).split(',')):
@@ -552,8 +622,10 @@ if __name__ == '__main__':
         sys.argv[1] = txt
     g, floating = floating_cells(load(sys.argv[1]))
     poles = [center(c, r) for r, row in enumerate(g) for c, ch in enumerate(row) if ch == 'B']
-    print(f'Rules: START {TIME} s (also the most the timer holds), node +{NODE_TIME} s' +
-          (f', own START times {ROOM_TIME}' if ROOM_TIME else ''))
+    print(f'Rules: START {TIME} s (also the most the timer holds), a node fills the timer up' +
+          (f', own START times {ROOM_TIME}' if ROOM_TIME else '') +
+          (f'; wire upgrades {UPGRADE_COSTS} batteries, +{UPGRADE_STEP} s each, used when a stage needs them'
+           f' ({BATTERIES_BEFORE} batteries in earlier levels)' if AUTO_UPGRADES else ''))
     rms = rooms(g)
     order, room_of, groups, area = walking_order(g, rms)
     only = {int(a) for a in sys.argv[2:]}          # e.g.  solver2.py map.txt 3  = only stage 3
@@ -591,59 +663,88 @@ if __name__ == '__main__':
         sockets = [(c, r) for (c, r) in cells_of_room if g[r][c] == 'o']
         # movable crates: every layout you can push them into, fewest pushes first
         layouts = push_configs(gopen, cells_of_room, st[0])
-        sols = []
-        clamp_of = {}                  # id(solution) -> socket used
-        pushes_of = {}                 # id(solution) -> the crate pushes it needs first
-        grid_of = {}                   # id(solution) -> the map with its crates where they ended up
-        found_at = None
         goals = [p for p, v in pads.items() if v[0] == 'G'] or cores
-        tried = 0; shorted_seen = set()
-        for gconf, pushes in layouts:
-            # Which red tiles this layout shorted out. A layout that shorts out a new
-            # set is always checked (that's what crates are for); others only while
-            # we're still among the first MAX_TRIES (fewest pushes first).
-            shorted = frozenset((c, r) for (c, r) in cells_of_room if gopen[r][c] == 'X' and gconf[r][c] == '.')
-            new_short = shorted not in shorted_seen
-            shorted_seen.add(shorted)
-            if not new_short and (tried >= MAX_TRIES or (found_at is not None and tried >= found_at + 6)):
-                continue
-            # quick check first: can you even get from the START to the goal?
-            if goals and not walk_reaches(gconf, st[0], goals[0], QUICK_BLOCK):
-                continue
-            tried += 1
-            Mc = M if not pushes else Map(gconf)
-            for sock in [None] + sockets:
-                Mx, px = Mc, poles
-                if sock is not None:
-                    gg = [list(row) for row in Mc.g]
-                    gg[sock[1]][sock[0]] = 'B'
-                    Mx, px = Map([''.join(row) for row in gg]), poles + [center(*sock)]
-                for s in solve_room(Mx, pads, px, cells, st[0], max_depth=6 if core else 12, core=core,
-                                    start_time=ROOM_TIME.get(k + 1)):
-                    if sock is not None:
-                        s = (s[0] + [f'(clamp in {sock})'],) + tuple(s[1:])
-                    if pushes:
-                        s = (['(crates moved)'] + s[0],) + tuple(s[1:])
-                    clamp_of[id(s)] = sock
-                    pushes_of[id(s)] = pushes
-                    grid_of[id(s)] = gconf
-                    sols.append(s)
-                    if found_at is None: found_at = tried
+
+        def solve_stage(start_time):
+          sols = []
+          clamp_of = {}                  # id(solution) -> socket used
+          pushes_of = {}                 # id(solution) -> the crate pushes it needs first
+          grid_of = {}                   # id(solution) -> the map with its crates where they ended up
+          found_at = None
+          tried = 0; shorted_seen = set()
+          for gconf, pushes in layouts:
+              # Which red tiles this layout shorted out. A layout that shorts out a new
+              # set is always checked (that's what crates are for); others only while
+              # we're still among the first MAX_TRIES (fewest pushes first).
+              shorted = frozenset((c, r) for (c, r) in cells_of_room if gopen[r][c] == 'X' and gconf[r][c] == '.')
+              new_short = shorted not in shorted_seen
+              shorted_seen.add(shorted)
+              if not new_short and (tried >= MAX_TRIES or (found_at is not None and tried >= found_at + 6)):
+                  continue
+              # quick check first: can you even get from the START to the goal?
+              if goals and not walk_reaches(gconf, st[0], goals[0], QUICK_BLOCK):
+                  continue
+              tried += 1
+              Mc = M if not pushes else Map(gconf)
+              for sock in [None] + sockets:
+                  Mx, px = Mc, poles
+                  if sock is not None:
+                      gg = [list(row) for row in Mc.g]
+                      gg[sock[1]][sock[0]] = 'B'
+                      Mx, px = Map([''.join(row) for row in gg]), poles + [center(*sock)]
+                  for s in solve_room(Mx, pads, px, cells, st[0], max_depth=6 if core else 12, core=core,
+                                      start_time=start_time):
+                      if sock is not None:
+                          s = (s[0] + [f'(clamp in {sock})'],) + tuple(s[1:])
+                      if pushes:
+                          s = (['(crates moved)'] + s[0],) + tuple(s[1:])
+                      clamp_of[id(s)] = sock
+                      pushes_of[id(s)] = pushes
+                      grid_of[id(s)] = gconf
+                      sols.append(s)
+                      if found_at is None: found_at = tried
+          return sols, clamp_of, pushes_of, grid_of, tried
+
+        def fair(sols):
+            pick = [x for x in sols if chosen(x)] if want else sols
+            return max((x[1] for x in pick), default=-1.0)
+
+        want = ROUTE_CHOICE.get(k + 1)
+        def chosen(x):
+            return [l.split('@')[0] for l in x[0] if l.startswith('N(')] == want
+        base = ROOM_TIME.get(k + 1, TIME)
+        have = BATTERIES_BEFORE + sum(1 for o in order[:k] for (c, r) in rms[o]
+                                      if g[r][c] == '*' or (c, r) in floating)
+        ups = 0
+        while True:
+            sols, clamp_of, pushes_of, grid_of, tried = solve_stage(base + ups * UPGRADE_STEP)
+            if not AUTO_UPGRADES or fair(sols) >= MIN_SPARE or ups >= len(UPGRADE_COSTS):
+                break
+            print(f'    (START {base + ups * UPGRADE_STEP} s: no fair route, trying one more wire upgrade)')
+            ups += 1
+        cost = sum(UPGRADE_COSTS[:ups])
         if len(layouts) > 1:
             print(f'    crates: {len(layouts)} layouts you can push them into, checked the wire in {tried}')
         kind = f'CORE {cores[0]}: wrap the wire round it' if cores else 'goal'
-        print(f'Stage {k + 1} (start {st[0]}, {kind}, START {ROOM_TIME.get(k + 1, TIME)} s): {len(sols)} solutions')
+        print(f'Stage {k + 1} (start {st[0]}, {kind}, START {base + ups * UPGRADE_STEP} s): {len(sols)} solutions')
+        if ups:
+            print(f'    needs {ups} wire upgrade{"s" if ups > 1 else ""} ({cost} batteries; '
+                  f'{have} could be picked up before this stage' + (')' if have >= cost else ': NOT ENOUGH)'))
+        if want:
+            print(f'    the team\'s route: {" -> ".join(want)}' + ('' if any(chosen(x) for x in sols) else '  NOT FOUND, using the most forgiving one'))
         if sockets and not any(clamp_of[id(s)] is None for s in sols) and sols:
             print('    needs the clamp: no route without it')
         if sols and not any(not pushes_of[id(s)] for s in sols):
             print(f'    needs the crates moved: at least {min(len(pushes_of[id(s)]) for s in sols)} pushes')
         if sols:
-            top = max(sols, key=lambda x: (x[1], -x[3]))
-            print(f'    most forgiving route: lowest timer {top[1]:.2f} s')
+            pool = [x for x in sols if chosen(x)] if want and any(chosen(x) for x in sols) else sols
+            top = max(pool, key=lambda x: (x[1], -x[3]))
+            print(f'    {"the route used" if pool is not sols else "most forgiving route"}: lowest timer {top[1]:.2f} s')
             paths[k + 1] = {'labels': top[0], 'lowest': top[1], 'points': [[p[0], p[1]] for p in top[4]],
                             'wraps': wrap_events(top[4]), 'start': list(st[0]),
                             'clamp': list(clamp_of[id(top)]) if clamp_of[id(top)] else None,
-                            'pushes': [list(p) for p in pushes_of[id(top)]]}
+                            'pushes': [list(p) for p in pushes_of[id(top)]],
+                            'upgrades': ups, 'time': base + ups * UPGRADE_STEP, 'batteries_before': have}
             # the crates stay where this route left them (later stages see them there)
             for (c, r) in cells_of_room:
                 row = list(g[r]); row[c] = grid_of[id(top)][r][c]; g[r] = ''.join(row)
@@ -661,6 +762,27 @@ if __name__ == '__main__':
                 ok = [k for k, (s, got, _t) in best.items() if c in got]
                 print(f'    cell {c}: ' + ('collectible' if ok else 'NOT collectible on any route'))
     if paths_out:
-        import json
+        import json, os
         if halls: paths['halls'] = halls
+        # the text map may start left of / above Godot's tile (0, 0) (map_from_scene.py
+        # writes where): move every route back into Godot's tiles and pixels
+        origin = sys.argv[1] + '.origin'
+        ox, oy = (int(v) for v in open(origin).read().split()) if os.path.exists(origin) else (0, 0)
+        if (ox, oy) != (0, 0):
+            for k, r in paths.items():
+                if k == 'halls':
+                    for h in r:
+                        h['hall'] = [h['hall'][0] + ox, h['hall'][1] + oy]
+                        h['pushes'] = [[p[0] + ox, p[1] + oy] + list(p[2:]) for p in h['pushes']]
+                    continue
+                r['points'] = [[p[0] + ox * TILE, p[1] + oy * TILE] for p in r['points']]
+                r['start'] = [r['start'][0] + ox, r['start'][1] + oy]
+                if r['clamp']:
+                    r['clamp'] = [r['clamp'][0] + ox, r['clamp'][1] + oy]
+                r['pushes'] = [[p[0] + ox, p[1] + oy] + list(p[2:]) for p in r['pushes']]
+                r['wraps'] = [[e[0], e[1], [[w[0] + ox, w[1] + oy] + list(w[2:]) for w in e[2]]] for e in r['wraps']]
         json.dump(paths, open(paths_out, 'w'))
+        if write_hints_too and scene_path.endswith('.tscn'):
+            sys.path.insert(0, here)
+            from write_hints import write_hints
+            write_hints(scene_path, paths_out)

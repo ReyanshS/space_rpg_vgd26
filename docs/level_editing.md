@@ -37,7 +37,7 @@ Layout either way.
 | floor / wall | `.` / `#` | walls (and doors, barriers) split the map into rooms |
 | start | `S` | yellow pad: press E here to grab the wire. **One per room.** |
 | goal | `G` | blue pad: touch it with the wire to power the room |
-| node | `N` | orange: stand on it and press E (or click) to wrap the wire round it; adds Node Time (up to the START time) and holds the clock for Node Hold seconds |
+| node | `N` | orange: stand on it and press E (or click) to connect the wire (it bends there); the timer fills up to the START time and stays full for as long as you stand on it. Step off and it counts down from full |
 | pole | `B` | support pillar (steel column with a purple ring): solid; the wire wraps round it when you walk past it. The column covers the tile above it, so don't put anything there players must see |
 | discharge | `X` | red: zaps you, and the wire can't cross it |
 | blinker | `x` | blinking grate: zaps only while lit |
@@ -203,8 +203,7 @@ The same level node also has **Level** (name, results message), **Rules**,
 **Rules** is where the difficulty lives:
 - **Wire Time**: seconds from the START. **Room Wire Time**: one number per room (in
   walking order, like Room Names) to give a room its own START time; 0 = use Wire Time.
-- **Node Time**: seconds a node adds. The timer never goes above the START time (Wire Time): a node or battery only tops it back up.
-- **Node Hold**: how long standing on a node holds the clock.
+- The timer never goes above the START time (Wire Time): a node fills it back up to that, a battery tops it up.
 - **Cell Bonus**: seconds a battery adds.
 After changing any of them (or the map), check every room still works:
 `python tools/solver2.py Levels/level_2.tscn`. Look at "most forgiving route: lowest
@@ -228,6 +227,12 @@ Open the **Hints** node. Each child is a **FloorGuide** (a Line2D).
 - **Hint Only** ticked: hidden until the player presses **H** (PIP offers it after
   two fails). Unticked: always visible, like a tutorial path.
 - **New one:** right-click Hints > **Instantiate Child Scene** > `Scenes/floor_guide.tscn`.
+- **Or let the solver draw them** (close Godot first): `python3 tools/solver2.py
+  Levels/level_1.tscn --paths Data/routes/level_1.json --margin 3 --hints`. Every room gets
+  its hint from the solver's route (the same one PIP walks in judge mode). Rooms the
+  tutorial already guides get none. It also works out which rooms need a wire upgrade
+  (see 6b). Want the hint to take YOUR route through a room? Put its nodes, in order, in
+  `tools/route_choices.json`, written the way the solver prints them, e.g. `"4": ["N(25,20)", "N(31,17)"]`.
 
 ## 6. Rogue PIP (Level 3)
 
@@ -253,6 +258,15 @@ its number, his shutdown time and a dotted flight path. On the **RoguePip** node
 - The upgrade screen shows after a room you power, when the player can afford the next
   upgrade. Its first PIP line is the level's
   **Pip Upgrade** (Inspector, PIP's rule lines).
+- **Rooms that need an upgrade** aren't a setting: the solver run in section 5 tries each
+  room at the START time, then with one more upgrade at a time (only as far as the batteries
+  in the rooms and levels before it could pay for), and writes how many it needs. After two
+  fails in such a room PIP says so: "Press U" if you can buy it, else how many batteries
+  you're short and which powered room still has some.
+- **Going back for batteries:** stand on the lit blue pad of a room you've powered and
+  **hold E**. Its power is cut (just that room) and you can do it again. Batteries you kept
+  stay yours; the missed ones are still there. The lines are in PIP's rule lines: **Pip
+  Needs Upgrade**, **Pip Needs Batteries**, **Pip Redo Room**, **Pip Cut Hint**, **Pip Cut Done**.
 - The save file is `user://save.cfg`. To start clean while testing, press **N** on the title
   screen (or delete it: Project > Open User Data Folder).
 
@@ -316,10 +330,10 @@ python tools/solver2.py Levels/level_1.tscn --paths Data/routes/level_1.json --m
 
 On the title screen, top left: **JUDGE MODE**. When it's on:
 - LEVEL 1 / 2 / 3 buttons appear, so a judge can jump straight to any level.
-- In a level, **R** makes PIP take over: he walks to the next room, sets the clamp
+- In a level, **P** makes PIP take over: he walks to the next room, sets the clamp
   down if it's needed, grabs the wire and walks the route (no timer, no zaps). Then
-  you get the controls back. R again for the next room. After two fails PIP says
-  "Press R and I'll walk you through it" instead of offering a hint.
+  you get the controls back. P again for the next room (R still restarts a room). After two
+  fails PIP says "Press P and I'll walk you through it" instead of offering a hint.
 - If the Output panel says **"Autopilot couldn't walk room N"**, PIP gave up and just
   powered the room. Almost always the map changed: make the routes again (section 8).
 - Blinking grates: PIP waits at the edge until he can cross while every grate under him

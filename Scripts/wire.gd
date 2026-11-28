@@ -9,6 +9,17 @@
 # (Shaders/wire_current.gdshader) that makes bright pulses run along it.
 # Every line and spark is on the glow light channel (LightFX.glow), so wires
 # stay bright even though the ship is dark.
+#
+# Poles: the rules treat a pole as a corner at its centre (level.gd, and the
+# solver). Drawn like that, the wire looked like it snapped to the middle of
+# the pillar. So when the wire goes round a pole it's DRAWN like a rope round a
+# post: straight to where it just touches the pillar's base, round the outside
+# of the base, and off again on the far side (_display_points). The base is an
+# ellipse (the game is seen from above at a slant). The front half of each loop
+# is drawn again on top of the pillar (_fronts), the back half stays behind it.
+# Walk round a pole more than once and the wire coils round it: every extra full
+# turn is one more loop, a little wider than the last (COIL_GAP), so you can
+# count them. Nothing is ever cut off or simplified.
 # ---------------------------------------------------------------------------
 class_name Wire
 extends Node2D
@@ -27,6 +38,10 @@ static var _spark_tex: ImageTexture
 
 var style: Style = Style.CABLE
 var anchors := PackedVector2Array()
+## For each anchor: Vector4(side, radius x, radius y, turn) if the wire wraps
+## round a post there (side = which way it turns: +1 / -1; turn = how far round
+## it has gone so far, in radians, from level.gd), or Vector4.ZERO for a pad.
+var wraps: Array[Vector4] = []
 var live_end := Vector2.ZERO
 var live := false
 var powered := false
@@ -38,6 +53,15 @@ var _mat: ShaderMaterial
 var _sparks: CPUParticles2D
 var _width := 3.0
 var _base_color := CABLE_COLOR
+var _fronts: Array = []        # [outline, core] Line2D pairs: the front of each loop round a post
+## Every post in the room (level.gd fills it): Vector4(centre x, centre y, radius x,
+## radius y). A straight stretch of wire that would cut through one of their
+## bases is drawn bending round its edge instead (_around_posts): the wire only
+## wraps for the rules once it crosses the centre, but it never looks like it
+## goes through the post on the way.
+var posts: Array[Vector4] = []
+const ARC_STEP := PI / 10.0    # how finely a loop is drawn (radians per point)
+const COIL_GAP := 2.5          # each extra full turn round a post sits this many px further out
 
 
 # _init runs when you write Wire.new(...). Its arguments come from new().
@@ -132,14 +156,18 @@ func _set_look(base: Color, pulse: Color, speed: float, intensity: float) -> voi
 
 func begin(p: Vector2) -> void:
 	anchors = PackedVector2Array([p])
+	wraps = [Vector4.ZERO]
 	live = true
 	live_end = p
 	_sparks.emitting = true
 	_refresh()
 
 
-func add_anchor(p: Vector2) -> void:
+## `wrap`: Vector4(side, radius x, radius y, turn) when the wire goes round a
+## post here (a pole or the clamp), drawn as a loop round its base; zero for a pad.
+func add_anchor(p: Vector2, wrap := Vector4.ZERO) -> void:
 	anchors.append(p)
+	wraps.append(wrap)
 	_refresh()
 
 
@@ -147,6 +175,14 @@ func add_anchor(p: Vector2) -> void:
 func remove_last_anchor() -> void:
 	if anchors.size() > 1:
 		anchors.remove_at(anchors.size() - 1)
+		wraps.remove_at(wraps.size() - 1)
+		_refresh()
+
+
+## How far the wire has turned round the post at anchor i (level.gd keeps count).
+func set_turn(i: int, turn: float) -> void:
+	if i >= 0 and i < wraps.size() and wraps[i] != Vector4.ZERO:
+		wraps[i].w = turn
 		_refresh()
 
 
@@ -165,6 +201,9 @@ func finish() -> void:
 
 func set_points(pts: PackedVector2Array) -> void:
 	anchors = pts
+	wraps.clear()
+	for i in pts.size():
+		wraps.append(Vector4.ZERO)
 	live = false
 	_refresh()
 
@@ -177,9 +216,180 @@ func get_points() -> PackedVector2Array:
 
 
 func _refresh() -> void:
-	var pts := get_points()
+	var fronts: Array = []
+	var pts := _display_points(fronts)
 	_outline.points = pts
 	_core.points = pts
+	# the front half of each loop, drawn again over the pillar
+	while _fronts.size() < fronts.size():
+		var o := _make_line(_width + 2.0, _outline.default_color)
+		var c := _make_line(_width, Color.WHITE)
+		c.material = _mat
+		c.texture = white_texture()
+		c.texture_mode = Line2D.LINE_TEXTURE_TILE
+		c.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+		for l in [o, c]:
+			l.z_index = 4        # wires are at -5: this is -1, the pillar's own depth (drawn after it)
+			add_child(l)
+		_fronts.append([o, c])
+	for i in _fronts.size():
+		var seg: PackedVector2Array = fronts[i] if i < fronts.size() else PackedVector2Array()
+		_fronts[i][0].points = seg
+		_fronts[i][1].points = seg
+		_fronts[i][0].default_color = _outline.default_color
+
+
+## The points the wire is drawn through: the anchors and the live end, with a
+## loop round every post it's wrapped round. `fronts` gets the front part of
+## each loop (the side facing the camera), to be drawn again over the post.
+func _display_points(fronts: Array) -> PackedVector2Array:
+	var pts := get_points()
+	if pts.size() < 3:
+		return _around_posts(pts, fronts)       # no corners yet: still bend round posts
+	var out := PackedVector2Array([pts[0]])
+	for i in range(1, pts.size() - 1):
+		var w: Vector4 = wraps[i] if i < wraps.size() else Vector4.ZERO
+		if w == Vector4.ZERO:
+			out.append(pts[i])
+			continue
+		var loop := _loop(out[out.size() - 1], pts[i], pts[i + 1], w)
+		out.append_array(loop)
+		# the front of the loop: every stretch below the post's centre (nearer the
+		# camera); a coiled wire has one per turn
+		var front := PackedVector2Array()
+		for q in loop:
+			if q.y >= pts[i].y - 0.5:
+				front.append(q)
+			else:
+				if front.size() >= 2:
+					fronts.append(front)
+				front = PackedVector2Array()
+		if front.size() >= 2:
+			fronts.append(front)
+	out.append(pts[pts.size() - 1])
+	return _around_posts(out, fronts)
+
+
+## Bends every straight stretch of `path` that would cut through a post's base
+## round the edge it's touching (the side its middle passes on). Bends below a
+## post's centre go into `fronts` too (drawn over the pillar).
+func _around_posts(path: PackedVector2Array, fronts: Array) -> PackedVector2Array:
+	if posts.is_empty() or path.size() < 2:
+		return path
+	var out := PackedVector2Array([path[0]])
+	for i in range(1, path.size()):
+		var a := path[i - 1]
+		var b := path[i]
+		for post in posts:
+			var bend := _bend_round(a, b, post)
+			if bend.is_empty():
+				continue
+			out.append_array(bend)
+			var front := PackedVector2Array()       # the part in front of the post's centre
+			for q in bend:
+				if q.y >= post.y - 0.5:
+					front.append(q)
+			if front.size() >= 2:
+				fronts.append(front)
+			break
+		out.append(b)
+	return out
+
+
+## If the straight wire a -> b cuts through the base of `post`, the points of
+## the wire going round its edge instead (tangent in, arc, tangent out);
+## otherwise nothing. Done in "circle space" (the base squashed to a circle).
+func _bend_round(a: Vector2, b: Vector2, post: Vector4) -> PackedVector2Array:
+	var c := Vector2(post.x, post.y)
+	var r := post.z
+	var k := post.z / maxf(post.w, 0.01)
+	var a2 := Vector2(a.x, c.y + (a.y - c.y) * k)
+	var b2 := Vector2(b.x, c.y + (b.y - c.y) * k)
+	var ab := b2 - a2
+	var len2 := ab.length_squared()
+	if len2 < 1.0 or a2.distance_to(c) <= r + 0.5 or b2.distance_to(c) <= r + 0.5:
+		return PackedVector2Array()
+	var t := clampf((c - a2).dot(ab) / len2, 0.0, 1.0)
+	var near := a2 + ab * t                   # the point of the wire closest to the post
+	if t <= 0.0 or t >= 1.0 or near.distance_to(c) >= r - 0.5:
+		return PackedVector2Array()           # it doesn't cut through the base
+	# go round the edge on the side the wire passes (where its closest point is):
+	# try both ways round and keep the short one that goes past that side
+	var toward := (near - c).normalized() if near.distance_to(c) > 0.01 else ab.orthogonal().normalized()
+	var dir := 0.0
+	var t1 := 0.0
+	var arc := 0.0
+	for d in [1.0, -1.0]:
+		var s1: float = (a2 - c).angle() + d * acos(clampf(r / a2.distance_to(c), -1.0, 1.0))
+		var s2: float = (b2 - c).angle() - d * acos(clampf(r / b2.distance_to(c), -1.0, 1.0))
+		var arc_d := fposmod(d * (s2 - s1), TAU)
+		if arc_d <= PI and Vector2.from_angle(s1 + d * arc_d * 0.5).dot(toward) >= 0.0:
+			dir = d
+			t1 = s1
+			arc = arc_d
+			break
+	if dir == 0.0:
+		return PackedVector2Array()
+	var steps := maxi(2, ceili(arc / ARC_STEP))
+	var bend := PackedVector2Array()
+	for s in steps + 1:
+		var q := c + Vector2.from_angle(t1 + dir * arc * s / steps) * r
+		bend.append(Vector2(q.x, c.y + (q.y - c.y) / k))
+	return bend
+
+
+## The wire coming from `a`, going round the post at `c`, leaving towards `b`.
+## The post's base is an ellipse (radii w.y across, w.z deep). Squashing the
+## picture by w.y / w.z makes it a circle, where tangents are easy: from a
+## point at distance d from a circle of radius r, the tangent touches it at
+## an angle acos(r / d) either side of the line to the centre.
+## w.w = how far round the wire has gone in all: each full turn beyond the
+## first loop adds a coil, a spiral getting COIL_GAP wider per turn.
+func _loop(a: Vector2, c: Vector2, b: Vector2, w: Vector4) -> PackedVector2Array:
+	var r := w.y
+	var k := w.y / maxf(w.z, 0.01)
+	var to_circle := func(p: Vector2) -> Vector2: return Vector2(p.x, c.y + (p.y - c.y) * k)
+	var from_circle := func(p: Vector2) -> Vector2: return Vector2(p.x, c.y + (p.y - c.y) / k)
+	var a2: Vector2 = to_circle.call(a)
+	var b2: Vector2 = to_circle.call(b)
+	if a2.distance_to(c) <= r + 0.5 or b2.distance_to(c) <= r + 0.5:
+		return PackedVector2Array([c])          # too close to wrap round: just the corner
+	# Which way round the post the wire goes: the way it turns (level.gd counts
+	# the turn: w.w, with its sign; w.x is the side it first swung). Going that
+	# way round, the wire arrives where a line from `a` just grazes the post and
+	# leaves where a line to `b` just grazes it. In angles round the centre:
+	#   arrives at  (direction of a) + dir * acos(r / distance to a)
+	#   leaves at   (direction of b) - dir * acos(r / distance to b)
+	# This works however far round it has gone (it used to pick "the outside of
+	# the bend", which picks the wrong side once you're more than half way round).
+	var dir := signf(w.w) if w.w != 0.0 else w.x
+	if dir == 0.0:
+		dir = 1.0
+	var t1 := (a2 - c).angle() + dir * acos(clampf(r / a2.distance_to(c), -1.0, 1.0))
+	var turn := absf(w.w)
+	# how far round between arriving and leaving (first without the extra coils)
+	var t2 := (b2 - c).angle() - dir * acos(clampf(r / b2.distance_to(c), -1.0, 1.0))
+	var arc := fposmod(dir * (t2 - t1), TAU)
+	if arc - turn > PI:
+		arc = 0.0                               # only just touching: no loop at all (not a full one)
+	var coils := maxi(0, roundi((turn - arc) / TAU))
+	if coils > 0:
+		# every full turn adds a coil, each a little wider: it leaves from the outermost
+		var r_end := r + COIL_GAP * coils
+		if b2.distance_to(c) > r_end + 0.5:
+			t2 = (b2 - c).angle() - dir * acos(clampf(r_end / b2.distance_to(c), -1.0, 1.0))
+			arc = fposmod(dir * (t2 - t1), TAU)
+			if arc - (turn - TAU * coils) > PI:
+				arc = 0.0
+	var delta := dir * (arc + TAU * coils)
+	var steps := maxi(2, ceili(absf(delta) / ARC_STEP))
+	var out := PackedVector2Array()
+	for s in steps + 1:
+		var u := float(s) / steps
+		var radius := r + COIL_GAP * coils * u            # a spiral: each turn a little wider
+		var q := c + Vector2.from_angle(t1 + delta * u) * radius
+		out.append(from_circle.call(q))
+	return out
 
 
 ## 0 = plenty of time, 1 = out of time. The cable heats up and flickers.
@@ -204,7 +414,9 @@ func strain(at: Vector2) -> void:
 	_outline.default_color = Color(0.8, 0.15, 0.1)
 	var tw := create_tween()
 	tw.tween_interval(0.12)
-	tw.tween_callback(func() -> void: _outline.default_color = Color(0.07, 0.05, 0.02))
+	tw.tween_callback(func() -> void:
+		_outline.default_color = Color(0.07, 0.05, 0.02)
+		_refresh())
 
 
 # ------------------------------------------------------------------ animations
@@ -224,6 +436,13 @@ func power_flow(duration: float) -> void:
 	fade.tween_callback(func() -> void: _flow.visible = false)
 
 
+## The power was cut (level.gd _cut_room): the floor conduit goes dark again.
+func set_unpowered() -> void:
+	powered = false
+	if style == Style.CONDUIT:
+		_set_look(CONDUIT_OFF, CONDUIT_OFF, 0.0, 0.0)
+
+
 func set_powered() -> void:
 	powered = true
 	_mat.set_shader_parameter("flicker", 0.0)
@@ -235,7 +454,7 @@ func set_powered() -> void:
 
 ## Draws the bright "flow" line only part of the way: t=0 nothing, t=1 everything.
 func _set_flow_progress(t: float) -> void:
-	var pts := get_points()
+	var pts := _display_points([])
 	if pts.size() < 2:
 		return
 	var total := 0.0
