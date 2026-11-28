@@ -677,6 +677,9 @@ m6x11 (the old font) is still in `Assets/fonts`, unused: it looked chunky becaus
   `Game.dev_room` and loads the level; `_apply_test_start()` then runs the same
   `_start_in_room()` as TestStart, on the room's START (`_dev_spot()`). While open it freezes
   the current scene (process_mode DISABLED, also the HUD's Always nodes) so keys don't leak.
+  Under NODE REST: **WIRE UPGRADES 0 1 2 3** (Nov 27 2026, Reyansh: "select their battery
+  upgrade level"): sets `Game.wire_upgrades` and emits `batteries_changed`, so the wire time,
+  its cap and bar change at once (even while carrying). Saved with the game's next save.
 - **Tutorial**: `Scripts/tutorial.gd` on the `Tutorial` node runs its `TutorialStep` children
   (`Scripts/tutorial_step.gd`, Marker2D) in tree order. Each step has `text`, `advance_when`
   (GRAB_WIRE, TOUCH_NODE, WRAP_POLE, SOLVE_ROOM, ENTER_NEXT_ROOM, REACH_HERE, DRIFT) and its

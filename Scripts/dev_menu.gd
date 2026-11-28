@@ -11,6 +11,11 @@
 # (Game.node_rest, used by level.gd _node_rest). Flip it and keep playing: it
 # works straight away. Every run starts with it off.
 #
+# Under it, WIRE UPGRADES 0 1 2 3: how many wire upgrades you own
+# (Game.wire_upgrades, +1 s on the wire each), so you can test a room at any
+# wire length without collecting batteries. It works straight away too, and
+# it's saved with the game next time the game saves (like a real upgrade).
+#
 # Game (game_state.gd) only adds this menu when the game runs from the Godot
 # editor (F5 / F6). Exported and web builds never have it.
 #
@@ -30,6 +35,7 @@ var _root: Control             # everything the menu draws (null until it first 
 var _first_button: Button
 var _frozen: Array = []        # [node, its process_mode] pairs we switched off
 var _focus_before: Control     # the button that had focus before we opened
+var _upgrade_buttons: Array[Button] = []   # WIRE UPGRADES 0..3 (the pressed one = what you own)
 
 
 func _ready() -> void:
@@ -58,6 +64,7 @@ func open() -> void:
 		_build()
 	_focus_before = get_viewport().gui_get_focus_owner()
 	_freeze_scene()
+	_show_upgrades()                # (bought or set somewhere else since last time?)
 	_root.visible = true
 	if _first_button:
 		_first_button.grab_focus()
@@ -141,6 +148,7 @@ func _build() -> void:
 	top.add_child(KeyHint.make(["`"], "close", DIM))
 
 	box.add_child(_rule_switch())
+	box.add_child(_upgrade_row())
 
 	var columns := HBoxContainer.new()
 	columns.add_theme_constant_override("separation", 8)
@@ -169,6 +177,41 @@ func _rule_switch() -> HBoxContainer:
 	row.add_child(b)
 	row.add_child(_label("Wire on a node and you stay close: the timer waits.", DIM))
 	return row
+
+
+## WIRE UPGRADES 0 1 2 3: pick how many wire upgrades you own. Each button says
+## the wire time it gives (the levels start at 3 s). One of them is always down.
+func _upgrade_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(_label("WIRE UPGRADES", UIStyle.AMBER))
+	var group := ButtonGroup.new()          # (only one of them can be down)
+	_upgrade_buttons.clear()
+	for n in Game.UPGRADE_COSTS.size() + 1:
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_group = group
+		b.add_theme_font_size_override("font_size", UIStyle.SMALL + 1)
+		b.text = "%d  (%d s)" % [n, 3 + n * int(Game.UPGRADE_STEP)]
+		b.pressed.connect(_set_upgrades.bind(n))
+		row.add_child(b)
+		_upgrade_buttons.append(b)
+	_show_upgrades()
+	return row
+
+
+## Owns `n` wire upgrades from now on. Game.batteries_changed tells the level
+## (the wire timer and its bar) and the HUD (the UPGRADE button) at once.
+func _set_upgrades(n: int) -> void:
+	Game.wire_upgrades = clampi(n, 0, Game.UPGRADE_COSTS.size())
+	Game.batteries_changed.emit()
+	_show_upgrades()
+
+
+## Presses the button for the upgrades you own now.
+func _show_upgrades() -> void:
+	for i in _upgrade_buttons.size():
+		_upgrade_buttons[i].set_pressed_no_signal(i == Game.wire_upgrades)
 
 
 ## One column: the level's name, then a button per room.
